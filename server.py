@@ -74,7 +74,7 @@ def _build() -> dict:
         if c is None:
             c = 0.0
             unpriced_tokens += r.total()
-        k = (r.date, r.agent, r.model)
+        k = (r.date, r.agent, r.model, (r.session or "unknown")[:12])
         cell = cells.get(k)
         if cell is None:
             cell = cells[k] = {"tokens": 0, "cost": 0.0, "requests": 0,
@@ -89,8 +89,8 @@ def _build() -> dict:
         cell["cw"] += r.cw
         cell["unpriced" if t is None else "priced"] += 1
 
-    matrix = [{"date": d, "agent": a, "model": m, **v}
-              for (d, a, m), v in cells.items()]
+    matrix = [{"date": d, "agent": a, "model": m, "session": s, **v}
+              for (d, a, m, s), v in cells.items()]
 
     def _sum(key):
         out = {}
