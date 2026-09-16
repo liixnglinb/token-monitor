@@ -94,18 +94,39 @@ def download_and_apply(asset: dict):
 
     pid = os.getpid()
     bat = os.path.join(tempfile.gettempdir(), "tokenmonitor-update.bat")
-    # cmd 脚本用系统默认编码（GBK）写，避免中文路径乱码
+    log = os.path.join(tempfile.gettempdir(), "tokenmonitor-update.log")
+    # cmd 脚本用系统默认编码（GBK）写，避免中文路径乱码。
+    # 带重试与日志：进程退出后文件锁/杀毒扫描可能短暂占用目标文件。
     with open(bat, "w", encoding="gbk", errors="replace") as f:
         f.write(
             "@echo off\r\n"
+            "setlocal enabledelayedexpansion\r\n"
+            f'set LOG={log}\r\n'
+            'echo [%date% %time%] update begin > "%LOG%"\r\n'
             ":wait\r\n"
             f'tasklist /FI "PID eq {pid}" | find "{pid}" >nul\r\n'
             "if not errorlevel 1 (\r\n"
             "  timeout /t 1 /nobreak >nul\r\n"
             "  goto wait\r\n"
             ")\r\n"
-            f'move /y "{tmp}" "{exe}" >nul\r\n'
+            'echo old process gone >> "%LOG%"\r\n'
+            "set N=0\r\n"
+            ":retry\r\n"
+            f'move /y "{tmp}" "{exe}" >> "%LOG%" 2>&1\r\n'
+            "if errorlevel 1 (\r\n"
+            "  set /a N+=1\r\n"
+            '  echo move failed !N! >> "%LOG%"\r\n'
+            "  if !N! GEQ 15 goto giveup\r\n"
+            "  timeout /t 2 /nobreak >nul\r\n"
+            "  goto retry\r\n"
+            ")\r\n"
+            'echo replaced >> "%LOG%"\r\n'
             f'start "" "{exe}"\r\n'
+            'echo started >> "%LOG%"\r\n'
+            'del "%~f0"\r\n'
+            "exit /b\r\n"
+            ":giveup\r\n"
+            'echo GIVE UP >> "%LOG%"\r\n'
             'del "%~f0"\r\n')
     subprocess.Popen(["cmd", "/c", bat], close_fds=True,
                      creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
