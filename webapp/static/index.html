@@ -124,6 +124,8 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
   <div class="side-foot">
     <div class="t">数据截至<br><span id="builtAt">—</span></div>
     <button id="reload">重新扫描数据源</button>
+    <button id="updBtn" style="margin-top:8px">检查更新</button>
+    <div class="t" id="verLine" style="margin-top:8px">版本 —</div>
   </div>
 </aside>
 
@@ -327,6 +329,7 @@ init();
 function init(){
   fetch("/api/summary").then(r=>r.json()).then(d=>{ DATA=d; renderAll(); })
     .catch(e=>{ $("noteBox").innerHTML = `<div class="note err">数据加载失败：${esc(e.message)}</div>`; });
+  if (!$("updBtn").dataset.pending) checkUpdate(true);
 }
 
 function renderAll(){
@@ -631,6 +634,57 @@ $("reload").onclick = async function(){
   this.disabled = true; this.textContent = "扫描中…";
   try { await fetch("/api/reload"); DATA = await (await fetch("/api/summary")).json(); renderAll(); }
   finally { this.disabled = false; this.textContent = "重新扫描数据源"; }
+};
+
+/* ---------- 自动更新 ---------- */
+async function checkUpdate(silent){
+  const btn = $("updBtn");
+  if (!silent){ btn.disabled = true; btn.textContent = "检查中…"; }
+  try {
+    const v = await (await fetch("/api/version")).json();
+    $("verLine").textContent = "版本 v" + v.version +
+      (v.latest && v.latest !== v.version ? " · 最新 v" + v.latest : "");
+    if (v.has_update){
+      btn.disabled = false;
+      btn.textContent = "⬆ 更新到 v" + v.latest;
+      btn.dataset.pending = "1";
+    } else {
+      btn.disabled = false;
+      btn.textContent = v.latest ? "已是最新" : "检查更新";
+      btn.dataset.pending = "";
+    }
+  } catch(e){
+    btn.disabled = false;
+    btn.textContent = "检查更新";
+    btn.dataset.pending = "";
+  }
+}
+$("updBtn").onclick = async function(){
+  if (this.dataset.pending !== "1"){ checkUpdate(false); return; }
+  this.disabled = true;
+  this.textContent = "下载新版本…";
+  try {
+    const r = await (await fetch("/api/update", { method: "POST" })).json();
+    if (!r.ok) throw new Error(r.error || "更新失败");
+    this.textContent = "更新完成，应用即将重启…";
+    let tries = 0;
+    const t = setInterval(async () => {
+      tries++;
+      try {
+        const v = await (await fetch("/api/version")).json();
+        clearInterval(t);
+        $("verLine").textContent = "版本 v" + v.version;
+        this.disabled = false;
+        this.textContent = "已是最新";
+        this.dataset.pending = "";
+        location.reload();
+      } catch(_){ /* 新进程未就绪，继续等 */ }
+      if (tries > 45){ clearInterval(t); this.textContent = "更新超时，请重启应用"; }
+    }, 2000);
+  } catch(e){
+    this.disabled = false;
+    this.textContent = "更新失败：重试";
+  }
 };
 </script>
 </body>

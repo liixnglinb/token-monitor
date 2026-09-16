@@ -23,7 +23,7 @@ DisableProgramGroupPage=yes
 Uninstallable=yes
 
 [Languages]
-Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
+Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Files]
 Source: "dist\TokenMonitor.exe"; DestDir: "{app}"; Flags: ignoreversion
