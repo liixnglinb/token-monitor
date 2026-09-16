@@ -83,6 +83,10 @@ main{flex:1;min-width:0;padding:20px 28px 48px}
 .seg button.on{background:#3A3A41;color:var(--txt)}
 .chart-wrap{position:relative;width:100%;height:320px}
 .chart-wrap.mini{height:190px}
+.chart-empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--dim);text-align:center;padding:0 24px}
+.chart-empty .t1{font-size:14px;color:var(--sub)}
+.chart-empty .t2{font-size:12px}
+.chart-empty[hidden]{display:none}
 .empty{color:var(--dim);text-align:center;padding:60px 0}
 
 /* 模型分块（对齐 DeepSeek：模型名在卡片外，每模型两卡） */
@@ -191,7 +195,10 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
           <button data-g="month">按月</button>
         </div>
       </div>
-      <div class="chart-wrap"><canvas id="mainChart" role="img" aria-label="主图表：随时间变化的金额、Token 或请求量柱状图">加载中…</canvas></div>
+      <div class="chart-wrap">
+        <canvas id="mainChart" role="img" aria-label="主图表：随时间变化的金额、Token 或请求量柱状图">加载中…</canvas>
+        <div class="chart-empty" id="mainEmpty" hidden></div>
+      </div>
     </div>
 
     <div id="agentList"></div>
@@ -397,7 +404,9 @@ function renderKPI(){
   const base = rows.reduce((s,r)=>s+r.inp+r.cw+r.cr,0);
 
   $("kCost").textContent = fmtCNY(cost * DATA.cny_rate);
-  $("kCostSub").textContent = fmtUSD(cost) + " · 汇率 " + DATA.cny_rate;
+  $("kCostSub").textContent = (cost === 0 && tokens > 0)
+    ? "模型单价不在价格库，未计入金额"
+    : fmtUSD(cost) + " · 汇率 " + DATA.cny_rate;
   $("kReq").textContent = fmtInt(req);
   const range = rangeDates();
   const days = range ? Math.round((new Date(range[1]) - new Date(range[0]))/864e5) + 1
@@ -423,6 +432,25 @@ function renderMain(){
   const total = data.reduce((s,d)=>s+d[1],0);
   $("mainSum").textContent = F.metric==="cost" ? fmtCNY(total*DATA.cny_rate)
     : F.metric==="tokens" ? fmtTok(total)+" tok" : fmtInt(total)+" 次";
+
+  /* 空状态：指标无值时给友好提示（含"价格未知"的口径说明） */
+  const emp = $("mainEmpty");
+  if (total === 0){
+    const hasTok = rows.some(r=>r.tokens > 0);
+    let t1 = "当前筛选下无记录";
+    let t2 = "试试把时间粒度切到「近 7 天」或「全部」";
+    if (F.metric === "cost" && hasTok){
+      t1 = "消耗金额为 ¥0.00";
+      t2 = "这些模型的单价不在价格库中，未计入金额 · 切换到 Tokens / 请求 可查看用量";
+    } else if (hasTok){
+      t1 = "当前筛选下无" + (F.metric === "tokens" ? " Token" : "请求") + "记录";
+      t2 = "试试切换时间粒度或指标";
+    }
+    emp.innerHTML = '<div class="t1">' + t1 + '</div><div class="t2">' + t2 + '</div>';
+    emp.hidden = false;
+  } else {
+    emp.hidden = true;
+  }
 
   /* 堆叠成员：TOP 6 + 其他 */
   const tot = new Map();
@@ -492,7 +520,7 @@ function miniChart(canvas, pairs, color, tip){
   return new Chart(canvas, { type: "bar",
     data: { labels: pairs.map(d=>d[0]),
       datasets: [{ data: pairs.map(d=>d[1]), backgroundColor: color,
-        borderRadius: 2, maxBarThickness: 8 }] },
+        borderRadius: 2, maxBarThickness: barW(pairs.length) }] },
     options: { responsive:true, maintainAspectRatio:false,
       interaction: { mode: "index", intersect: false },
       plugins: { legend:{display:false},
@@ -522,6 +550,14 @@ function addMini(id, pairs, color, tip){
   c.options.scales.y.display = false;
   c.update();
   return c;
+}
+/* 单点/双点时柱太细，看起来像坏图 —— 自适应放宽 */
+const barW = n => n <= 2 ? 36 : n <= 5 ? 16 : 8;
+/* 金额为 0 但有用量时，标注"价格未知"，避免误以为算错 */
+function costText(cost, tokens){
+  if (cost > 0) return fmtCNY(cost * DATA.cny_rate);
+  return fmtCNY(0) + (tokens > 0
+    ? ' <span class="muted" title="该模型单价不在价格库中">价格未知</span>' : '');
 }
 
 function renderAgentList(){
@@ -555,7 +591,7 @@ function renderAgentList(){
           '<span class="ar-fold">▶</span>' +
           '<span class="dot" style="background:' + color + '"></span>' +
           '<span class="nm">' + esc(name) + '</span>' +
-          '<span class="num">Tokens <b>' + fmtInt(o.tokens) + '</b> · ' + fmtInt(o.requests) + ' 次 · ' + fmtCNY(o.cost*DATA.cny_rate) + '</span>' +
+          '<span class="num">Tokens <b>' + fmtInt(o.tokens) + '</b> · ' + fmtInt(o.requests) + ' 次 · ' + costText(o.cost, o.tokens) + '</span>' +
         '</div>' +
         '<div class="ar-chart"><canvas id="ac-' + i + '" role="img" aria-label="' + esc(name) + ' 每日 Token 走势"></canvas></div>' +
         '<div class="ar-models" id="am-' + i + '"></div>' +
@@ -586,7 +622,7 @@ function renderAgentList(){
         row.className = "mrow";
         row.innerHTML =
           '<span class="nm" title="' + esc(mname) + '">' + esc(mname) + '</span>' +
-          '<span class="num">Tokens <b>' + fmtInt(o2.tokens) + '</b> · ' + fmtInt(o2.requests) + ' 次 · ' + fmtCNY(o2.cost*DATA.cny_rate) + '</span>' +
+          '<span class="num">Tokens <b>' + fmtInt(o2.tokens) + '</b> · ' + fmtInt(o2.requests) + ' 次 · ' + costText(o2.cost, o2.tokens) + '</span>' +
           '<div class="ch"><canvas id="mc-' + i + '-' + j + '" role="img" aria-label="' + esc(mname) + ' 每日 Token 走势"></canvas></div>';
         boxM.appendChild(row);
         const mrows = arows.filter(r=>r.model===mname);
