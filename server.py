@@ -36,6 +36,15 @@ STATIC_DIR = os.path.join(ROOT, "webapp", "static")
 app = FastAPI(title="Token Monitor")
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 
+# 启动时清理上次更新留下的旧映像（改名后的 *.exe.old 尽力删除）
+if getattr(sys, "frozen", False):
+    try:
+        _old = sys.executable + ".old"
+        if os.path.exists(_old):
+            os.remove(_old)
+    except OSError:
+        pass
+
 _state = {"built_at": None, "data": None}
 
 

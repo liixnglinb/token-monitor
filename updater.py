@@ -93,10 +93,16 @@ def download_and_apply(asset: dict):
         raise RuntimeError("下载的更新包异常，已中止")
 
     pid = os.getpid()
+    exe_old = exe + ".old"
     bat = os.path.join(tempfile.gettempdir(), "tokenmonitor-update.bat")
     log = os.path.join(tempfile.gettempdir(), "tokenmonitor-update.log")
     # cmd 脚本用系统默认编码（GBK）写，避免中文路径乱码。
-    # 带重试与日志：进程退出后文件锁/杀毒扫描可能短暂占用目标文件。
+    #
+    # ⚠️ Windows 锁定「运行中的 exe 映像」：move /y 直接覆盖自身会永久
+    # 「拒绝访问」。标准做法（Chrome 式自更新）：
+    #   1) 把运行中的 exe **改名**为 .old（改名不受映像锁限制）
+    #   2) 新 exe move 到原路径
+    #   3) start 新 exe，尽力删除 .old
     with open(bat, "w", encoding="gbk", errors="replace") as f:
         f.write(
             "@echo off\r\n"
@@ -112,17 +118,21 @@ def download_and_apply(asset: dict):
             'echo old process gone >> "%LOG%"\r\n'
             "set N=0\r\n"
             ":retry\r\n"
-            f'move /y "{tmp}" "{exe}" >> "%LOG%" 2>&1\r\n'
+            f'move /y "{exe}" "{exe_old}" >> "%LOG%" 2>&1\r\n'
             "if errorlevel 1 (\r\n"
             "  set /a N+=1\r\n"
-            '  echo move failed !N! >> "%LOG%"\r\n'
+            '  echo rename failed !N! >> "%LOG%"\r\n'
             "  if !N! GEQ 15 goto giveup\r\n"
             "  timeout /t 2 /nobreak >nul\r\n"
             "  goto retry\r\n"
             ")\r\n"
-            'echo replaced >> "%LOG%"\r\n'
+            'echo renamed old exe >> "%LOG%"\r\n'
+            f'move /y "{tmp}" "{exe}" >> "%LOG%" 2>&1\r\n'
+            'if errorlevel 1 ( echo place new failed >> "%LOG%" & goto giveup )\r\n'
+            'echo placed new exe >> "%LOG%"\r\n'
             f'start "" "{exe}"\r\n'
             'echo started >> "%LOG%"\r\n'
+            f'del "{exe_old}" >> "%LOG%" 2>&1\r\n'
             'del "%~f0"\r\n'
             "exit /b\r\n"
             ":giveup\r\n"
