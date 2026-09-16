@@ -43,7 +43,8 @@ def is_newer(latest: str, local: str) -> bool:
     try:
         return _parse(latest) > _parse(local)
     except ValueError:
-        return False
+        # 本地版本号非语义化（如开发构建 "dev"）：只要有正式发布就提示更新
+        return local != latest
 
 
 def fetch_latest(timeout: int = 8):
