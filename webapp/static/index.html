@@ -112,6 +112,8 @@ main{flex:1;min-width:0;padding:20px 28px 48px}
 .ar-fold{width:14px;text-align:center;color:var(--dim);font-size:11px;flex:none;transition:transform .15s}
 .ar.open .ar-fold{transform:rotate(90deg)}
 .ar-head .dot{width:9px;height:9px;border-radius:3px;flex:none}
+.ar-icon{width:20px;height:20px;flex:none;display:inline-flex;align-items:center;justify-content:center}
+.ar-icon svg{width:20px;height:20px;display:block}
 .ar-head .nm{font-weight:500}
 .ar-head .num{margin-left:auto;color:var(--sub);font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}
 .ar-head .num b{color:var(--txt);font-weight:500}
@@ -237,6 +239,22 @@ const RANGES = [
   ["all",       "全部"],
 ];
 const RANGE_LABEL = Object.fromEntries(RANGES);
+/* Agent 软件图标（内联 SVG，24×24，继承 currentColor） */
+const AGENT_ICONS = {
+  "claude-code": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 2.8v5.4M12 15.8v5.4M2.8 12h5.4M15.8 12h5.4M5.5 5.5l3.8 3.8M14.7 14.7l3.8 3.8M18.5 5.5l-3.8 3.8M9.3 14.7L5.5 18.5"/></svg>',
+  "codex": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 2.6l7.6 4.4v8.8L12 20.2l-7.6-4.4V7z"/><path d="M12 8.1l3.8 2.2v4.4L12 16.9l-3.8-2.2v-4.4z"/></svg>',
+  "zcode": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 5h12L9 12h9l-9 7"/></svg>',
+  "opencode": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6.5l-5.5 5.5L9 17.5M15 6.5l5.5 5.5L15 17.5"/></svg>',
+  "hermes": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 8.2c3.6-3.2 7.2-3.2 9.4 0 2.2-3.2 5.8-3.2 9.4 0-1.9 6.2-5 10.2-9.4 13.2-4.4-3-7.5-7-9.4-13.2z"/><path d="M12 8.4v9.6"/></svg>',
+  "mhagent": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3.8" y="3.8" width="16.4" height="16.4" rx="3.4"/><path d="M8.6 16.4V8.4l3.4 4.4 3.4-4.4v8"/></svg>',
+  "openclaw-autoclaw": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21.2c-3.1 0-5.2-1.4-5.2-3.4 0-1.5 1.3-2.4 2.7-2.7M12 21.2c3.1 0 5.2-1.4 5.2-3.4 0-1.5-1.3-2.4-2.7-2.7"/><path d="M7.4 6.4c0-2.1 2-3.6 4.6-3.6s4.6 1.5 4.6 3.6"/><path d="M7.9 11.6V9M12 11.2V8.4M16.1 11.6V9"/></svg>',
+  "agnes": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><circle cx="12" cy="12" r="8.6"/><path d="M8.3 16.3l3.7-9.2 3.7 9.2M9.7 13.4h4.6"/></svg>',
+  "dsh": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.6 6.2h7.2M3.6 12h11.4M3.6 17.8h5.6"/><path d="M17.4 5.2l3.4 13.6"/></svg>',
+};
+function agentIcon(name){
+  return AGENT_ICONS[name] ||
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="4.2" y="4.2" width="15.6" height="15.6" rx="4"/><circle cx="12" cy="12" r="2.4"/></svg>';
+}
 const $ = id => document.getElementById(id);
 
 /* ---------- 格式化 ---------- */
@@ -589,7 +607,7 @@ function renderAgentList(){
       '<div class="ar' + (open ? " open" : "") + '">' +
         '<div class="ar-head">' +
           '<span class="ar-fold">▶</span>' +
-          '<span class="dot" style="background:' + color + '"></span>' +
+          '<span class="ar-icon" style="color:' + color + '">' + agentIcon(name) + '</span>' +
           '<span class="nm">' + esc(name) + '</span>' +
           '<span class="num">Tokens <b>' + fmtInt(o.tokens) + '</b> · ' + fmtInt(o.requests) + ' 次 · ' + costText(o.cost, o.tokens) + '</span>' +
         '</div>' +
