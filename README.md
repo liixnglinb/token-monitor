@@ -20,7 +20,7 @@
 
 ### 便携版
 
-下载 `TokenMonitor-portable-vX.Y.Z.zip` 解压，双击 `TokenMonitor.exe` 即可（免安装，同样支持自动更新）。
+下载 `TokenMonitor-portable-vX.Y.Z.zip` 解压，双击 `TokenMonitor.exe` 即可；更新器与安装版共用，软件内可直接升级。
 
 ### 从源码运行
 
