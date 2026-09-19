@@ -1,16 +1,20 @@
 # -*- coding: utf-8 -*-
-"""模型计价 —— LiteLLM 主源 · OpenRouter 回退 · CC Switch 补充
+"""模型计价 —— 内置快照兜底 · LiteLLM 主源 · OpenRouter 回退 · CC Switch 补充
 
 价格单位统一为「每 token 美元」。
-数据来源（本机缓存，无需联网）：
+数据来源（优先级由低到高）：
+  pricing-bundled.json.gz                      (内置快照, ~12000 条, 兜底基线)
+  ↓ 以下为本机缓存，存在则覆盖内置：
   %APPDATA%/tokscale/cache/pricing-litellm.json     (主源, ~2.3MB)
   %APPDATA%/tokscale/cache/pricing-openrouter.json  (回退)
   %APPDATA%/tokscale/cache/pricing-models-dev.json  (补充)
   ~/.cc-switch/cc-switch.db → model_pricing          (补充, 199 条)
 """
+import gzip
 import json
 import os
 import sqlite3
+import sys
 
 CACHE = os.path.join(os.environ.get("APPDATA", ""), "tokscale", "cache")
 
@@ -73,13 +77,43 @@ def _norm(m):
 
 _INDEX = None
 _STATS = {"total": 0, "hit": 0, "miss": {}}
+ORIGIN = {"bundled": 0, "cache": 0, "ccswitch": 0}   # 价表来源构成，供面板显示
+
+
+def _res(name):
+    """资源定位：PyInstaller 打包后文件在 sys._MEIPASS 下"""
+    base = getattr(sys, "_MEIPASS", None) or os.path.dirname(
+        os.path.abspath(__file__))
+    return os.path.join(base, name)
+
+
+def _load_bundled():
+    """内置价表快照（已归一化，元组顺序同索引：in/out/cw/cr）。
+
+    这是兜底基线：用户机器上没有 tokscale / CC Switch 时，成本仍然算得出来。
+    读不到就返回空，让上层继续尝试本机价表。
+    """
+    out = {}
+    try:
+        with gzip.open(_res("pricing-bundled.json.gz"), "rb") as f:
+            data = json.loads(f.read().decode("utf-8"))
+        for m, v in data.items():
+            if isinstance(v, (list, tuple)) and len(v) == 4:
+                out[_norm(m)] = tuple(float(x) for x in v)
+    except Exception as e:
+        # 绝不静默：读不到内置快照意味着新机器上可能全部计价失败，必须留痕
+        ORIGIN["bundled_error"] = "%s: %s" % (type(e).__name__, e)
+        return {}
+    return out
 
 
 def _build():
-    global _INDEX
+    global _INDEX, ORIGIN
     if _INDEX is not None:
         return _INDEX
-    raw = {}
+    # 最低优先级：随产品发布的内置快照
+    raw = _load_bundled()
+    ORIGIN["bundled"] = len(raw)
     # 优先级由低到高，后者覆盖前者
     for fn in ("pricing-models-dev.json", "pricing-openrouter.json",
                "pricing-litellm.json"):
@@ -101,6 +135,7 @@ def _build():
         short = m.split("/")[-1]
         if short and short not in idx:
             idx[short] = tup
+    ORIGIN["total"] = len(idx)
     _INDEX = idx
     return idx
 
