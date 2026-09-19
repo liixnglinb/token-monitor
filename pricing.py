@@ -62,13 +62,17 @@ def _load_json(fn):
 def _norm(m):
     """归一化模型名：小写、去空白、去 provider 前缀与常见别名前缀
 
-    实测别名：日志里的 `zai_glm-5.3-flash` 与价格表的 `glm-5.3-flash`
+    实测别名：日志里的 `zai_glm-5.3-flash` 与价格表的 `glm-5.3-flash`；
+    连字符形式的 `sn-`（商汤小浣熊命名空间）同理 —— 曾漏掉它，
+    导致 sn-deepseek-v4-pro / sn-glm-5-3-flash 等 2.12 亿 tok 误判为"价格未知"。
+    注意：只加**能验证到去前缀后精确命中**的前缀；
+    sensenova-* / ark-code-latest / ox-alpha-free 在价表里 0 命中，属真缺价，不许猜。
     是同一模型，不归一化会导致未命中。
     """
     m = (m or "").strip().lower()
     if not m:
         return ""
-    for pre in ("zai_", "openai_", "anthropic_", "google_", "meta_"):
+    for pre in ("zai_", "openai_", "anthropic_", "google_", "meta_", "sn-"):
         if m.startswith(pre):
             m = m[len(pre):]
             break

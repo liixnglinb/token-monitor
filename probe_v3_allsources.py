@@ -125,67 +125,114 @@ class R:
         return self.inp + self.cw + self.cr + self.out
 
 
+# ---------------------------------------------------------- 文件级缓存
+def file_cached(files, parse_fn):
+    """按文件缓存解析结果：mtime+size 未变则复用，变了就整文件重解析。
+
+    files    : 待解析文件路径列表
+    parse_fn : path -> [元组]，元组字段顺序同 _rec_tuple
+    """
+    out = []
+    for p in files:
+        if scan_cache is None:
+            out += [_rec_obj(t) for t in parse_fn(p)]
+            continue
+        try:
+            st = os.stat(p)
+            key, m, s = real_path(p), st.st_mtime_ns, st.st_size
+        except OSError:
+            continue
+        c = scan_cache.get_file(key)
+        if c and c.get("m") == m and c.get("s") == s:
+            out += [_rec_obj(t) for t in c.get("recs") or []]
+            continue
+        new = parse_fn(p)
+        scan_cache.put_file(key, m, s, len(new), new)
+        out += [_rec_obj(t) for t in new]
+    return out
+
+
+def dedupe_by_key(recs):
+    """按 R.key 保留最后一条 —— 与原 scan_claude 的 dict 语义一致"""
+    d = {}
+    for r in recs:
+        d[r.key or id(r)] = r
+    return list(d.values())
+
+
+
 # ============================================================ 原生唯一源
-def scan_claude():
-    root = os.path.join(HOME, ".claude", "projects")
-    seen, n = {}, 0
-    for dp, _d, names in os.walk(root):
-        for fn in names:
-            if not fn.endswith(".jsonl"):
-                continue
-            n += 1
-            for obj in iter_jsonl(os.path.join(dp, fn)):
-                if obj.get("type") != "assistant":
-                    continue
-                m = obj.get("message") or {}
-                u = m.get("usage")
-                if not isinstance(u, dict):
-                    continue
-                k = m.get("id") or obj.get("uuid")
-                seen[k] = R("claude-code", to_date(obj.get("timestamp")),
-                            obj.get("sessionId", ""), m.get("model"),
-                            u.get("input_tokens") or 0,
-                            u.get("cache_creation_input_tokens") or 0,
-                            u.get("cache_read_input_tokens") or 0,
-                            u.get("output_tokens") or 0,
-                            (u.get("output_tokens_details") or {}).get("thinking_tokens") or 0,
-                            key=str(k))
+def _claude_file(path):
+    """解析单个 Claude Code 会话日志 -> 记录元组列表（文件内按 message.id 去重）"""
+    seen = {}
+    for obj in iter_jsonl(path):
+        if obj.get("type") != "assistant":
+            continue
+        m = obj.get("message") or {}
+        u = m.get("usage")
+        if not isinstance(u, dict):
+            continue
+        k = m.get("id") or obj.get("uuid")
+        if not k:
+            continue
+        seen[str(k)] = (
+            "claude-code", to_date(obj.get("timestamp")),
+            obj.get("sessionId", ""), str(m.get("model") or "unknown").lower(),
+            u.get("input_tokens") or 0,
+            u.get("cache_creation_input_tokens") or 0,
+            u.get("cache_read_input_tokens") or 0,
+            u.get("output_tokens") or 0,
+            (u.get("output_tokens_details") or {}).get("thinking_tokens") or 0,
+            str(k))
     return list(seen.values())
 
 
+def scan_claude():
+    root = os.path.join(HOME, ".claude", "projects")
+    files = []
+    for dp, _d, names in os.walk(root):
+        for fn in names:
+            if fn.endswith(".jsonl"):
+                files.append(os.path.join(dp, fn))
+    return dedupe_by_key(file_cached(files, _claude_file))
+
+
+def _codex_file(path):
+    """单个 Codex rollout 日志：token_count 是会话内累计值，只取末条"""
+    last, model = None, "unknown"
+    for obj in iter_jsonl(path):
+        t, pl = obj.get("type"), obj.get("payload") or {}
+        if t == "turn_context":
+            model = pl.get("model") or model
+        elif t == "event_msg" and pl.get("type") == "token_count":
+            tt = (pl.get("info") or {}).get("total_token_usage")
+            if isinstance(tt, dict):
+                last = (obj.get("timestamp", ""), tt)
+    if not last:
+        return []
+    ts, tt = last
+    ti = tt.get("input_tokens", 0) or 0
+    cr = tt.get("cached_input_tokens", 0) or 0
+    # 非 OpenAI 模型经 Codex 转发时，cached 可能大于 input（口径不同），
+    # 直接相减会得出负 input → 面板显示负成本。缓存不可能超过总输入。
+    if cr > ti:
+        cr = ti
+    fn = os.path.basename(path)
+    return [("codex", to_date(ts), fn, str(model).lower(),
+             ti - cr, tt.get("cache_write_input_tokens") or 0, cr,
+             tt.get("output_tokens") or 0,
+             tt.get("reasoning_output_tokens") or 0, fn)]
+
+
 def scan_codex():
-    out = []
+    files = []
     for sub in ("sessions", "archived_sessions"):
         root = os.path.join(HOME, ".codex", sub)
         for dp, _d, names in os.walk(root):
             for fn in names:
-                if not fn.endswith(".jsonl"):
-                    continue
-                path = os.path.join(dp, fn)
-                last, model = None, "unknown"
-                for obj in iter_jsonl(path):
-                    t, pl = obj.get("type"), obj.get("payload") or {}
-                    if t == "turn_context":
-                        model = pl.get("model") or model
-                    elif t == "event_msg" and pl.get("type") == "token_count":
-                        tt = (pl.get("info") or {}).get("total_token_usage")
-                        if isinstance(tt, dict):
-                            last = (obj.get("timestamp", ""), tt)
-                if not last:
-                    continue
-                ts, tt = last
-                ti = tt.get("input_tokens", 0) or 0
-                cr = tt.get("cached_input_tokens", 0) or 0
-                # 非 OpenAI 模型经 Codex 转发时，cached 可能大于 input（口径不同），
-                # 直接相减会得出负 input → 面板显示负成本。缓存不可能超过总输入。
-                if cr > ti:
-                    cr = ti
-                out.append(R("codex", to_date(ts), fn, model,
-                             ti - cr, tt.get("cache_write_input_tokens") or 0, cr,
-                             tt.get("output_tokens") or 0,
-                             tt.get("reasoning_output_tokens") or 0,
-                             key=fn))
-    return out
+                if fn.endswith(".jsonl"):
+                    files.append(os.path.join(dp, fn))
+    return file_cached(files, _codex_file)
 
 
 def scan_zcode():
