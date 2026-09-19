@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """Token Monitor 服务端 —— DeepSeek 风格用量面板
 
-数据管道：复用 probe_v3_allsources 的 9 个扫描器（含全部去重/语义修正），
+数据管道：probe_v3_allsources 的手写扫描器 + 注册表驱动扩展源
+（含全部去重 / 语义修正 / 超预算整源丢弃），
 经 pricing.py 计价后，聚合成 (date, agent, model) 矩阵交给前端自由筛选。
 
 接口：  GET  /api/summary   全量聚合矩阵 + KPI
@@ -49,7 +50,11 @@ _state = {"built_at": None, "data": None}
 
 
 def _build() -> dict:
-    """扫描全部数据源 → 计价 → 聚合矩阵。耗时约 5~20s。"""
+    """扫描全部数据源 → 计价 → 聚合矩阵。
+
+    实测耗时：本机首次约 50s（含 1GB 级会话日志与注册表扩展源遍历），
+    二次起命中进程内零结果缓存约 20~40s。结果常驻 _state，仅首屏与 /api/reload 付费。
+    """
     import probe_v3_allsources as V3
 
     pricing._STATS["hit"] = 0
@@ -58,7 +63,7 @@ def _build() -> dict:
 
     recs = []
     scan_errors = []
-    for name, fn in V3.ORIGINAL_SOURCES + V3.NEW_SOURCES:
+    for name, fn in V3.all_merged_sources():
         try:
             r = fn()
             recs += r[0] if isinstance(r, tuple) else r
@@ -119,6 +124,7 @@ def _build() -> dict:
             "cache_rate": sum(r.cr for r in recs) / max(total_cache_base, 1),
             "unpriced_tokens": unpriced_tokens,
         },
+        "source_notes": dict(getattr(V3, "SKIP_NOTES", {})),
         "scan_errors": scan_errors,
     }
 
