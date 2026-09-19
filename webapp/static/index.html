@@ -140,6 +140,10 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .mono{font-family:ui-monospace,Consolas,monospace;font-size:12px}
 .muted{color:var(--dim);font-size:12px}
 </style>
+<style>
+  .sel{width:100%;margin-top:4px;padding:6px 8px;border-radius:6px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.05);color:inherit;font:inherit;cursor:pointer}
+  .sel:focus{outline:2px solid rgba(224,169,43,.5);outline-offset:1px}
+</style>
 </head>
 <body>
 <h2 class="sr-only">本地 Agent Token 用量面板：按时间与数据源筛选，展示消耗金额、请求次数、Token 量与缓存命中率，并按模型分块展示明细。</h2>
@@ -154,6 +158,17 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
     <div class="t">数据截至<br><span id="builtAt">—</span></div>
     <button id="reload">重新扫描数据源</button>
     <button id="updBtn" style="margin-top:8px">检查更新</button>
+    <div class="t" style="margin-top:10px">自动刷新</div>
+    <select id="autoMin" class="sel" aria-label="自动刷新间隔">
+      <option value="0">关闭</option>
+      <option value="1">每 1 分钟</option>
+      <option value="3">每 3 分钟</option>
+      <option value="5">每 5 分钟</option>
+      <option value="10">每 10 分钟</option>
+      <option value="30">每 30 分钟</option>
+      <option value="60">每 1 小时</option>
+    </select>
+    <div class="t" id="scanState" style="margin-top:6px;color:#e0a92b"></div>
     <div class="t" id="verLine" style="margin-top:8px">版本 —</div>
   </div>
 </aside>
@@ -357,7 +372,8 @@ const fmtTick = {
 /* ---------- 主流程 ---------- */
 init();
 function init(){
-  fetch("/api/summary").then(r=>r.json()).then(d=>{ DATA=d; renderAll(); })
+  fetch("/api/summary").then(r=>r.json()).then(d=>{ DATA=d; renderAll();
+    if (d._meta) { LAST_BUILT = d._meta.built_at || null; syncSettings(d._meta); } })
     .catch(e=>{ $("noteBox").innerHTML = `<div class="note err">数据加载失败：${esc(e.message)}</div>`; });
   if (!$("updBtn").dataset.pending) checkUpdate(true);
 }
@@ -707,9 +723,52 @@ $("fExport").onclick = () => {
   a.click(); URL.revokeObjectURL(a.href);
 };
 $("reload").onclick = async function(){
-  this.disabled = true; this.textContent = "扫描中…";
-  try { await fetch("/api/reload"); DATA = await (await fetch("/api/summary")).json(); renderAll(); }
-  finally { this.disabled = false; this.textContent = "重新扫描数据源"; }
+  this.disabled = true; this.textContent = "已在后台扫描…";
+  try { await fetch("/api/reload"); } finally {
+    setTimeout(() => { this.disabled = false; this.textContent = "重新扫描数据源"; }, 1200);
+  }
+};
+
+/* ---------- 自动刷新：只轮询轻量的 /api/settings，built_at 变了才拉数据 ---------- */
+let LAST_BUILT = null, POLL_MS = 15000;
+function syncSettings(s){
+  if (!s) return;
+  const el = $("autoMin");
+  if (el && s.settings && document.activeElement !== el)
+    el.value = String(s.settings.refresh_minutes ?? 0);
+  const ba = $("builtAt");
+  if (ba && s.built_at){
+    const d = new Date(s.built_at);
+    ba.textContent = isNaN(d) ? String(s.built_at).slice(11, 16)
+      : d.toLocaleString("zh-CN", {month:"2-digit", day:"2-digit",
+        hour:"2-digit", minute:"2-digit", hour12:false});
+  }
+  const st = $("scanState");
+  if (st) st.textContent = s.busy ? "正在后台扫描…"
+    : (s.queued ? "已排队，等待当前扫描完成…" : (s.error ? "上次扫描失败：" + s.error : ""));
+}
+async function pollMeta(){
+  try {
+    const r = await (await fetch("/api/settings")).json();
+    syncSettings(r);
+    if (r.built_at && r.built_at !== LAST_BUILT){
+      LAST_BUILT = r.built_at;
+      DATA = await (await fetch("/api/summary")).json();
+      renderAll();
+      const b = $("reload");
+      if (b){ b.disabled = false; b.textContent = "重新扫描数据源"; }
+    }
+  } catch(e){ /* 后端重启中，下一轮再试 */ }
+}
+setInterval(pollMeta, POLL_MS);
+$("autoMin").onchange = async function(){
+  const m = parseInt(this.value, 10) || 0;
+  try {
+    await fetch("/api/settings", { method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_minutes: m }) });
+  } catch(e){}
+  pollMeta();
 };
 
 /* ---------- 自动更新 ---------- */

@@ -30,7 +30,8 @@ import updater
 CST = None  # 延迟导入保持结构清晰（见下）
 from datetime import datetime, timezone, timedelta
 CST = timezone(timedelta(hours=8))
-CNY_RATE = 7.1                       # 展示用近似汇率，与 probe_v3 报告一致
+CNY_RATE = 7.1
+SCAN_WORKERS = int(os.environ.get("TM_WORKERS", "8"))   # 并行扫描线程数                       # 展示用近似汇率，与 probe_v3 报告一致
 
 STATIC_DIR = os.path.join(ROOT, "webapp", "static")
 
@@ -46,14 +47,35 @@ if getattr(sys, "frozen", False):
     except OSError:
         pass
 
-_state = {"built_at": None, "data": None}
+import refresher as RF                                # noqa: E402
+
+
+def _version_probe():
+    """软件更新检查：由后台线程按间隔调用，结果缓存供 /api/version 秒回"""
+    try:
+        import updater
+    except Exception:
+        return {"version": "dev", "latest": None, "has_update": False,
+                "dev_mode": True}
+    local = updater.local_version()
+    info = {"version": local, "latest": None, "has_update": False,
+            "repo": updater.REPO}
+    try:
+        latest, _assets = updater.fetch_latest()
+        info["latest"] = latest
+        info["has_update"] = updater.is_newer(latest, local)
+    except Exception as e:                              # 断网/限流不影响使用
+        info["error"] = str(e)[:120]
+    return info
 
 
 def _build() -> dict:
     """扫描全部数据源 → 计价 → 聚合矩阵。
 
-    实测耗时：本机首次约 50s（含 1GB 级会话日志与注册表扩展源遍历），
-    二次起命中进程内零结果缓存约 20~40s。结果常驻 _state，仅首屏与 /api/reload 付费。
+    实测耗时（本机 62 个源、8 线程并行）：
+      · 磁盘缓存全空的首次扫描  约 110s
+      · 有 scan-cache 的常规重建 约 20~30s（未变动的源直接复用上次解析结果）
+    本函数只在后台线程里跑；/api/summary 始终立即返回上一次的好数据，界面不会被扫描阻塞。
     """
     import probe_v3_allsources as V3
 
@@ -61,15 +83,8 @@ def _build() -> dict:
     pricing._STATS["total"] = 0
     pricing._STATS["miss"] = {}
 
-    recs = []
-    scan_errors = []
-    for name, fn in V3.all_merged_sources():
-        try:
-            r = fn()
-            recs += r[0] if isinstance(r, tuple) else r
-        except Exception as e:                      # 单源失败不拖垮面板
-            scan_errors.append({"agent": name, "error": str(e)[:120]})
-            continue
+    # 并行扫描：绝大多数源是 I/O 等待，线程池能把冷扫从 ~110s 压到 ~30s 量级
+    recs, scan_errors = V3.run_all_sources(workers=SCAN_WORKERS)
 
     cells = {}
     unpriced_tokens = 0
@@ -125,43 +140,53 @@ def _build() -> dict:
             "unpriced_tokens": unpriced_tokens,
         },
         "source_notes": dict(getattr(V3, "SKIP_NOTES", {})),
+        "cache_stats": V3.flush_cache(),
         "scan_errors": scan_errors,
     }
 
 
-def get_data() -> dict:
-    if _state["data"] is None:
-        _state["data"] = _build()
-        _state["built_at"] = datetime.now(CST).isoformat(timespec="seconds")
-    return _state["data"]
+_R = RF.Refresher(_build, version_fn=_version_probe)   # 必须在 _build 之后
 
 
 @app.get("/api/summary")
 def api_summary():
-    d = get_data()
+    """立即返回上一次的好数据；没有结果时后台发起首扫并返回 building 占位"""
+    d, built_at, err, busy = _R.snapshot()
+    d = dict(d)
+    meta = dict(_R.status())
+    meta["updated"] = built_at
+    if err:
+        meta["error"] = err
+    d["_meta"] = meta
+    if busy:
+        d.setdefault("building", True)
     return JSONResponse(d, headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/reload")
 def api_reload():
-    _state["data"] = _build()
-    _state["built_at"] = datetime.now(CST).isoformat(timespec="seconds")
-    return {"ok": True, "built_at": _state["built_at"],
-            "rows": len(_state["data"]["matrix"])}
+    """非阻塞：正在扫描时再点 = 排队，绝不并发跑两个扫描"""
+    return JSONResponse(_R.refresh(force=True))
+
+
+@app.get("/api/settings")
+def api_get_settings():
+    return JSONResponse(_R.status())
+
+
+@app.post("/api/settings")
+async def api_set_settings(request):
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    return JSONResponse({"ok": True, "settings": _R.set_settings(body)})
 
 
 @app.get("/api/version")
 def api_version():
-    local = updater.local_version()
-    info = {"version": local, "latest": None, "has_update": False,
-            "repo": updater.REPO}
-    try:
-        latest, _assets = updater.fetch_latest()
-        info["latest"] = latest
-        info["has_update"] = updater.is_newer(latest, local)
-    except Exception as e:                          # 断网 / 限流时不影响使用
-        info["error"] = str(e)[:120]
-    return info
+    """读后台缓存的版本信息，秒回；缓存为空时自行发起一次检查"""
+    return JSONResponse(_R.version())
 
 
 @app.post("/api/update")
@@ -178,6 +203,9 @@ def api_update():
     # 1 秒后退出当前进程，让更新脚本接管（替换 exe 并重启）
     threading.Timer(1.0, lambda: os._exit(0)).start()
     return {"ok": True, "latest": latest}
+
+
+_R.start()          # 后台刷新线程：按 settings.refresh_minutes 自动重扫
 
 
 @app.get("/")

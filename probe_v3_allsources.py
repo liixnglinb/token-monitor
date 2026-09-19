@@ -24,6 +24,7 @@ import shutil
 import time
 import sqlite3
 import tempfile
+import threading
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
@@ -114,7 +115,10 @@ class R:
                  think=0, note="", key=""):
         self.agent, self.date, self.session = agent, date, session
         self.model = (model or "unknown").lower()
-        self.inp, self.cw, self.cr, self.out, self.think = inp, cw, cr, out, think
+        # 全局兜底：任何源都不该吐出负 token（会让成本变负、界面显示 ¥-176）
+        n = lambda v: int(v) if isinstance(v, (int, float)) and v > 0 else 0
+        (self.inp, self.cw, self.cr, self.out,
+         self.think) = n(inp), n(cw), n(cr), n(out), n(think)
         self.note, self.key = note, key
 
     def total(self):
@@ -172,6 +176,10 @@ def scan_codex():
                 ts, tt = last
                 ti = tt.get("input_tokens", 0) or 0
                 cr = tt.get("cached_input_tokens", 0) or 0
+                # 非 OpenAI 模型经 Codex 转发时，cached 可能大于 input（口径不同），
+                # 直接相减会得出负 input → 面板显示负成本。缓存不可能超过总输入。
+                if cr > ti:
+                    cr = ti
                 out.append(R("codex", to_date(ts), fn, model,
                              ti - cr, tt.get("cache_write_input_tokens") or 0, cr,
                              tt.get("output_tokens") or 0,
@@ -572,6 +580,119 @@ try:
 except Exception:                                     # 打包缺模块也不能崩
     REG_SOURCES = []
 
+try:
+    import scan_cache
+except Exception:                                     # 缺缓存模块时退化为每次全扫
+    scan_cache = None
+
+CACHE_STATS = {"hit": 0, "miss": 0, "verdict": 0}
+
+# 手写扫描器实际会读的文件根 —— 用于算指纹。格式：(路径, 类型)
+#   jsonl = 只收 *.jsonl / db = 只收 sqlite / both = 两者都要
+HAND_ROOTS = {
+    "Claude Code": [("~/.claude/projects", "jsonl")],
+    "Codex": [("~/.codex/sessions", "jsonl"), ("~/.codex/archived_sessions", "jsonl")],
+    "ZCode": [("~/.zcode/cli/db/db.sqlite", "db")],
+    "OpenCode": [("~/.local/share/opencode/opencode.db", "db")],
+    "Hermes": [("~/.hermes/state.db", "db")],
+    "Agnes": [("~/.agnes", "both")],
+    "OpenClaw AutoClaw": [("~/.openclaw-autoclaw", "both")],
+    "MHAgent": [("~AppData/MHAgent/.claude/projects", "jsonl")],
+    "DSH": [("~/.dsh", "both")],
+    "WorkBuddy": [("~/.workbuddy/projects", "jsonl")],
+}
+
+
+def _hand_files(specs):
+    out = []
+    for raw, kind in specs:
+        p = raw.replace("~AppData", APPDATA).replace("~", HOME)
+        p = p.replace("/", os.sep)
+        if not os.path.exists(p):
+            continue
+        if os.path.isfile(p):
+            out.append(p)
+            continue
+        n = 0
+        for dp, dirs, names in os.walk(p):
+            dirs[:] = [d for d in dirs if d.lower() not in _SKIP_DIRS]
+            for fn in names:
+                low = fn.lower()
+                if kind == "jsonl" and not low.endswith((".jsonl", ".ndjson")):
+                    continue
+                if kind == "db" and not low.endswith((".db", ".sqlite", ".sqlite3")):
+                    continue
+                if kind == "both" and not low.endswith(
+                        (".jsonl", ".ndjson", ".json", ".db", ".sqlite", ".sqlite3")):
+                    continue
+                out.append(os.path.join(dp, fn))
+                n += 1
+                if n >= MAX_REG_FILES:
+                    break
+            if n >= MAX_REG_FILES:
+                break
+    return out
+
+
+def _rec_tuple(r):
+    return (r.agent, r.date, r.session, r.model,
+            r.inp, r.cw, r.cr, r.out, r.think, r.key)
+
+
+def _rec_obj(t):
+    return R(t[0], t[1], t[2], t[3], t[4], t[5], t[6], t[7], t[8], key=t[9])
+
+
+def _takes_arg(fn):
+    try:
+        import inspect
+        return len(inspect.signature(fn).parameters) > 0
+    except (TypeError, ValueError):
+        return False
+
+
+def cached_scan(key, files_fn, real_fn):
+    """通用包装：文件未变则复用上次解析结果。real_fn 返回 list[R] 或 (list[R], meta)"""
+    if scan_cache is None:
+        return real_fn()
+    verdict = scan_cache.get_verdict(key)
+    if verdict:
+        CACHE_STATS["verdict"] += 1
+        SKIP_NOTES[key] = verdict
+        return [], {"缓存": "命中上次判定", "说明": verdict}
+    try:
+        files = files_fn()
+    except Exception:
+        files = []
+    flat = files if not isinstance(files, tuple) else [p for sub in files for p in sub]
+    fp = scan_cache.fingerprint(scan_cache.file_entries(flat)) if flat else ""
+    if fp:
+        hit = scan_cache.get_records(key, fp)
+        if hit is not None:
+            CACHE_STATS["hit"] += 1
+            return [_rec_obj(t) for t in hit], {"缓存": "命中（文件未变化）"}
+    CACHE_STATS["miss"] += 1
+    # real_fn 能收清单就传给它（避免重复遍历目录），否则无参调用
+    res = real_fn(files) if _takes_arg(real_fn) else real_fn()
+    recs = res[0] if isinstance(res, tuple) else res
+    truncated = key in SKIP_NOTES
+    if not recs:
+        scan_cache.remember_verdict(key, SKIP_NOTES.get(key) or "本机无可用用量")
+    elif fp and not truncated:
+        scan_cache.put_records(key, fp, [_rec_tuple(r) for r in recs])
+    return res
+
+
+def cached_hand(name, fn):
+    """给手写扫描器套缓存；没登记根目录的原样返回"""
+    specs = HAND_ROOTS.get(name)
+    if not specs or scan_cache is None:
+        return fn
+
+    def _wrapped():
+        return cached_scan(name, lambda: _hand_files(specs), fn)
+    return _wrapped
+
 # 已有手写扫描器（含同一应用的别称路径），注册表命中即跳过
 HANDLED_IDS = {
     "claude-code", "codex", "zcode", "opencode", "hermes",
@@ -591,7 +712,16 @@ REG_STATUSES = {"verified", "candidate"}
 
 MAX_REG_FILES = 600                      # 单源文件数上限，防止超大目录拖死面板
 MAX_WALK_ENTRIES = 60000                 # 单源遍历上界（有源两万多条目、日志在深处）
-WALK_CAP_HIT = [False]                   # 遍历被截断的留痕：截断=结果不完整，整源作废
+# 截断留痕必须 thread-local：并发扫描时不能让 A 源的标记被 B 源读到
+_TL = threading.local()
+
+
+def _cap_get():
+    return getattr(_TL, 'hit', False)
+
+
+def _cap_set(v):
+    setattr(_TL, 'hit', bool(v))
 _ZERO_RESULT = set()                     # 进程内记忆：上次扫完是空的源，本次直接跳过
 MAX_SOURCE_SECONDS = 25.0                  # 单源时间预算：超预算整源丢弃，不给半截数字
 CHECK_EVERY_LINES = 4000                   # 行级预算检查粒度（单个会话日志可达 1GB）                   # 单源时间预算：超预算整源跳过，不给半截数字
@@ -816,7 +946,7 @@ def reg_files(root, seen_real):
         for fn in names:
             scanned += 1
             if scanned > MAX_WALK_ENTRIES:
-                WALK_CAP_HIT[0] = True          # 留痕：绝不静默少算
+                _cap_set(True)          # 留痕：绝不静默少算
                 return
             if not fn.lower().endswith((".jsonl", ".ndjson", ".json")):
                 continue
@@ -851,7 +981,7 @@ def reg_dbs(root, cap=6, seen_real=None):
             scanned += 1
             if scanned > MAX_WALK_ENTRIES:
                 capped = True
-                WALK_CAP_HIT[0] = True
+                _cap_set(True)
                 break
             if not fn.lower().endswith((".db", ".sqlite", ".sqlite3")):
                 continue
@@ -885,19 +1015,33 @@ def _merge_total_only(bucket, out_recs, agent):
                           key="cum:%s:%s" % (sess, model)))
 
 
-def scan_reg_jsonl_one(src, agent, seen_real):
+def _iter_src_json(src, seen_real):
+    """未提供现成清单时的回退：自行遍历该源的 json 文件"""
+    for t in src.get("paths", []):
+        root = reg_path(t)
+        if os.path.exists(root):
+            for p in reg_files(root, seen_real):
+                yield p
+
+
+def _iter_src_dbs(src, seen_real):
+    """未提供现成清单时的回退：自行遍历该源的 sqlite 库"""
+    for t in src.get("paths", []):
+        root = reg_path(t)
+        if os.path.exists(root):
+            for p in reg_dbs(root, seen_real=seen_real):
+                yield p
+
+
+def scan_reg_jsonl_one(src, agent, seen_real, pre=None):
     recs, seen, nf = [], set(), 0
     folded = [0]                                # 被折叠掉的重复 usage 条数
     cum = {}                                    # (session, model) -> (date, 最大总量)
     t0 = time.time()
     truncated = False
-    for t in src.get("paths", []):
-        root = reg_path(t)
-        if not os.path.exists(root):
-            continue
-        if truncated:
-            break
-        for path in reg_files(root, seen_real):
+    # pre: 上层已遍历出的文件清单 —— 传进来就别再走一遍树
+    stream = pre if pre is not None else _iter_src_json(src, seen_real)
+    for path in stream:
             if nf >= MAX_REG_FILES or time.time() - t0 > MAX_SOURCE_SECONDS:
                 truncated = True                # 半截数字不可信，整源作废
                 break
@@ -946,21 +1090,14 @@ def scan_reg_jsonl_one(src, agent, seen_real):
     return recs
 
 
-def scan_reg_sqlite_one(src, agent, seen_real):
+def scan_reg_sqlite_one(src, agent, seen_real, pre=None):
     recs = []
     cum = {}
     t0 = time.time()
     truncated = False
-    for t in src.get("paths", []):
-        if truncated:
-            break
-        if time.time() - t0 > MAX_SOURCE_SECONDS:
-            truncated = True
-            break
-        root = reg_path(t)
-        if not os.path.exists(root):
-            continue
-        for db in reg_dbs(root, seen_real=seen_real):
+    # pre: 上层已枚举出的 sqlite 清单 —— 传进来就别再走一遍树
+    _dbs = pre if pre is not None else list(_iter_src_dbs(src, seen_real))
+    for db in _dbs:
             try:
                 con = sqlite3.connect("file:" + db.replace("\\", "/").replace("#", "%23")
                                       + "?mode=ro", uri=True, timeout=5)
@@ -1023,23 +1160,46 @@ def make_registry_scanner(src):
     """一个源同时跑 jsonl + sqlite 两条通用解析，不依赖注册表 fmt 字段写对没有"""
     agent = src["id"]
 
+    def _files():
+        """只遍历一次，返回 (json清单, db清单)，供指纹与扫描器共用"""
+        fl, dl, s1, s2 = [], [], set(), set()
+        for t in src.get("paths", []):
+            root = reg_path(t)
+            if not os.path.exists(root):
+                continue
+            fl.extend(reg_files(root, s1))
+            dl.extend(reg_dbs(root, seen_real=s2))
+        return fl, dl
+
+    def _raw(filelist=None):
+        seen_real = set()                       # 同一源的 json 与 sqlite 共用
+        _cap_set(False)
+        if filelist is None:
+            out = scan_reg_jsonl_one(src, agent, seen_real)
+            out += scan_reg_sqlite_one(src, agent, seen_real)
+            return out
+        fl, dl = filelist
+        out = scan_reg_jsonl_one(src, agent, seen_real, pre=fl)
+        out += scan_reg_sqlite_one(src, agent, seen_real, pre=dl)
+        return out
+        if _cap_get():                     # 遍历被截断 -> 结果不完整，整源作废
+            _cap_set(False)
+            SKIP_NOTES[agent] = "目录条目超上限，结果不完整，整源未计入"
+            _ZERO_RESULT.add(agent)             # 下次重建直接跳过，别重走 6 万条目
+            if scan_cache:
+                scan_cache.remember_verdict(agent, SKIP_NOTES[agent])
+            return [], {"注册表": agent, "说明": SKIP_NOTES[agent]}
+        note = SKIP_NOTES.get(agent, "通用解析（注册表驱动）")
+        return out, {"注册表": agent, "说明": note}
+
     def _fn():
         if agent in _ZERO_RESULT:               # 上次就是空，本次不重走目录
             return [], {"注册表": agent, "说明": "本机无可用用量（已缓存判定）"}
-        seen_real = set()                       # 同一源的 json 与 sqlite 共用
-        WALK_CAP_HIT[0] = False
-        out = scan_reg_jsonl_one(src, agent, seen_real)
-        out += scan_reg_sqlite_one(src, agent, seen_real)
-        if WALK_CAP_HIT[0]:                     # 遍历被截断 -> 结果不完整，整源作废
-            WALK_CAP_HIT[0] = False
-            SKIP_NOTES[agent] = "目录条目超上限，结果不完整，整源未计入"
-            _ZERO_RESULT.add(agent)             # 下次重建直接跳过，别重走 6 万条目
-            return [], {"注册表": agent, "说明": SKIP_NOTES[agent]}
-        if not out:
-            # 含"目录超上限被截断"的源：下次仍会被截断，缓存判定避免重走 6 万条目
-            _ZERO_RESULT.add(agent)
-        note = SKIP_NOTES.get(agent, "通用解析（注册表驱动）")
-        return out, {"注册表": agent, "说明": note}
+        res = cached_scan(agent, _files, _raw) if scan_cache else _raw()
+        recs = res[0] if isinstance(res, tuple) else res
+        if not recs and agent not in SKIP_NOTES:
+            _ZERO_RESULT.add(agent)             # 含被截断的源，下次别再重走 6 万条目
+        return res
     return _fn
 
 
@@ -1060,9 +1220,46 @@ def build_extra_sources():
 EXTRA_SOURCES = build_extra_sources()
 
 
-def all_merged_sources():
-    """面板实际并入总量的扫描器"""
-    return ORIGINAL_SOURCES + NEW_SOURCES + EXTRA_SOURCES
+def run_all_sources(workers=8, use_cache=True):
+    """并行执行全部并入总量的扫描器，返回 (recs, errors)。
+
+    各源绝大多数是 I/O 等待（遍历目录 / stat / 读日志），线程池收益明显。
+    单源异常只记进 errors，绝不拖垮整次构建。
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    jobs = all_merged_sources(use_cache=use_cache)
+    recs, errors = [], []
+    if not jobs:
+        return recs, errors
+    workers = max(1, min(int(workers or 1), len(jobs)))
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        futs = {ex.submit(fn): name for name, fn in jobs}
+        for fu in as_completed(futs):
+            name = futs[fu]
+            try:
+                r = fu.result()
+            except Exception as e:                      # 单源失败不影响整体
+                errors.append({"agent": name, "error": str(e)[:120]})
+                continue
+            recs += r[0] if isinstance(r, tuple) else r
+    return recs, errors
+
+
+def flush_cache():
+    """把本轮新增的缓存落盘（一次构建结束时调一次）"""
+    if scan_cache is not None:
+        scan_cache.save()
+    return dict(CACHE_STATS)
+
+
+def all_merged_sources(use_cache=True):
+    """面板实际并入总量的扫描器。use_cache=False 可强制全量重扫。"""
+    a, b = ORIGINAL_SOURCES, NEW_SOURCES
+    if use_cache and scan_cache is not None:
+        a = [(n, cached_hand(n, f)) for n, f in a]
+        b = [(n, cached_hand(n, f)) for n, f in b]
+    return a + b + EXTRA_SOURCES
 
 
 def main():
