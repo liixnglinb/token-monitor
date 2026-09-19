@@ -25,7 +25,7 @@ _DIR = None
 _PATH = None
 _MEM = None                      # dict 或 None（未加载）
 LAST_ERROR = [None]              # 最近一次落盘失败原因（供面板显示）
-_FMT = 3                         # 结构版本；改记录字段时 +1 让旧缓存自动作废
+_FMT = 4                         # 结构版本；改记录字段时 +1 让旧缓存自动作废
 
 # (agent, date, session, model, inp, cw, cr, out, think, key)
 FIELDS = 10
@@ -56,13 +56,14 @@ def _load():
     cache_dir()                       # 确保 _PATH 已初始化（否则 open(None) 直接炸）
     if _MEM is not None:
         return _MEM
-    data = {"fmt": _FMT, "sources": {}, "verdicts": {}}
+    data = {"fmt": _FMT, "sources": {}, "verdicts": {}, "files": {}}
     try:
         with open(_PATH, "r", encoding="utf-8") as f:
             raw = json.load(f)
         if isinstance(raw, dict) and raw.get("fmt") == _FMT:
             data["sources"] = raw.get("sources") or {}
             data["verdicts"] = raw.get("verdicts") or {}
+            data["files"] = raw.get("files") or {}
     except (OSError, ValueError):
         pass
     _MEM = data
@@ -159,6 +160,25 @@ def save():
     return True
 
 
+# ---------------- 文件级增量缓存 ----------------
+def get_file(real):
+    '"""返回 {m: mtime_ns, s: size, n: 已消费记录数, recs: [元组]} 或 None"""'
+    with _LOCK:
+        return _load()["files"].get(real)
+
+
+def put_file(real, m, s, n, recs):
+    with _LOCK:
+        d = _load()
+        d["files"][real] = {"m": m, "s": s, "n": int(n),
+                            "recs": [list(r) for r in recs]}
+
+
+def drop_file(real):
+    with _LOCK:
+        _load()["files"].pop(real, None)
+
+
 def stats():
     d = _load()
     n = sum(len(v.get("recs") or []) for v in d["sources"].values())
@@ -167,4 +187,5 @@ def stats():
     except (OSError, TypeError):
         size = 0
     return {"sources": len(d["sources"]), "verdicts": len(d["verdicts"]),
+            "files": len(d.get("files") or {}),
             "records": n, "bytes": size, "path": _PATH}

@@ -111,10 +111,8 @@ def _build():
     global _INDEX, ORIGIN
     if _INDEX is not None:
         return _INDEX
-    # 最低优先级：随产品发布的内置快照
-    raw = _load_bundled()
-    ORIGIN["bundled"] = len(raw)
-    # 优先级由低到高，后者覆盖前者
+    # 本机价表优先，优先级由低到高，后者覆盖前者
+    raw = {}
     for fn in ("pricing-models-dev.json", "pricing-openrouter.json",
                "pricing-litellm.json"):
         for m, v in _load_json(fn).items():
@@ -126,6 +124,13 @@ def _build():
                 raw[_norm(m)] = tup
     # CC Switch 仅作补漏，不覆盖已有的权威价格
     for m, v in _ccswitch_pricing().items():
+        raw.setdefault(m, v)
+    ORIGIN["cache"] = len(raw)
+
+    # 内置快照只**补空位**：本机没有的模型才用它兜底。
+    # 不能当基线先插入 —— 快照里含短名条目，而索引是短名先到先得，
+    # 那样快照里的旧价会遮蔽本机更新过的价（实测总价从 $1286 掉到 $581）。
+    for m, v in _load_bundled().items():
         raw.setdefault(m, v)
 
     # 建索引：同时登记 全名 与 去 provider 前缀后的短名

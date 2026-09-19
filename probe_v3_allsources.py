@@ -1051,11 +1051,32 @@ def scan_reg_jsonl_one(src, agent, seen_real, pre=None):
             except OSError:
                 continue
             nf += 1
-            idx = 0
+            # ---- 文件级增量（借鉴 claude-usage 的 processed_files）----
+            ck, fm, fs = None, -1, -1
+            if scan_cache is not None and path.lower().endswith((".jsonl", ".ndjson")):
+                try:
+                    ck = real_path(path)
+                    _st = os.stat(path)
+                    fm, fs = _st.st_mtime_ns, _st.st_size
+                except OSError:
+                    ck = None
+            cached = scan_cache.get_file(ck) if ck else None
+            if cached and cached.get("m") == fm and cached.get("s") == fs:
+                for t in cached.get("recs") or []:
+                    recs.append(_rec_obj(t))          # 文件没变：连读都不读
+                continue
+            base, skip = [], 0
+            if cached and 0 < cached.get("s", 0) <= fs:
+                base = list(cached.get("recs") or [])   # 纯追加：只解析新增尾部
+                skip = int(cached.get("n") or 0)
+            new, idx, used = [], 0, 0
             for obj in iter_records(path):
                 if not isinstance(obj, dict):
                     continue
                 idx += 1
+                used = idx
+                if idx <= skip:
+                    continue
                 if idx % CHECK_EVERY_LINES == 0 and time.time() - t0 > MAX_SOURCE_SECONDS:
                     truncated = True
                     break
@@ -1077,10 +1098,16 @@ def scan_reg_jsonl_one(src, agent, seen_real, pre=None):
                     folded[0] += 1
                     continue
                 seen.add(key)
-                recs.append(R(agent, d, sess, model, inp, cw, cr, out, think,
-                              key="%s:%d" % (os.path.basename(path), idx)))
+                new.append((agent, d, sess, model, inp, cw, cr, out, think,
+                            "%s:%d" % (os.path.basename(path), idx)))
             if truncated:
                 break
+            if ck:
+                # 只要没中途截断就写回：mtime 变了但没新增记录时，
+                # 也要把新 mtime 记上（否则下次又整文件重读，缓存白做）
+                scan_cache.put_file(ck, fm, fs, max(used, skip), base + new)
+            for t in base + new:
+                recs.append(_rec_obj(t))
     if truncated:
         SKIP_NOTES[agent] = "超预算（日志体量过大），整源未计入"
         return []
