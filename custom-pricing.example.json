@@ -1,0 +1,16 @@
+{
+  "//说明": "自定义模型单价。用于补内置价表里没有的模型，属最高优先级。",
+  "//单位": "每 100 万 token 的美元价（不是 per-token）",
+  "//格式": "\"模型名\": {\"input\":3, \"output\":15, \"cache_write\":3.75, \"cache_read\":0.3}",
+  "//别名": "in/out/w/r、prompt/completion 均可；缺 cache 项按 input 的 1.25x 与 0.1x 估算",
+  "//放哪": "%LOCALAPPDATA%\\TokenMonitor\\custom-pricing.json，或程序同目录",
+  "//注意": "请核对官方定价后再填。本文件默认不含任何生效条目，未计价会如实显示「价格未知」。",
+  "//当前未计价的模型（按 tokens 降序，供参考）": [
+    "ark-code-latest",
+    "ox-alpha-free",
+    "sensenova-6.8-flash-lite",
+    "agnes-2.5-flash",
+    "sn-glm-5-3-flash",
+    "sn-deepseek-v4-pro"
+  ]
+}

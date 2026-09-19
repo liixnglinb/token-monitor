@@ -169,6 +169,16 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
       <option value="60">每 1 小时</option>
     </select>
     <div class="t" id="scanState" style="margin-top:6px;color:#e0a92b"></div>
+    <div class="t" id="scanInfo" style="margin-top:4px;color:#7e858f"></div>
+    <label class="t" style="margin-top:10px;display:flex;align-items:center;gap:6px;cursor:pointer">
+      <input type="checkbox" id="autoUpd" style="accent-color:#e0a92b">自动检查更新
+    </label>
+    <select id="updMin" class="sel" aria-label="更新检查间隔">
+      <option value="10">每 10 分钟</option>
+      <option value="30">每 30 分钟</option>
+      <option value="60">每 1 小时</option>
+      <option value="360">每 6 小时</option>
+    </select>
     <div class="t" id="verLine" style="margin-top:8px">版本 —</div>
   </div>
 </aside>
@@ -381,7 +391,17 @@ function init(){
 function renderAll(){
   renderRangeMenu();
   renderKPI(); renderMain(); renderAgentList();
-  renderModelTable(); renderNote();
+  renderModelTable(); renderNote(); renderScanInfo();
+}
+
+/* 扫描开销：命中/未命中/判定跳过，让"这次为什么慢"有处可看 */
+function renderScanInfo(){
+  const el = $("scanInfo"); if (!el) return;
+  const c = DATA && DATA.cache_stats;
+  if (!c) { el.textContent = ""; return; }
+  el.textContent = "扫描：命中 " + (c.hit||0) + " · 重扫 " + (c.miss||0)
+    + " · 跳过 " + (c.verdict||0);
+  el.title = "命中=文件未变化直接复用上次解析；重扫=本次真正解析；跳过=此前判定无可用数据";
 }
 
 /* ---------- 下拉菜单 ---------- */
@@ -736,6 +756,13 @@ function syncSettings(s){
   const el = $("autoMin");
   if (el && s.settings && document.activeElement !== el)
     el.value = String(s.settings.refresh_minutes ?? 0);
+  const st2 = $("autoUpd"), um = $("updMin");
+  if (s.settings) {
+    if (st2 && document.activeElement !== st2)
+      st2.checked = !!s.settings.auto_update_check;
+    if (um && document.activeElement !== um)
+      um.value = String(s.settings.update_check_minutes ?? 30);
+  }
   const ba = $("builtAt");
   if (ba && s.built_at){
     const d = new Date(s.built_at);
@@ -769,6 +796,20 @@ $("autoMin").onchange = async function(){
       body: JSON.stringify({ refresh_minutes: m }) });
   } catch(e){}
   pollMeta();
+};
+async function pushSettings(patch){
+  try {
+    await fetch("/api/settings", { method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch) });
+  } catch(e){}
+  pollMeta();
+}
+if ($("autoUpd")) $("autoUpd").onchange = function(){
+  pushSettings({ auto_update_check: this.checked });
+};
+if ($("updMin")) $("updMin").onchange = function(){
+  pushSettings({ update_check_minutes: parseInt(this.value, 10) || 30 });
 };
 
 /* ---------- 自动更新 ---------- */

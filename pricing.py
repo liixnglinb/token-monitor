@@ -87,6 +87,51 @@ def _res(name):
     return os.path.join(base, name)
 
 
+def _load_custom():
+    """用户自定义价表 —— 最高优先级，用来补我们不知道的模型。
+
+    查找顺序（后者覆盖前者）：
+      1) <程序目录>/custom-pricing.json
+      2) %LOCALAPPDATA%/TokenMonitor/custom-pricing.json
+
+    数值单位是「每 100 万 token 的美元价」，内部换算成 per-token。
+    格式：{"model-name": {"input": 3, "output": 15,
+                    "cache_write": 3.75, "cache_read": 0.3}}
+      别名：in/out/w/r、prompt/completion 也认；
+      缺 cache 项时按 Anthropic 口径用 input 的 1.25x / 0.1x 估算；
+      以 // 开头的键视为注释。
+    """
+    out = {}
+    paths = [_res("custom-pricing.json")]
+    la = os.environ.get("LOCALAPPDATA")
+    if la:
+        paths.append(os.path.join(la, "TokenMonitor", "custom-pricing.json"))
+    for p in paths:
+        try:
+            with open(p, encoding="utf-8") as f:
+                data = json.load(f)
+        except (OSError, ValueError):
+            continue
+        if not isinstance(data, dict):
+            continue
+        for m, v in data.items():
+            if str(m).startswith("//") or not isinstance(v, dict):
+                continue
+            # 用户写的是"每 100 万 token 美元"，这里换算成 per-token
+            pi = _first(v, ("input", "in", "prompt")) / 1e6
+            po = _first(v, ("output", "out", "completion")) / 1e6
+            pw = _first(v, ("cache_write", "w", "cache_creation")) / 1e6
+            pr = _first(v, ("cache_read", "r", "cached")) / 1e6
+            if not (pi or po):
+                continue
+            pw = pw or pi * 1.25
+            pr = pr or pi * 0.1
+            key = _norm(m)
+            out[key] = (pi, po, pw, pr)
+            out.setdefault(key.split("/")[-1], (pi, po, pw, pr))
+    return out
+
+
 def _load_bundled():
     """内置价表快照（已归一化，元组顺序同索引：in/out/cw/cr）。
 
@@ -132,6 +177,11 @@ def _build():
     # 那样快照里的旧价会遮蔽本机更新过的价（实测总价从 $1286 掉到 $581）。
     for m, v in _load_bundled().items():
         raw.setdefault(m, v)
+
+    # 用户自定义：最高优先级，最后覆盖（补内置价表里没有的模型）
+    cust = _load_custom()
+    ORIGIN["custom"] = len(cust)
+    raw.update(cust)
 
     # 建索引：同时登记 全名 与 去 provider 前缀后的短名
     idx = {}

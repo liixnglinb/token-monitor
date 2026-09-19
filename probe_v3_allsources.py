@@ -894,20 +894,45 @@ def _first(d, keys):
     return None
 
 
-def rec_ctx(obj):
-    """取 (date, session, model)；兼容 message / payload / data 再包一层"""
+def _pick_model(obj, depth=0):
+    """递归找模型名。限深度、值必须是字符串，避开 maxTokens / modelId 之类的配置项。"""
+    if depth > 6 or not isinstance(obj, dict):
+        return None
+    for k in _MODEL_KEYS:
+        v = obj.get(k)
+        if isinstance(v, str) and v.strip() and len(v) < 80:
+            return v.strip().lower()
+    for k in ("header", "config", "model_config", "request", "settings"):
+        v = obj.get(k)
+        if isinstance(v, dict):
+            r = _pick_model(v, depth + 1)
+            if r:
+                return r
+    for v in obj.values():
+        if isinstance(v, dict):
+            r = _pick_model(v, depth + 1)
+            if r:
+                return r
+    return None
+
+
+def rec_ctx(obj, fallback=None):
+    """取 (date, session, model)；兼容 message / payload / data 再包一层。
+
+    fallback: 本条记录自己没带模型时沿用的值（同文件内上一条已知模型）。
+    """
     boxes = [obj]
     for k in ("message", "payload", "data", "info"):
         v = obj.get(k)
         if isinstance(v, dict):
             boxes.append(v)
-    date = model = sess = None
+    date = sess = None
     for b in boxes:
         date = date if date is not None else _first(b, _TS_KEYS)
-        model = model if model is not None else _first(b, _MODEL_KEYS)
         sess = sess if sess is not None else _first(b, _SESS_KEYS)
+    model = _pick_model(obj)
     return (to_date(date), str(sess or ""),
-            str(model).lower() if model else "unknown")
+            model or (fallback or "unknown"))
 
 
 def iter_records(path):
@@ -1039,9 +1064,11 @@ def scan_reg_jsonl_one(src, agent, seen_real, pre=None):
     cum = {}                                    # (session, model) -> (date, 最大总量)
     t0 = time.time()
     truncated = False
+    last_model = None                     # 文件内向后传递的模型名
     # pre: 上层已遍历出的文件清单 —— 传进来就别再走一遍树
     stream = pre if pre is not None else _iter_src_json(src, seen_real)
     for path in stream:
+            last_model = None             # 每个文件独立传递（循环体是 12 空格）
             if nf >= MAX_REG_FILES or time.time() - t0 > MAX_SOURCE_SECONDS:
                 truncated = True                # 半截数字不可信，整源作废
                 break
@@ -1070,11 +1097,18 @@ def scan_reg_jsonl_one(src, agent, seen_real, pre=None):
                 base = list(cached.get("recs") or [])   # 纯追加：只解析新增尾部
                 skip = int(cached.get("n") or 0)
             new, idx, used = [], 0, 0
+            if last_model is None:
+                last_model = "unknown"
             for obj in iter_records(path):
                 if not isinstance(obj, dict):
                     continue
                 idx += 1
                 used = idx
+                # 模型名常在另一类记录里（如 box-agent 的 request/header），
+                # 且顺序在 usage 之前，所以按文件向后传递
+                _m = _pick_model(obj)
+                if _m:
+                    last_model = _m
                 if idx <= skip:
                     continue
                 if idx % CHECK_EVERY_LINES == 0 and time.time() - t0 > MAX_SOURCE_SECONDS:
@@ -1084,7 +1118,7 @@ def scan_reg_jsonl_one(src, agent, seen_real, pre=None):
                 if not got:
                     continue
                 inp, cw, cr, out, think, total_only = got
-                d, sess, model = rec_ctx(obj)
+                d, sess, model = rec_ctx(obj, last_model)
                 if total_only:
                     k = (sess or os.path.basename(path), model)
                     prev = cum.get(k)
@@ -1188,7 +1222,13 @@ def make_registry_scanner(src):
     agent = src["id"]
 
     def _files():
-        """只遍历一次，返回 (json清单, db清单)，供指纹与扫描器共用"""
+        """只遍历一次，返回 (json清单, db清单)，供指纹与扫描器共用。
+
+        不做时间预算：曾试过"没找到文件就走满 N 秒则放弃"，
+        结果误杀了 box-agent（两万多条目、会话日志在深处）—— 2.93 亿 tokens 静默消失。
+        "走不完"不等于"没有"。零结果判定已由 scan_cache 的 verdicts 跨进程持久化，
+        这笔遍历开销只在缓存清空后的第一次付。
+        """
         fl, dl, s1, s2 = [], [], set(), set()
         for t in src.get("paths", []):
             root = reg_path(t)
