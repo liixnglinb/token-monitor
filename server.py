@@ -273,8 +273,37 @@ def api_version():
     return JSONResponse(_R.version())
 
 
+@app.post("/api/update/download")
+def api_update_download():
+    """第一段：仅下载并校验，暂存等待确认（前端据此显示「已下载，重启即可安装」胶囊）"""
+    try:
+        latest, assets, _meta = updater.fetch_latest()
+        asset = updater.find_exe_asset(assets)
+        if asset is None:
+            return JSONResponse({"ok": False,
+                                 "error": "Release 中没有可更新的 exe 资产"}, status_code=400)
+        updater.download_staged(asset, checksum_asset=updater.find_sum_asset(assets),
+                                version=latest)
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)[:200]}, status_code=500)
+    return {"ok": True, "latest": latest, "size": asset.get("size")}
+
+
+@app.post("/api/update/apply")
+def api_update_apply():
+    """第二段：对暂存包写替换脚本，1 秒后退出当前进程让脚本接管重启"""
+    try:
+        latest = updater.STAGED.get("version")
+        updater.apply_staged()
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)[:200]}, status_code=400)
+    threading.Timer(1.0, lambda: os._exit(0)).start()
+    return {"ok": True, "latest": latest}
+
+
 @app.post("/api/update")
 def api_update():
+    """兼容入口：下载 + 安装一步到位（不拆段）"""
     try:
         latest, assets, _meta = updater.fetch_latest()
         asset = updater.find_exe_asset(assets)

@@ -157,8 +157,14 @@ def _download(url: str, dest: str, timeout: int = 300, min_size: int = 1024 * 10
     raise last_err or RuntimeError("所有下载源均失败")
 
 
-def download_and_apply(asset: dict, checksum_asset=None):
-    """下载新版 exe → 校验完整性 → 写自替换脚本 → 启动脚本。当前进程由 server 侧退出。
+# 已下载待安装的更新包：download_staged 暂存，apply_staged 消费。
+# 拆成两段是为了复刻 ZCode 的「已下载，重启即可安装」确认态——
+# 下载完成不立即重启，等用户点左下角胶囊再替换。
+STAGED = {}
+
+
+def download_staged(asset: dict, checksum_asset=None, version: str = None) -> str:
+    """第一段：下载新版到临时目录并校验完整性，暂存等待确认安装。返回暂存路径。
 
     完整性校验优先级：
       1) checksum_asset 不为 None 时，先下载对应 .sha256 并比对 SHA256，不一致直接中止；
@@ -190,6 +196,20 @@ def download_and_apply(asset: dict, checksum_asset=None):
     # 体积兜底：无 sha256 或 sha256 不可用时，仍要求至少 1MB，避免错误页直接替换
     if os.path.getsize(tmp) < 1024 * 1024:
         raise RuntimeError("下载的更新包异常，已中止")
+
+    STAGED.clear()
+    STAGED.update({"tmp": tmp, "asset": dict(asset), "version": version})
+    return tmp
+
+
+def apply_staged(tmp: str = None) -> None:
+    """第二段：为暂存的更新包写自替换脚本并启动；当前进程由 server 侧退出。"""
+    _, exe = _base()
+    tmp = tmp or STAGED.get("tmp")
+    if not exe or not os.path.exists(exe):
+        raise RuntimeError("仅打包版（PyInstaller exe）支持自更新")
+    if not tmp or not os.path.exists(tmp):
+        raise RuntimeError("暂存的更新包不存在，请重新下载")
 
     pid = os.getpid()
     exe_old = exe + ".old"
@@ -254,3 +274,9 @@ def download_and_apply(asset: dict, checksum_asset=None):
             'del "%~f0"\r\n')
     subprocess.Popen(["cmd", "/c", bat], close_fds=True,
                      creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+
+
+def download_and_apply(asset: dict, checksum_asset=None):
+    """兼容入口：下载 + 校验 + 直接进入替换流程（一步到位，不等确认）。"""
+    tmp = download_staged(asset, checksum_asset)
+    apply_staged(tmp)

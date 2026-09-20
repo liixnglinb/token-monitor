@@ -184,6 +184,14 @@ aside{border-right:1px solid rgba(255,255,255,.05)}
 .upd-tip .body b{color:#DADADF;font-weight:600}
 .upd-tip .body code{font-family:ui-monospace,Consolas,monospace;font-size:11px;background:rgba(255,255,255,.07);border-radius:4px;padding:1px 5px}
 .upd-tip .hint{color:var(--dim);font-size:11.5px;border-top:.5px solid #2E2E34;padding-top:8px;margin-top:4px}
+/* 左下角更新胶囊（对齐 ZCode）：已下载待安装时常驻，点击重启安装 */
+#updPill{position:fixed;left:10px;bottom:10px;z-index:56;display:inline-flex;align-items:center;gap:7px;
+  background:#1E1F24;border:1px solid rgba(255,255,255,.10);border-radius:9px;
+  padding:8px 14px;font-size:12.5px;color:var(--sub);cursor:pointer;
+  box-shadow:0 12px 30px -10px rgba(0,0,0,.7);animation:popIn .22s cubic-bezier(.22,1,.36,1)}
+#updPill svg{width:14px;height:14px;color:var(--cyan);flex:none}
+#updPill:hover{color:var(--txt);border-color:rgba(255,255,255,.2)}
+#updPill[hidden]{display:none}
 .upd-tip .go{display:inline-flex;align-items:center;gap:6px;background:var(--blue);color:#fff;border:0;
   border-radius:7px;padding:6px 13px;font-size:12.5px;font-weight:600;cursor:pointer}
 .upd-tip .go:hover{filter:brightness(1.15)}
@@ -1244,6 +1252,10 @@ let tipPinned = false, tipHovered = false;
    此前 checkUpdate 只刷新设置页按钮、从不回写 UPD —— 悬停提示与
    红点指示整条链路处于死状态（v1.2.x 改版时断线），这里补上 */
 function syncUpd(v){
+  if (UPD.state === "ready"){
+    /* 已下载待安装：周期检查不改写状态，否则会把确认胶囊打断回「发现新版本」 */
+    setUpdUI(); return;
+  }
   UPD.ver = v.version || null;
   UPD.latest = v.latest || null;
   UPD.body = v.body || "";
@@ -1279,10 +1291,11 @@ function setUpdUI(){
   const dot = $("updBadge"), spin = $("updSpin"), mini = $("updMini");
   if (!dot || !spin || !mini) return;
   const st = UPD.state;
-  dot.hidden = !(st === "update" || st === "done");
-  dot.className = "dot " + (st === "update" ? "update" : st === "done" ? "done" : "");
+  dot.hidden = !(st === "update" || st === "done" || st === "ready");
+  dot.className = "dot " + (st === "done" ? "done" : "update");
   spin.hidden = st !== "dl";
   mini.title = st === "update" ? "发现新版本 v" + (UPD.latest || "") + "，点击查看"
+    : st === "ready" ? "v" + (UPD.latest || "") + " 已下载，点击立即安装"
     : st === "dl" ? "正在下载更新…"
     : st === "done" ? "更新完成，正在重启" : "检查更新";
 }
@@ -1302,6 +1315,10 @@ function renderUpdTip(confirmed){
           ? '<button class="go" onclick="startUpdate()">立即更新</button>'
             + '<button class="later" onclick="hideUpdTip()">稍后</button>'
           : '<div class="hint">点击图标确认更新</div>');
+  } else if (UPD.state === "ready" && UPD.latest){
+    /* 已下载待安装：提示去哪确认 */
+    html = '<div class="t1">v' + esc(UPD.latest) + ' 已下载</div>'
+      + '<div class="hint" style="border-top:0;padding-top:0">重启应用即自动完成安装——点击左下角胶囊，或再次点击此图标立即安装。</div>';
   } else {
     html = '<div class="t1">' + (UPD.ver ? "当前 v" + esc(UPD.ver) : "Token Monitor") + '</div>'
       + '<div style="color:#8A8A90;margin-top:3px">'
@@ -1327,6 +1344,7 @@ const miniEl = $("updMini");
 if (miniEl){
   miniEl.addEventListener("mouseenter", () => {
     if (UPD.state === "update" && !tipPinned) renderUpdTip(false);
+    else if (UPD.state === "ready") renderUpdTip(true);
     else if (UPD.state === "dl") renderUpdTip(false);
   });
   miniEl.addEventListener("mouseleave", () => {
@@ -1334,6 +1352,7 @@ if (miniEl){
   });
   miniEl.addEventListener("click", () => {
     if (UPD.state === "update"){ tipPinned = !tipPinned; renderUpdTip(true); }
+    else if (UPD.state === "ready"){ applyUpdate(); }
     else if (UPD.state === "dl"){ tipPinned = !tipPinned; renderUpdTip(false); }
     else { checkUpdate(false); }
   });
@@ -1369,14 +1388,23 @@ async function checkUpdate(silent){
     btn.dataset.pending = "";
   }
 }
-$("updBtn").onclick = async function(){
-  if (this.dataset.pending !== "1"){ checkUpdate(false); return; }
-  this.disabled = true;
-  this.textContent = "下载新版本…"; UPD.state = "dl"; setUpdUI();
+/* ---------- 左下角更新胶囊（对齐 ZCode）：下载完成后常驻，点击重启安装 ---------- */
+function showReadyPill(v){
+  const pill = $("updPill"); if (!pill) return;
+  $("updPillT").textContent = "v" + v + " 已下载，重启即可安装";
+  pill.hidden = false;
+  pill.onclick = () => applyUpdate();
+}
+function hidePill(){ const p = $("updPill"); if (p) p.hidden = true; }
+
+async function applyUpdate(){
+  hideUpdTip(); hidePill();
+  const btn = $("updBtn");
+  btn.disabled = true; btn.textContent = "安装中，即将重启…";
+  UPD.state = "done"; setUpdUI();
   try {
-    const r = await (await fetch("/api/update", { method: "POST" })).json();
-    if (!r.ok) throw new Error(r.error || "更新失败");
-    this.textContent = "更新完成，应用即将重启…"; UPD.state = "done"; setUpdUI();
+    const r = await (await fetch("/api/update/apply", { method: "POST" })).json();
+    if (!r.ok) throw new Error(r.error || "安装失败");
     let tries = 0;
     const t = setInterval(async () => {
       tries++;
@@ -1384,19 +1412,41 @@ $("updBtn").onclick = async function(){
         const v = await (await fetch("/api/version")).json();
         clearInterval(t);
         $("verLine").textContent = "版本 v" + v.version;
-        this.disabled = false;
-        this.textContent = "已是最新";
-        this.dataset.pending = "";
+        btn.disabled = false; btn.textContent = "已是最新"; btn.dataset.pending = "";
+        UPD.state = "idle"; setUpdUI();
         location.reload();
       } catch(_){ /* 新进程未就绪，继续等 */ }
-      if (tries > 45){ clearInterval(t); this.textContent = "更新超时，请重启应用"; }
+      if (tries > 45){ clearInterval(t); btn.textContent = "更新超时，请重启应用"; }
     }, 2000);
   } catch(e){
-    this.disabled = false;
-    this.textContent = "更新失败：重试";
+    /* 暂存包丢失（如服务重启过）→ 回到发现新版本态，让用户重新下载 */
+    btn.disabled = false; btn.textContent = "安装失败：重新下载";
+    UPD.state = "idle"; setUpdUI(); checkUpdate(true);
+  }
+}
+window.applyUpdate = applyUpdate;
+
+$("updBtn").onclick = async function(){
+  if (UPD.state === "ready"){ applyUpdate(); return; }
+  if (this.dataset.pending !== "1"){ checkUpdate(false); return; }
+  this.disabled = true;
+  this.textContent = "下载新版本…"; UPD.state = "dl"; setUpdUI();
+  try {
+    /* 两段式：先只下载校验（不重启），成功后出「已下载，重启即可安装」胶囊 */
+    const r = await (await fetch("/api/update/download", { method: "POST" })).json();
+    if (!r.ok) throw new Error(r.error || "下载失败");
+    UPD.state = "ready"; setUpdUI();
+    this.disabled = false; this.textContent = "重启安装 v" + r.latest;
+    this.dataset.pending = "1";
+    UPD.latest = r.latest;
+    showReadyPill(r.latest);
+  } catch(e){
+    this.disabled = false; this.textContent = "更新失败：重试";
+    UPD.state = "idle"; setUpdUI();
   }
 };
 </script>
   <div class="upd-tip" id="updTip" hidden></div>
+  <div id="updPill" hidden><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 2.5v7M5.5 7L8 9.5 10.5 7M3.5 11h9"/></svg><span id="updPillT"></span></div>
 </body>
 </html>
