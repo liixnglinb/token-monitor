@@ -6,15 +6,37 @@
 
 打包：pyinstaller TokenMonitor.spec
 """
+import logging
+import os
 import socket
+import sys
+import tempfile
 import threading
 import time
+import traceback
 import urllib.request
 
 import webview
 
 WINDOW_TITLE = "Token Monitor"
 BG = "#0B0C0E"          # 与面板底色一致，加载时不闪白
+
+
+def _setup_log() -> logging.Logger:
+    """文件日志：windowed 模式没有控制台，出问题只能靠它排查"""
+    base = os.environ.get("LOCALAPPDATA") or tempfile.gettempdir()
+    d = os.path.join(base, "TokenMonitor")
+    try:
+        os.makedirs(d, exist_ok=True)
+        logging.basicConfig(
+            filename=os.path.join(d, "app.log"), level=logging.INFO,
+            format="%(asctime)s %(levelname)s %(message)s", encoding="utf-8")
+    except Exception:
+        logging.basicConfig(level=logging.INFO)
+    return logging.getLogger("tokenmonitor")
+
+
+LOG = _setup_log()
 
 
 def find_port(start: int = 8420) -> int:
@@ -30,9 +52,13 @@ def find_port(start: int = 8420) -> int:
 
 
 def serve(port: int) -> None:
-    import uvicorn
-    import server
-    uvicorn.run(server.app, host="127.0.0.1", port=port, log_level="warning")
+    try:
+        import uvicorn
+        import server
+        LOG.info("服务线程启动 port=%s", port)
+        uvicorn.run(server.app, host="127.0.0.1", port=port, log_level="warning")
+    except BaseException:
+        LOG.error("服务线程异常退出:\n%s", traceback.format_exc())
 
 
 def wait_ready(port: int, timeout: float = 20.0) -> bool:
@@ -98,9 +124,14 @@ class Api:
 
 
 def main() -> None:
+    LOG.info("=== 启动 exe=%s frozen=%s ===", sys.executable, getattr(sys, "frozen", False))
     port = find_port()
+    LOG.info("选定端口 %s", port)
     threading.Thread(target=serve, args=(port,), daemon=True).start()
-    wait_ready(port)
+    ok = wait_ready(port)
+    LOG.info("服务就绪=%s", ok)
+    if not ok:
+        LOG.warning("服务在 20 秒内未就绪，仍尝试开窗口（页面可能暂时连不上）")
 
     window = webview.create_window(
         WINDOW_TITLE,
@@ -116,7 +147,12 @@ def main() -> None:
     window.events.loaded += lambda: hook_external_links(window)
 
     # 阻塞在窗口事件循环；用户关闭窗口后返回，进程随之退出
-    webview.start()
+    try:
+        webview.start()
+    except BaseException:
+        LOG.error("窗口事件循环异常:\n%s", traceback.format_exc())
+        raise
+    LOG.info("窗口已关闭，进程退出")
 
 
 if __name__ == "__main__":
