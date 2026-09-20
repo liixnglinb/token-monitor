@@ -21,9 +21,11 @@ CST = timezone(timedelta(hours=8))
 
 DEFAULTS = {
     "refresh_minutes": 5,        # 数据自动重扫间隔；0 = 关闭
-    "auto_update_check": True,   # 是否自动检查软件新版本
-    "update_check_minutes": 30,  # 软件更新检查间隔
 }
+# 软件更新检查不再开放配置（产品决策，UI 不暴露任何"何时检测更新"项）：
+# 启动即检查一次，此后固定每 30 分钟一次。老 settings.json 里遗留的
+# auto_update_check / update_check_minutes 键会被 load_settings 直接丢弃。
+UPDATE_CHECK_MINUTES = 30
 MIN_REFRESH = 1
 MAX_REFRESH = 720
 
@@ -60,12 +62,6 @@ def _clamp(s):
     except (TypeError, ValueError):
         m = DEFAULTS["refresh_minutes"]
     s["refresh_minutes"] = 0 if m <= 0 else max(MIN_REFRESH, min(MAX_REFRESH, m))
-    try:
-        u = int(s.get("update_check_minutes", DEFAULTS["update_check_minutes"]))
-    except (TypeError, ValueError):
-        u = DEFAULTS["update_check_minutes"]
-    s["update_check_minutes"] = max(1, min(MAX_REFRESH, u))
-    s["auto_update_check"] = bool(s.get("auto_update_check", True))
     return s
 
 
@@ -117,15 +113,14 @@ class Refresher:
         while not self._stop.is_set():
             with self._lock:
                 rm = self.settings["refresh_minutes"]
-                um = self.settings["update_check_minutes"]
-                auto = self.settings["auto_update_check"]
                 dirty = self._dirty
             due_data = rm > 0 and (
                 dirty or self._built_at is None
                 or (time.time() - self._last_build_ts()) >= rm * 60)
-            due_ver = (auto and self._version_fn and (
+            # 更新检查固定策略：启动即查（_version_at 为空）+ 每 30 分钟，不受设置影响
+            due_ver = (self._version_fn is not None and (
                 self._version_at is None
-                or (time.time() - self._version_at) >= um * 60))
+                or (time.time() - self._version_at) >= UPDATE_CHECK_MINUTES * 60))
             if not due_data and not due_ver:
                 self._stop.wait(5.0)
                 continue

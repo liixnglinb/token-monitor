@@ -145,6 +145,45 @@ class Api:
         open_external(url)
 
 
+# ── 顶边融合：标题栏染成侧栏同色，实现 ZCode 式「无边框一体」观感 ──
+# 原理：DWM 允许给原生标题栏上色（Win11 22000+）。标题栏 = 侧栏色后，
+# 左侧 logo 列与标题栏在视觉上连成一根贯通到窗口顶的侧栏；
+# 右上角的原生最小化/关闭按钮保留（不牺牲缩放、贴靠、任务栏行为）。
+# Win10 不支持上色（调用返回错误码，被忽略），退化为深色标题栏。
+_DWM_SIDEBAR = 0x00191616      # COLORREF(0x00BBGGRR) ← 侧栏 #161619
+_DWM_TEXT = 0x00736B6B         # 标题文字 ← --dim #6B6B73（弱化到近隐形）
+_DWM_COLOR_NONE = 0xFFFFFFFE   # 去掉 1px 窗口边框线
+
+
+def fuse_titlebar() -> None:
+    """给窗口上 DWM 深色融合妆。找不到句柄或非 Win11 时静默跳过。"""
+    try:
+        import ctypes
+        user32 = ctypes.windll.user32
+        hwnd = 0
+        for _ in range(10):                       # 窗口句柄可能晚几百毫秒才就绪
+            hwnd = user32.FindWindowW(None, WINDOW_TITLE)
+            if hwnd:
+                break
+            time.sleep(0.3)
+        if not hwnd:
+            LOG.warning("fuse_titlebar: 未找到窗口句柄，跳过")
+            return
+        dwm = ctypes.windll.dwmapi
+        def _set(attr: int, val: int) -> None:
+            v = ctypes.c_uint(val)
+            dwm.DwmSetWindowAttribute(ctypes.c_void_p(hwnd),
+                                      ctypes.c_int(attr),
+                                      ctypes.byref(v), ctypes.sizeof(v))
+        _set(20, 1)                               # DWMWA_USE_IMMERSIVE_DARK_MODE
+        _set(35, _DWM_SIDEBAR)                    # DWMWA_CAPTION_COLOR
+        _set(36, _DWM_TEXT)                       # DWMWA_TEXT_COLOR
+        _set(34, _DWM_COLOR_NONE)                 # DWMWA_BORDER_COLOR
+        LOG.info("fuse_titlebar applied hwnd=%s", hwnd)
+    except Exception:
+        LOG.warning("fuse_titlebar 失败（不影响使用）:\n%s", traceback.format_exc())
+
+
 def main() -> None:
     global _INSTANCE_MUTEX
     LOG.info("=== 启动 exe=%s frozen=%s ===", sys.executable, getattr(sys, "frozen", False))
@@ -188,6 +227,7 @@ def main() -> None:
     )
 
     window.events.loaded += lambda: hook_external_links(window)
+    window.events.shown += lambda: fuse_titlebar()
 
     # 阻塞在窗口事件循环；用户关闭窗口后返回，进程随之退出
     try:
