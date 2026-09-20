@@ -7,8 +7,9 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='4' fill='%234D6BFE'/%3E%3Cpath d='M4 12L8 4l4 8z' fill='white'/%3E%3C/svg%3E">
 <style>
 :root{
-  --bg:#1A1A1C; --side:#1D1D20; --card:#252528; --card2:#2D2D31;
-  --line:#2E2E32; --txt:#ECECEE; --sub:#9C9CA3; --dim:#6E6E76;
+  /* 层次靠亮度递增表达（参考 ZCode）：底 #1A → 侧栏 #21 → 卡片 #2A → 悬停 #33 */
+  --bg:#1A1A1C; --side:#212125; --card:#2A2A2F; --card2:#33333A;
+  --line:#2B2B31; --txt:#E9E9EB; --sub:#9A9A9E; --dim:#6E6E73;
   --blue:#4D6BFE; --cyan:#5DC3F0; --purple:#8E7CFF; --green:#37B48F;
   --amber:#EF9F27; --red:#E24B4A;
 }
@@ -61,8 +62,13 @@ main{flex:1;min-width:0;padding:20px 28px 48px}
 .chip i{font-style:normal;opacity:.7;font-size:14px;line-height:1}
 .spacer{flex:1}
 
-.note{background:rgba(239,159,39,.08);border:.5px solid rgba(239,159,39,.25);color:#E8B96A;border-radius:8px;padding:8px 14px;margin-bottom:16px;font-size:12px}
-.note.err{background:rgba(226,75,74,.08);border-color:rgba(226,75,74,.3);color:#F0A2A1}
+/* 提示条：中性灰底，仅用左侧 2px 细条区分类别（避免大面积彩色） */
+.note{background:#242428;border:.5px solid #2E2E35;border-left:2px solid #4A4A52;color:#9A9A9E;border-radius:8px;padding:8px 14px;margin-bottom:10px;font-size:12px;line-height:1.7}
+.note b{color:#C9C9CE;font-weight:500}
+.note.plan{border-left-color:#4D6BFE}
+.note.unpriced{border-left-color:#C98A3C}
+.note.time{border-left-color:#4A4A52}
+.note.err{background:rgba(226,75,74,.10);border-color:rgba(226,75,74,.28);border-left-color:#E24B4A;color:#F0A2A1}
 
 /* KPI */
 .kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:18px}
@@ -474,14 +480,14 @@ function renderNote(){
   let html = "";
   window.PLAN_SET = new Set((k.plan_models || []).map(s => String(s).toLowerCase()));
   if (k.plan_tokens > 0)
-    html += `<div class="note">其中 ${fmtTok(k.plan_tokens)} tokens 来自套餐/订阅制模型（商汤小浣熊、Agnes、OX、火山方舟等）—— 按口径只记用量，不计金额。</div>`;
+    html += `<div class="note plan">其中 ${fmtTok(k.plan_tokens)} tokens 来自套餐/订阅制模型（商汤小浣熊、Agnes、OX、火山方舟等）—— 按口径只记用量，不计金额。</div>`;
   if (k.unpriced_tokens > 0)
-    html += `<div class="note">另有 ${fmtTok(k.unpriced_tokens)} tokens 走 API 但单价不在价表中（${(k.unpriced_tokens/k.tokens*100).toFixed(1)}%），未计入金额 — 实际成本会更高。</div>`;
+    html += `<div class="note unpriced">另有 ${fmtTok(k.unpriced_tokens)} tokens 走 API 但单价不在价表中（${(k.unpriced_tokens/k.tokens*100).toFixed(1)}%），未计入金额 — 实际成本会更高。</div>`;
   if (range){
     const unk = DATA.matrix.filter(r=>r.date==="unknown" &&
       true);
     const t = unk.reduce((s,r)=>s+r.tokens,0);
-    if (t > 0) html += `<div class="note">时间筛选生效中：另有 ${fmtTok(t)} tokens 因日志缺失日期戳，仅在「全部」时计入</div>`;
+    if (t > 0) html += `<div class="note time">时间筛选生效中：另有 ${fmtTok(t)} tokens 因日志缺失日期戳，仅在「全部」时计入</div>`;
   }
   if (DATA.scan_errors && DATA.scan_errors.length)
     html += `<div class="note err">部分数据源扫描失败：${esc(DATA.scan_errors.map(e=>e.agent).join("、"))}</div>`;
