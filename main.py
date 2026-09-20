@@ -56,7 +56,11 @@ def serve(port: int) -> None:
         import uvicorn
         import server
         LOG.info("服务线程启动 port=%s", port)
-        uvicorn.run(server.app, host="127.0.0.1", port=port, log_level="warning")
+        # ws="none"：本项目是纯 HTTP 服务，不需要 WebSocket。
+        # 不显式关掉的话，uvicorn 会导入 websockets —— 打包环境若缺该包，
+        # 会抛 `ImportError: cannot import name '__version__' from 'websockets'`
+        uvicorn.run(server.app, host="127.0.0.1", port=port,
+                    log_level="warning", ws="none")
     except BaseException:
         LOG.error("服务线程异常退出:\n%s", traceback.format_exc())
 
