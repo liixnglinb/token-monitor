@@ -150,6 +150,78 @@ main{flex:1;min-width:0;padding:20px 28px 48px}
 .mrow .num{margin-left:auto;color:var(--sub);font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}
 .mrow .num b{color:var(--txt);font-weight:500}
 .mrow .ch{width:200px;height:38px;flex:none}
+
+/* ── ZCode 风格：侧栏与主区融合 ── */
+aside{border-right:1px solid rgba(255,255,255,.045)}
+.aside-top{display:flex;align-items:center;gap:6px;padding:2px 6px 14px}
+.aside-top .logo{flex:1 1 auto;min-width:0;padding:0}
+.aside-top .logo span.logo-t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 更新小按钮 */
+.upd-mini{position:relative;width:30px;height:30px;flex:none;border-radius:8px;border:1px solid transparent;
+  background:transparent;color:var(--sub);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;
+  transition:background .18s,color .18s,border-color .18s}
+.upd-mini:hover{background:var(--card2);color:var(--txt);border-color:var(--line2)}
+.upd-mini svg{width:15px;height:15px}
+.upd-mini .dot{position:absolute;top:4px;right:4px;width:7px;height:7px;border-radius:50%;border:1.5px solid var(--bg)}
+.upd-mini .dot.update{background:var(--blue);box-shadow:0 0 8px rgba(77,107,254,.8);animation:pulse 2s infinite}
+.upd-mini .dot.done{background:var(--green)}
+.upd-mini .spin{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+.upd-mini .spin i{width:14px;height:14px;border-radius:50%;border:2px solid rgba(255,255,255,.15);border-top-color:var(--cyan);animation:rot .8s linear infinite}
+@keyframes rot{to{transform:rotate(360deg)}}
+/* 更新悬停说明 */
+.upd-tip{position:fixed;z-index:60;max-width:320px;background:#232429;border:1px solid rgba(255,255,255,.10);
+  border-radius:10px;padding:12px 14px;font-size:12.5px;color:var(--sub);line-height:1.7;
+  box-shadow:0 14px 34px -12px rgba(0,0,0,.7);pointer-events:auto}
+.upd-tip .t1{color:var(--txt);font-weight:600;margin-bottom:4px}
+.upd-tip .body{white-space:pre-wrap;max-height:180px;overflow:auto;color:#A9ADB8;margin-bottom:8px}
+.upd-tip .go{display:inline-flex;align-items:center;gap:6px;background:var(--blue);color:#fff;border:0;
+  border-radius:7px;padding:6px 13px;font-size:12.5px;font-weight:600;cursor:pointer}
+.upd-tip .go:hover{filter:brightness(1.15)}
+.upd-tip .later{background:transparent;border:0;color:var(--dim);cursor:pointer;font-size:12px;margin-left:10px}
+.upd-tip .later:hover{color:var(--txt)}
+/* 底部设置按钮 */
+.side-btn{width:100%;display:flex;align-items:center;gap:9px;background:transparent;border:0;
+  color:var(--sub);border-radius:8px;padding:8px 10px;cursor:pointer;font-size:12.5px;
+  transition:background .15s,color .15s}
+.side-btn:hover{background:var(--card);color:var(--txt)}
+.side-btn svg{width:15px;height:15px;flex:none}
+.side-foot .t.tiny{font-size:11px;color:var(--dim)}
+/* 设置浮层（从左下弹出） */
+.settings-pop{position:fixed;left:8px;bottom:8px;z-index:50;width:264px;
+  background:linear-gradient(180deg,#232429,#1D1E24);border:1px solid rgba(255,255,255,.10);
+  border-radius:14px;padding:16px;box-shadow:0 24px 60px -20px rgba(0,0,0,.85);
+  transform-origin:left bottom;animation:popIn .22s cubic-bezier(.22,1,.36,1)}
+@keyframes popIn{from{opacity:0;transform:translateY(10px) scale(.97)}to{opacity:1;transform:none}}
+.sp-title{font-size:13.5px;font-weight:600;color:var(--txt);margin-bottom:12px}
+.sp-sec{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--dim);margin:14px 0 8px}
+.sp-row{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  font-size:12.5px;color:var(--sub);margin-bottom:9px}
+.sp-row .sel{width:118px;margin-top:0;padding:5px 7px;font-size:12px}
+.sp-row input[type=checkbox]{width:15px;height:15px;accent-color:var(--blue);cursor:pointer}
+.sp-act{width:100%;background:var(--card);border:.5px solid var(--line);color:var(--sub);
+  border-radius:8px;padding:7px 0;cursor:pointer;font-size:12px;transition:background .15s,color .15s}
+.sp-act:hover{background:var(--card2);color:var(--txt)}
+.sp-note{font-size:11.5px;color:var(--dim);margin-top:7px;line-height:1.6}
+.sp-notes{font-size:11.5px;color:var(--dim);line-height:1.7;margin-top:10px;
+  border-top:1px solid var(--line);padding-top:10px}
+.sp-notes .note{background:transparent;border:0;border-left:2px solid #3A3A42;
+  border-radius:0;padding:4px 0 4px 9px;margin:0 0 7px;font-size:11.5px}
+.sp-notes .note.plan{border-left-color:var(--blue)}
+.sp-notes .note.unpriced{border-left-color:#C98A3C}
+.sp-notes .note.time{border-left-color:#4A4A52}
+.sp-notes .note.err{border-left-color:#E24B4A;color:#F0A2A1}
+/* 主区顶部提示条（仅错误显示） */
+#noteBox .note{background:rgba(226,75,74,.10);border:.5px solid rgba(226,75,74,.28);
+  border-left:2px solid #E24B4A;color:#F0A2A1;border-radius:8px;padding:8px 14px;
+  margin-bottom:14px;font-size:12px;line-height:1.7}
+#noteBox:empty{display:none}
+/* 环形图空态 */
+.donut-wrap.empty canvas{visibility:hidden}
+.donut-wrap.empty::before{content:"";position:absolute;inset:22px;border-radius:50%;
+  border:3px dashed #3A3A44;animation:rot 24s linear infinite}
+.donut-wrap.empty::after{content:"暂无数据";position:absolute;inset:0;display:flex;
+  align-items:center;justify-content:center;color:var(--dim);font-size:13px}
 @media(max-width:1100px){.kpis{grid-template-columns:repeat(1,minmax(0,1fr))}.mb-grid{grid-template-columns:1fr}}
 @media(max-width:860px){aside{display:none}}
 
@@ -174,37 +246,52 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 <h2 class="sr-only">本地 Agent Token 用量面板：按时间与数据源筛选，展示消耗金额、请求次数、Token 量与缓存命中率，并按模型分块展示明细。</h2>
 
 <aside>
-  <div class="logo"><i></i>Token Monitor</div>
+  <div class="aside-top">
+    <div class="logo"><i></i><span class="logo-t">Token Monitor</span></div>
+    <button id="updMini" class="upd-mini" title="检查更新" aria-label="检查更新">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+        <path d="M8 2.5v7M5.5 7L8 9.5 10.5 7M3.5 11h9"/>
+      </svg>
+      <span class="dot update" id="updBadge" hidden></span>
+      <span class="spin" id="updSpin" hidden><i></i></span>
+    </button>
+  </div>
   <nav id="nav">
     <a data-view="overview" class="active"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 13.5V8M6 13.5V3M10 13.5V6M14 13.5V9.5"/></svg>用量总览</a>
     <a data-view="models"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="5.5"/><path d="M8 2.5v11M2.5 8h11"/></svg>模型成本</a>
   </nav>
+  <div style="flex:1 1 auto"></div>
   <div class="side-foot">
-    <div class="t">数据截至<br><span id="builtAt">—</span></div>
-    <button id="reload">重新扫描数据源</button>
-    <button id="updBtn" style="margin-top:8px">检查更新</button>
-    <div class="t" style="margin-top:10px">自动刷新</div>
-    <select id="autoMin" class="sel" aria-label="自动刷新间隔">
-      <option value="0">关闭</option>
-      <option value="1">每 1 分钟</option>
-      <option value="3">每 3 分钟</option>
-      <option value="5">每 5 分钟</option>
-      <option value="10">每 10 分钟</option>
-      <option value="30">每 30 分钟</option>
+    <button id="settingsBtn" class="side-btn" title="设置">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="8" cy="8" r="2.2"/>
+        <path d="M13 8a5 5 0 0 0-.1-1l1.6-1.2-1.3-2.3-1.9.8a5 5 0 0 0-.9-.5L10 2H6l-.3 1.8a5 5 0 0 0-.9.5l-1.9-.8-1.3 2.3L3.1 7a5 5 0 0 0 0 2l-1.6 1.2 1.3 2.3 1.9-.8c.27.2.57.37.9.5l.3 1.8h4l.3-1.8a5 5 0 0 0 1.6-1.1"/>
+      </svg><span>设置</span>
+    </button>
+    <div class="t tiny">数据截至 <span id="builtAt">—</span></div>
+  </div>
+  <div class="settings-pop" id="settingsPop" hidden>
+    <div class="sp-title">设置</div>
+    <div class="sp-sec">更新</div>
+    <label class="sp-row"><span>自动检查更新</span><input type="checkbox" id="autoUpd"></label>
+    <label class="sp-row"><span>检查间隔</span><select id="updMin" class="sel" aria-label="更新检查间隔">
+      <option value="0">关闭</option><option value="15">每 15 分钟</option>
+      <option value="30">每 30 分钟</option><option value="60">每 1 小时</option>
+      <option value="120">每 2 小时</option><option value="360">每 6 小时</option>
+    </select></label>
+    <button id="updBtn" class="sp-act">检查更新</button>
+    <div class="sp-sec">数据</div>
+    <label class="sp-row"><span>自动刷新</span><select id="autoMin" class="sel" aria-label="自动刷新间隔">
+      <option value="0">关闭</option><option value="1">每 1 分钟</option>
+      <option value="3">每 3 分钟</option><option value="5">每 5 分钟</option>
+      <option value="10">每 10 分钟</option><option value="30">每 30 分钟</option>
       <option value="60">每 1 小时</option>
-    </select>
-    <div class="t" id="scanState" style="margin-top:6px;color:#e0a92b"></div>
-    <div class="t" id="scanInfo" style="margin-top:4px;color:#7e858f"></div>
-    <label class="t" style="margin-top:10px;display:flex;align-items:center;gap:6px;cursor:pointer">
-      <input type="checkbox" id="autoUpd" style="accent-color:#e0a92b">自动检查更新
-    </label>
-    <select id="updMin" class="sel" aria-label="更新检查间隔">
-      <option value="10">每 10 分钟</option>
-      <option value="30">每 30 分钟</option>
-      <option value="60">每 1 小时</option>
-      <option value="360">每 6 小时</option>
-    </select>
-    <div class="t" id="verLine" style="margin-top:8px">版本 —</div>
+    </select></label>
+    <button id="reload" class="sp-act sp-act2">重新扫描数据源</button>
+    <div id="scanState" class="sp-note" style="color:#e0a92b"></div>
+    <div id="scanInfo" class="sp-note" style="color:#7e858f"></div>
+    <div id="verLine" class="sp-note">版本 —</div>
+    <div id="sideNotes" class="sp-notes"></div>
   </div>
 </aside>
 
@@ -476,26 +563,27 @@ function closeAllDropdowns(){
 document.addEventListener("click", closeAllDropdowns);
 
 function renderNote(){
-  const k = DATA.kpi_all, box = $("noteBox");
-  const range = rangeDates();
-  let html = "";
-  window.PLAN_SET = new Set((k.plan_models || []).map(s => String(s).toLowerCase()));
+  /* 说明性内容移到侧栏「设置」浮层，主区只保留扫描错误 —— 顶部不再有大段说明 */
+  const main = $("noteBox"), side = $("sideNotes");
+  if (!main || !side) return;
+  const k = DATA.kpi_all;
+  window.PLAN_SET = new Set((k.plan_models || []).map(x => String(x).toLowerCase()));
+  let side_html = "";
   if (k.plan_tokens > 0)
-    html += `<div class="note plan">其中 ${fmtTok(k.plan_tokens)} tokens 来自套餐/订阅制模型（商汤小浣熊、Agnes、OX、火山方舟等）—— 按口径只记用量，不计金额。</div>`;
+    side_html += `<div class="note plan">其中 ${fmtTok(k.plan_tokens)} tokens 来自套餐/订阅制模型（商汤小浣熊、Agnes、OX、火山方舟等）—— 按口径只记用量，不计金额。</div>`;
   if (k.unpriced_tokens > 0)
-    html += `<div class="note unpriced">另有 ${fmtTok(k.unpriced_tokens)} tokens 走 API 但单价不在价表中（${(k.unpriced_tokens/k.tokens*100).toFixed(1)}%），未计入金额 — 实际成本会更高。</div>`;
+    side_html += `<div class="note unpriced">另有 ${fmtTok(k.unpriced_tokens)} tokens 走 API 但单价不在价表中（${(k.unpriced_tokens/k.tokens*100).toFixed(1)}%），未计入金额 — 实际成本会更高。</div>`;
+  const range = rangeDates();
   if (range){
-    const unk = DATA.matrix.filter(r=>r.date==="unknown" &&
-      true);
-    const t = unk.reduce((s,r)=>s+r.tokens,0);
-    if (t > 0) html += `<div class="note time">时间筛选生效中：另有 ${fmtTok(t)} tokens 因日志缺失日期戳，仅在「全部」时计入</div>`;
+    const t = DATA.matrix.filter(r=>r.date==="unknown").reduce((s,r)=>s+r.tokens,0);
+    if (t > 0) side_html += `<div class="note time">时间筛选生效中：另有 ${fmtTok(t)} tokens 因日志缺失日期戳，仅在「全部」时计入</div>`;
   }
-  if (DATA.scan_errors && DATA.scan_errors.length)
-    html += `<div class="note err">部分数据源扫描失败：${esc(DATA.scan_errors.map(e=>e.agent).join("、"))}</div>`;
-  box.innerHTML = html;
+  main.innerHTML = (DATA.scan_errors && DATA.scan_errors.length)
+    ? `<div class="note err">部分数据源扫描失败：${esc(DATA.scan_errors.map(e=>e.agent).join("、"))}</div>` : "";
+  side.innerHTML = side_html;
 }
 
-/* ---------- KPI ---------- */
+
 function renderKPI(){
   const rows = rowsFor(true);                       // KPI 含日期未知行
   const tokens = rows.reduce((s,r)=>s+r.tokens,0);
@@ -949,6 +1037,76 @@ if ($("updMin")) $("updMin").onchange = function(){
   pushSettings({ update_check_minutes: parseInt(this.value, 10) || 30 });
 };
 
+/* ---------- 更新状态机：左上角小按钮 + tooltip ---------- */
+const UPD = window.__UPD_STATE = { state: "idle", latest: null, ver: null, body: "" };
+let tipPinned = false, tipHovered = false;
+
+function setUpdUI(){
+  const dot = $("updBadge"), spin = $("updSpin"), mini = $("updMini");
+  if (!dot || !spin || !mini) return;
+  const st = UPD.state;
+  dot.hidden = !(st === "update" || st === "done");
+  dot.className = "dot " + (st === "update" ? "update" : st === "done" ? "done" : "");
+  spin.hidden = st !== "dl";
+  mini.title = st === "update" ? "发现新版本 v" + (UPD.latest || "") + "，点击查看"
+    : st === "dl" ? "正在下载更新…"
+    : st === "done" ? "更新完成，正在重启" : "检查更新";
+}
+
+function renderUpdTip(confirmed){
+  const tip = $("updTip"); if (!tip) return;
+  let html;
+  if (UPD.state === "dl"){
+    html = '<div class="t1">正在下载新版本…</div>'
+      + '<div class="dl-row"><span class="dl-ring"></span>下载完成后会提示你确认安装，期间可正常使用。</div>';
+  } else if (confirmed && UPD.state === "update" && UPD.latest){
+    html = '<div class="t1">发现新版本 v' + esc(UPD.latest) + '</div>'
+      + (UPD.body ? '<div class="body">' + esc(UPD.body) + '</div>' : "")
+      + '<button class="go" onclick="startUpdate()">立即更新</button>'
+      + '<button class="later" onclick="hideUpdTip()">稍后</button>';
+  } else {
+    html = '<div class="t1">' + (UPD.ver ? "当前 v" + esc(UPD.ver) : "Token Monitor") + '</div>'
+      + '<div style="color:#8A8A90;margin-top:3px">'
+      + (UPD.state === "checking" ? "正在检查更新…" : "已是最新版本") + '</div>';
+  }
+  tip.innerHTML = html;
+  tip.hidden = false;
+  const r = $("updMini").getBoundingClientRect();
+  tip.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 350)) + "px";
+  tip.style.top = (r.bottom + 8) + "px";
+}
+function hideUpdTip(){ const t = $("updTip"); if (t) t.hidden = true; }
+window.hideUpdTip = hideUpdTip;
+
+window.startUpdate = function(){
+  hideUpdTip();
+  const btn = $("updBtn");
+  if (btn && btn.dataset.pending === "1") btn.click();
+};
+
+/* 左上角小按钮：悬停简提示 / 点击展开确认 */
+const miniEl = $("updMini");
+if (miniEl){
+  miniEl.addEventListener("mouseenter", () => {
+    if (UPD.state === "update" && !tipPinned) renderUpdTip(false);
+    else if (UPD.state === "dl") renderUpdTip(false);
+  });
+  miniEl.addEventListener("mouseleave", () => {
+    setTimeout(() => { if (!tipPinned && !tipHovered) hideUpdTip(); }, 150);
+  });
+  miniEl.addEventListener("click", () => {
+    if (UPD.state === "update"){ tipPinned = !tipPinned; renderUpdTip(true); }
+    else if (UPD.state === "dl"){ tipPinned = !tipPinned; renderUpdTip(false); }
+    else { checkUpdate(false); }
+  });
+  document.addEventListener("click", e => {
+    if (!e.target.closest(".upd-tip") && !e.target.closest("#updMini")){
+      tipPinned = false; hideUpdTip();
+    }
+  });
+  document.addEventListener("keyup", e => { if (e.key === "Escape") hideUpdTip(); });
+}
+
 /* ---------- 自动更新 ---------- */
 async function checkUpdate(silent){
   const btn = $("updBtn");
@@ -975,11 +1133,11 @@ async function checkUpdate(silent){
 $("updBtn").onclick = async function(){
   if (this.dataset.pending !== "1"){ checkUpdate(false); return; }
   this.disabled = true;
-  this.textContent = "下载新版本…";
+  this.textContent = "下载新版本…"; UPD.state = "dl"; setUpdUI();
   try {
     const r = await (await fetch("/api/update", { method: "POST" })).json();
     if (!r.ok) throw new Error(r.error || "更新失败");
-    this.textContent = "更新完成，应用即将重启…";
+    this.textContent = "更新完成，应用即将重启…"; UPD.state = "done"; setUpdUI();
     let tries = 0;
     const t = setInterval(async () => {
       tries++;
@@ -1000,5 +1158,6 @@ $("updBtn").onclick = async function(){
   }
 };
 </script>
+  <div class="upd-tip" id="updTip" hidden></div>
 </body>
 </html>
