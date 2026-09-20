@@ -59,8 +59,12 @@ def serve(port: int) -> None:
         # ws="none"：本项目是纯 HTTP 服务，不需要 WebSocket。
         # 不显式关掉的话，uvicorn 会导入 websockets —— 打包环境若缺该包，
         # 会抛 `ImportError: cannot import name '__version__' from 'websockets'`
+        # http="h11"：h11 是纯 Python 实现（uvicorn 的必需依赖，必定存在）。
+        # 默认的 "auto" 会优先用 httptools —— 那是 uvicorn[standard] 的可选 C 扩展，
+        # 本项目依赖里没有，打包后会出现残缺模块 →
+        # `AttributeError: module 'httptools' has no attribute 'HttpRequestParser'`
         uvicorn.run(server.app, host="127.0.0.1", port=port,
-                    log_level="warning", ws="none")
+                    log_level="warning", http="h11", ws="none")
     except BaseException:
         LOG.error("服务线程异常退出:\n%s", traceback.format_exc())
 
