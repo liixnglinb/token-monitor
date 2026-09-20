@@ -2,3 +2,5 @@ fastapi
 uvicorn
 zstandard
 pywebview
+pystray
+Pillow

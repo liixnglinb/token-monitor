@@ -172,8 +172,9 @@ def fuse_titlebar() -> None:
         dwm = ctypes.windll.dwmapi
         def _set(attr: int, val: int) -> None:
             v = ctypes.c_uint(val)
-            dwm.DwmSetWindowAttribute(ctypes.c_void_p(hwnd),
-                                      ctypes.c_int(attr),
+            # 注意：attr/size 必须传原生 int——包成 c_int 传给 int 型形参
+            # 在部分 Python/ctypes 版本会抛 TypeError
+            dwm.DwmSetWindowAttribute(ctypes.c_void_p(hwnd), attr,
                                       ctypes.byref(v), ctypes.sizeof(v))
         _set(20, 1)                               # DWMWA_USE_IMMERSIVE_DARK_MODE
         _set(35, _DWM_SIDEBAR)                    # DWMWA_CAPTION_COLOR
@@ -182,6 +183,102 @@ def fuse_titlebar() -> None:
         LOG.info("fuse_titlebar applied hwnd=%s", hwnd)
     except Exception:
         LOG.warning("fuse_titlebar 失败（不影响使用）:\n%s", traceback.format_exc())
+
+
+# ── 系统托盘：关窗最小化到托盘继续监控；托盘「退出」结束全部后台 ──
+_TRAY = {"icon": None, "window": None, "port": 0}   # 运行期引用，防 GC 回收
+
+
+def _tray_image():
+    """从打包资源里的 icon.ico 读 64px 图像作托盘图标。"""
+    from PIL import Image
+    base = sys._MEIPASS if getattr(sys, "frozen", False) \
+        else os.path.dirname(os.path.abspath(__file__))
+    img = Image.open(os.path.join(base, "icon.ico"))
+    img.load()
+    if img.size != (64, 64):
+        img = img.resize((64, 64), Image.LANCZOS)
+    return img.convert("RGBA")
+
+
+def _api_get(port: int, path: str):
+    """托盘菜单动作走本地 HTTP，复用后端既有逻辑（重扫/检查更新）。"""
+    try:
+        with urllib.request.urlopen(
+                "http://127.0.0.1:%d%s" % (port, path), timeout=4) as r:
+            return r.status
+    except Exception:
+        return None
+
+
+def _quit_all(icon=None, item=None) -> None:
+    """托盘「退出」：停托盘 → 关窗口 → 删暂存更新包 → 硬退出。
+
+    os._exit 让 uvicorn / 扫描线程随进程立即终止，不残留任何后台。
+    """
+    LOG.info("托盘退出：开始清理全部后台")
+    try:
+        import updater
+        updater.discard_staged()      # 删除已下载未安装的暂存更新包
+    except Exception:
+        LOG.warning("清理暂存更新包失败（忽略）:\n%s", traceback.format_exc())
+    try:
+        w = _TRAY.get("window")
+        if w:
+            w.destroy()
+    except Exception:
+        pass
+    try:
+        if icon:
+            icon.stop()
+    except Exception:
+        pass
+    LOG.info("托盘退出：os._exit(0)")
+    os._exit(0)
+
+
+def _on_closing(window) -> bool:
+    """点窗口 X：隐藏到托盘继续监控（真退出走托盘菜单），返回 False 取消关闭。"""
+    try:
+        window.hide()
+        icon = _TRAY.get("icon")
+        if icon:
+            icon.notify("已最小化到托盘，右键图标可退出程序", "Token Monitor")
+        LOG.info("窗口隐藏到托盘")
+    except Exception:
+        LOG.warning("隐藏到托盘失败:\n%s", traceback.format_exc())
+    return False                        # 取消默认关闭行为
+
+
+def _setup_tray(window, port: int) -> None:
+    """托盘图标 + 右键菜单。失败只记日志，主功能不受影响。"""
+    try:
+        import pystray
+        img = _tray_image()
+
+        def _show(*_a):
+            try:
+                window.show()
+            except Exception:
+                pass
+
+        menu = pystray.Menu(
+            pystray.MenuItem("显示面板", _show, default=True),
+            pystray.MenuItem("重新扫描数据源",
+                             lambda *_a: _api_get(port, "/api/reload")),
+            pystray.MenuItem("检查更新",
+                             lambda *_a: _api_get(port, "/api/version")),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem("退出（结束全部后台）", _quit_all),
+        )
+        icon = pystray.Icon("TokenMonitor", img, "Token Monitor", menu)
+        _TRAY["icon"] = icon
+        _TRAY["window"] = window
+        _TRAY["port"] = port
+        threading.Thread(target=icon.run, daemon=True, name="tm-tray").start()
+        LOG.info("托盘已启动")
+    except Exception:
+        LOG.warning("托盘初始化失败（不影响主功能）:\n%s", traceback.format_exc())
 
 
 def main() -> None:
@@ -228,8 +325,11 @@ def main() -> None:
 
     window.events.loaded += lambda: hook_external_links(window)
     window.events.shown += lambda: fuse_titlebar()
+    # 点 X = 隐藏到托盘继续监控；彻底退出走托盘菜单「退出（结束全部后台）」
+    window.events.closing += lambda *a: _on_closing(window)
+    _setup_tray(window, port)
 
-    # 阻塞在窗口事件循环；用户关闭窗口后返回，进程随之退出
+    # 阻塞在窗口事件循环；真退出由托盘菜单触发（os._exit 清理全部后台）
     try:
         webview.start()
     except BaseException:

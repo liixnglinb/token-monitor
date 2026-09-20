@@ -276,6 +276,18 @@ def apply_staged(tmp: str = None) -> None:
                      creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
 
 
+def discard_staged() -> None:
+    """删除已下载未安装的暂存更新包并清空暂存记录（程序退出时调用，不留后台垃圾）。"""
+    tmp = STAGED.get("tmp")
+    STAGED.clear()
+    if tmp and os.path.exists(tmp):
+        try:
+            os.remove(tmp)
+            print("已清理暂存更新包: " + tmp)
+        except OSError:
+            pass
+
+
 def download_and_apply(asset: dict, checksum_asset=None):
     """兼容入口：下载 + 校验 + 直接进入替换流程（一步到位，不等确认）。"""
     tmp = download_staged(asset, checksum_asset)
