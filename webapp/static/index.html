@@ -186,11 +186,12 @@ aside{border-right:1px solid rgba(255,255,255,.05)}
 .side-btn:hover{background:#1D1D21;color:var(--txt)}
 .side-btn svg{width:16px;height:16px;flex:none}
 .side-foot .t.tiny{font-size:11px;color:var(--dim)}
-/* ── 全屏设置页（ZCode 式） ── */
+/* ── 全屏设置页（ZCode 式） ──
+   注：#updMini 在设置模式下保持可见 —— 后台每 30 分钟自动检查更新，
+   发现新版时指示点在任何视图都要能看到 */
 body.mode-set aside #nav,
 body.mode-set aside .side-foot,
-body.mode-set .aside-top .logo,
-body.mode-set #updMini{display:none}
+body.mode-set .aside-top .logo{display:none}
 body.mode-set #setNav{display:block}
 body.mode-set main .filters,
 body.mode-set main #noteBox{display:none}
@@ -298,8 +299,6 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 }
 </style>
 <style>
-  .sel{width:100%;margin-top:4px;padding:6px 8px;border-radius:6px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.05);color:inherit;font:inherit;cursor:pointer}
-  .sel:focus{outline:2px solid rgba(224,169,43,.5);outline-offset:1px}
 </style>
 </head>
 <body>
@@ -1093,7 +1092,8 @@ function switchView(view){
   const isSet = view === "settings";
   document.body.classList.toggle("mode-set", isSet);
   document.querySelectorAll("#nav a").forEach(x=>x.classList.toggle("active", x.dataset.view===view));
-  document.querySelectorAll("#tabbar button[data-view]").forEach(x=>x.classList.toggle("active", x.dataset.view===view));
+  document.querySelectorAll("#tabbar button").forEach(x=>
+    x.classList.toggle("active", isSet ? !!x.dataset.settings : x.dataset.view===view));
   $("view-overview").hidden = view !== "overview";
   $("view-models").hidden   = view !== "models";
   $("view-settings").hidden = !isSet;

@@ -223,8 +223,17 @@ def download_and_apply(asset: dict, checksum_asset=None):
             "  goto retry\r\n"
             ")\r\n"
             'echo renamed old exe >> "%LOG%"\r\n'
+            # 放新 exe 也做重试：AV/索引器常短暂锁住目标目录，一次失败就放弃太激进
+            "set M=0\r\n"
+            ":place\r\n"
             f'move /y "{tmp}" "{exe}" >> "%LOG%" 2>&1\r\n'
-            'if errorlevel 1 ( echo place new failed >> "%LOG%" & goto giveup )\r\n'
+            "if errorlevel 1 (\r\n"
+            "  set /a M+=1\r\n"
+            '  echo place failed !M! >> "%LOG%"\r\n'
+            "  if !M! GEQ 5 goto giveup\r\n"
+            "  timeout /t 2 /nobreak >nul\r\n"
+            "  goto place\r\n"
+            ")\r\n"
             'echo placed new exe >> "%LOG%"\r\n'
             'echo waiting for resources release >> "%LOG%"\r\n'
             'timeout /t 4 /nobreak >nul\r\n'
@@ -234,7 +243,11 @@ def download_and_apply(asset: dict, checksum_asset=None):
             'del "%~f0"\r\n'
             "exit /b\r\n"
             ":giveup\r\n"
+            # 防砖：走到这里时旧 exe 多半已被改名成 .old，必须还原，
+            # 否则目录里没有 exe，软件直接消失（P0）
             'echo GIVE UP >> "%LOG%"\r\n'
+            f'if exist "{exe_old}" move /y "{exe_old}" "{exe}" >> "%LOG%" 2>&1\r\n'
+            'echo restore attempted >> "%LOG%"\r\n'
             'del "%~f0"\r\n')
     subprocess.Popen(["cmd", "/c", bat], close_fds=True,
                      creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
