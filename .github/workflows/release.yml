@@ -67,6 +67,18 @@ jobs:
           if (-not (Test-Path "dist\TokenMonitor.exe")) { throw "exe 缺失" }
           if (-not (Test-Path "dist\TokenMonitor-setup-${{ github.ref_name }}.exe")) { throw "安装包缺失" }
 
+      # 为每个发布产物生成对应的 .sha256 校验文件，供客户端自更新时校验下载
+      # 完整性，防止镜像返回截断/被篡改的包导致替换后变砖。
+      - name: 生成 SHA256 校验文件
+        shell: pwsh
+        run: |
+          Get-ChildItem dist | ForEach-Object {
+            # Get-FileHash 默认输出大写，这里转小写；格式：小写hash + 两个空格 + 文件名（ASCII 编码）
+            $hash = (Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLower()
+            "$hash  $($_.Name)" | Out-File -FilePath "dist\$($_.Name).sha256" -Encoding ascii
+          }
+          Get-ChildItem dist\*.sha256 | ForEach-Object { Get-Content $_.FullName }
+
       - name: 发布 Release
         uses: softprops/action-gh-release@v2
         with:
@@ -74,4 +86,5 @@ jobs:
             dist/TokenMonitor.exe
             dist/TokenMonitor-setup-*.exe
             dist/TokenMonitor-portable-*.zip
+            dist/*.sha256
           generate_release_notes: true

@@ -19,7 +19,7 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -37,6 +37,76 @@ STATIC_DIR = os.path.join(ROOT, "webapp", "static")
 
 app = FastAPI(title="Token Monitor")
 app.add_middleware(GZipMiddleware, minimum_size=1024)
+
+
+# ── 本机防护中间件 ───────────────────────────────────────────────
+# 后端只裸奔在 127.0.0.1：恶意网页可跨站调 /api/reload（触发全盘扫描）、
+# POST /api/settings、POST /api/update（驱动下载更新），且 Host 头可被
+# DNS rebinding 伪造。下面这块纯 ASGI 中间件做两道本地防护：
+#   规则 A 防 DNS rebinding：Host 主机名不在 {127.0.0.1, localhost, [::1]}
+#   规则 B 防跨站 CSRF：/api/* 带了 Origin 且 Origin 主机名不在上述集合 → 拦截
+# 无 Origin 的请求（curl、同源 GET）直接放行，不破坏现有用法。
+# 注意：pywebview 内嵌浏览器加载的是 http://127.0.0.1:port，同源请求，
+#       不带跨站 Origin，也不受影响。
+_ALLOWED_HOSTS = {"127.0.0.1", "localhost", "[::1]"}
+_ALLOWED_ORIGIN_HOSTS = {"127.0.0.1", "localhost", "::1"}
+
+
+def _host_name(host: str) -> str:
+    """从 Host 头剥离端口，IPv6 保留方括号形式以便与集合比对"""
+    host = (host or "").strip()
+    if host.startswith("["):
+        end = host.find("]")
+        return host[:end + 1] if end != -1 else host
+    return host.split(":")[0]
+
+
+def _origin_host(origin: str) -> str:
+    """从 Origin 头取主机名（urlparse 已剥端口与方括号）"""
+    from urllib.parse import urlparse
+    return (urlparse(origin or "").hostname or "").lower()
+
+
+async def _guard_reply(send, status: int, payload: dict) -> None:
+    import json
+    body = json.dumps(payload).encode("utf-8")
+    await send({
+        "type": "http.response.start",
+        "status": status,
+        "headers": [
+            (b"content-type", b"application/json; charset=utf-8"),
+            (b"content-length", str(len(body)).encode()),
+        ],
+    })
+    await send({"type": "http.response.body", "body": body})
+
+
+class LocalOnlyGuard:
+    """只允许本机来源的中间件（DNS rebinding + 跨站 CSRF 双防）"""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") != "http":
+            await self.app(scope, receive, send)
+            return
+        headers = {k.decode().lower(): v.decode()
+                   for k, v in scope.get("headers", [])}
+        if _host_name(headers.get("host", "")) not in _ALLOWED_HOSTS:
+            await _guard_reply(send, 403, {"ok": False, "error": "forbidden host"})
+            return
+        path = (scope.get("path") or "").split("?")[0]
+        origin = headers.get("origin")
+        if path.startswith("/api/") and origin:
+            if _origin_host(origin) not in _ALLOWED_ORIGIN_HOSTS:
+                await _guard_reply(send, 403,
+                                   {"ok": False, "error": "cross-origin blocked"})
+                return
+        await self.app(scope, receive, send)
+
+
+app.add_middleware(LocalOnlyGuard)    # 挂在 GZip 之后，最外层先执行
 
 # 启动时清理上次更新留下的旧映像（改名后的 *.exe.old 尽力删除）
 if getattr(sys, "frozen", False):
@@ -88,6 +158,7 @@ def _build() -> dict:
 
     cells = {}
     unpriced_tokens = 0
+    unpriced_requests = 0    # 价表缺价（API 但没匹配到价格）的请求数
     plan_tokens = 0          # 套餐/订阅制：有意不计费，只记用量
     plan_models = set()      # 供界面区分『套餐不计费』与『价表缺价』
     for r in recs:
@@ -101,6 +172,7 @@ def _build() -> dict:
         elif c is None:
             c = 0.0
             unpriced_tokens += r.total()  # API 但价表缺价
+            unpriced_requests += 1
         k = (r.date, r.agent, r.model, (r.session or "unknown")[:12])
         cell = cells.get(k)
         if cell is None:
@@ -145,6 +217,7 @@ def _build() -> dict:
             "cost_usd": sum(r["cost"] for r in matrix),
             "cache_rate": sum(r.cr for r in recs) / max(total_cache_base, 1),
             "unpriced_tokens": unpriced_tokens,
+            "unpriced_requests": unpriced_requests,
             "plan_tokens": plan_tokens,
             "plan_models": sorted(plan_models),
         },
@@ -184,7 +257,7 @@ def api_get_settings():
 
 
 @app.post("/api/settings")
-async def api_set_settings(request):
+async def api_set_settings(request: Request):
     try:
         body = await request.json()
     except Exception:
@@ -206,7 +279,8 @@ def api_update():
         if asset is None:
             return JSONResponse({"ok": False,
                                  "error": "Release 中没有可更新的 exe 资产"}, status_code=400)
-        updater.download_and_apply(asset)           # 下载 → 写自替换脚本
+        # 若 Release 附带 .sha256 校验资产则一并传入，下载后做 SHA256 完整性校验
+        updater.download_and_apply(asset, checksum_asset=updater.find_sum_asset(assets))
     except Exception as e:
         return JSONResponse({"ok": False, "error": str(e)[:200]}, status_code=500)
     # 1 秒后退出当前进程，让更新脚本接管（替换 exe 并重启）

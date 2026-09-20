@@ -6,6 +6,7 @@
 
 打包：pyinstaller TokenMonitor.spec
 """
+import ctypes
 import logging
 import os
 import socket
@@ -20,6 +21,9 @@ import webview
 
 WINDOW_TITLE = "Token Monitor"
 BG = "#0B0C0E"          # 与面板底色一致，加载时不闪白
+
+SERVE_ERROR = []        # 服务线程崩溃时记录最近一条错误；main() 据此决定是否提示退出
+_INSTANCE_MUTEX = None  # 单实例互斥体句柄，存模块级防 GC（进程结束前一直持有）
 
 
 def _setup_log() -> logging.Logger:
@@ -66,17 +70,27 @@ def serve(port: int) -> None:
         uvicorn.run(server.app, host="127.0.0.1", port=port,
                     log_level="warning", http="h11", ws="none")
     except BaseException:
-        LOG.error("服务线程异常退出:\n%s", traceback.format_exc())
+        exc = traceback.format_exc()
+        LOG.error("服务线程异常退出:\n%s", exc)
+        # 记录最近一条错误（截断到末尾 1500 字符），供 main() 判定是否提示退出
+        SERVE_ERROR.append(exc[-1500:])
 
 
-def wait_ready(port: int, timeout: float = 20.0) -> bool:
+def wait_ready(port: int, timeout: float = 20.0, serve_thread: "threading.Thread | None" = None) -> bool:
     """等端口真正可访问再开窗口，否则会先看到白屏/连接失败页
 
     首次启动要扫描本机日志，服务就绪可能要几秒。
+    服务线程若在等待期间崩溃（已死或已记录错误），立即返回 False，
+    不要傻等满 timeout 才让 main() 去开白屏窗口。
     """
     url = "http://127.0.0.1:%d/" % port
     deadline = time.time() + timeout
     while time.time() < deadline:
+        # 服务线程已死或已记录错误：没必要再等，直接判定失败
+        if serve_thread is not None and not serve_thread.is_alive():
+            return False
+        if SERVE_ERROR:
+            return False
         try:
             with urllib.request.urlopen(url, timeout=0.8) as r:
                 if r.status < 500:
@@ -132,13 +146,34 @@ class Api:
 
 
 def main() -> None:
+    global _INSTANCE_MUTEX
     LOG.info("=== 启动 exe=%s frozen=%s ===", sys.executable, getattr(sys, "frozen", False))
+
+    # 单实例锁：Windows 命名互斥体，防止重复启动多个实例。
+    # 注意 windowed exe 没有控制台，重复启动时 MessageBox 是唯一可见提示。
+    _INSTANCE_MUTEX = ctypes.windll.kernel32.CreateMutexW(
+        0, 0, "Local\\TokenMonitor.SingleInstance")
+    if ctypes.windll.kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS = 183
+        LOG.warning("检测到已有实例在运行，本进程退出")
+        ctypes.windll.user32.MessageBoxW(
+            0, "Token Monitor 已在运行。", "Token Monitor", 0x40)
+        sys.exit(0)
+
     port = find_port()
     LOG.info("选定端口 %s", port)
-    threading.Thread(target=serve, args=(port,), daemon=True).start()
-    ok = wait_ready(port)
+    serve_thread = threading.Thread(target=serve, args=(port,), daemon=True)
+    serve_thread.start()
+    ok = wait_ready(port, serve_thread=serve_thread)
     LOG.info("服务就绪=%s", ok)
     if not ok:
+        # 服务线程崩溃：弹出提示后直接退出，避免用户看到白屏窗口
+        if SERVE_ERROR:
+            LOG.error("服务启动失败：\n%s", SERVE_ERROR[-1])
+            ctypes.windll.user32.MessageBoxW(
+                0,
+                "服务启动失败，请查看日志：%LOCALAPPDATA%\\TokenMonitor\\app.log",
+                "Token Monitor", 0x40)
+            sys.exit(1)
         LOG.warning("服务在 20 秒内未就绪，仍尝试开窗口（页面可能暂时连不上）")
 
     window = webview.create_window(

@@ -222,8 +222,6 @@ aside{border-right:1px solid rgba(255,255,255,.045)}
   border:3px dashed #3A3A44;animation:rot 24s linear infinite}
 .donut-wrap.empty::after{content:"暂无数据";position:absolute;inset:0;display:flex;
   align-items:center;justify-content:center;color:var(--dim);font-size:13px}
-@media(max-width:1100px){.kpis{grid-template-columns:repeat(1,minmax(0,1fr))}.mb-grid{grid-template-columns:1fr}}
-@media(max-width:860px){aside{display:none}}
 
 /* 表格视图 */
 table{width:100%;border-collapse:collapse}
@@ -236,6 +234,21 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .bar i{display:block;height:100%;border-radius:3px}
 .mono{font-family:ui-monospace,Consolas,monospace;font-size:12px}
 .muted{color:var(--dim);font-size:12px}
+
+/* 底部标签栏：窄屏（≤860px）替代侧栏导航，避免侧栏隐藏后无法切换视图 */
+#tabbar{display:none}
+@media(max-width:860px){
+  #tabbar{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:50;width:100%;
+    height:54px;padding-bottom:env(safe-area-inset-bottom);
+    background:#161618;border-top:1px solid rgba(255,255,255,.06)}
+  #tabbar button{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:3px;border:0;background:transparent;color:var(--sub);cursor:pointer;font-size:11px;line-height:1}
+  #tabbar button svg{width:19px;height:19px}
+  #tabbar button.active{color:var(--txt)}
+  #tabbar button.active svg{color:var(--blue)}
+  main{padding-bottom:72px}
+  body{padding-bottom:env(safe-area-inset-bottom)}
+}
 </style>
 <style>
   .sel{width:100%;margin-top:4px;padding:6px 8px;border-radius:6px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.05);color:inherit;font:inherit;cursor:pointer}
@@ -371,6 +384,12 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
   </section>
 </main>
 
+<nav id="tabbar" aria-label="底部导航">
+  <button data-view="overview" class="active" aria-label="总览"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 13.5V8M6 13.5V3M10 13.5V6M14 13.5V9.5"/></svg><span>总览</span></button>
+  <button data-view="models" aria-label="模型成本"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="5.5"/><path d="M8 2.5v11M2.5 8h11"/></svg><span>模型成本</span></button>
+  <button data-settings="1" aria-label="设置"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="2.2"/><path d="M13 8a5 5 0 0 0-.1-1l1.6-1.2-1.3-2.3-1.9.8a5 5 0 0 0-.9-.5L10 2H6l-.3 1.8a5 5 0 0 0-.9.5l-1.9-.8-1.3 2.3L3.1 7a5 5 0 0 0 0 2l-1.6 1.2 1.3 2.3 1.9-.8c.27.2.57.37.9.5l.3 1.8h4l.3-1.8a5 5 0 0 0 1.6-1.1"/></svg><span>设置</span></button>
+</nav>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script>
 "use strict";
@@ -421,6 +440,13 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
 /* ---------- 工具 ---------- */
 const ymd = d => d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
 const md  = s => { const [,m,d] = s.split("-"); return String(+m)+"/"+String(+d); };   // 2026-09-16 → 9/16
+/* 月份 key（2026-09）→ 图表显示用：同年显示 "9月"，跨年显示 "2025年12月"（保留完整 key 用于排序/tooltip 取数，不动原始数据） */
+const fmtMonth = s => {
+  const m = /^(\d{4})-(\d{2})$/.exec(s);
+  if (!m) return s;                       // 非月份 key（如 2026-09-16）原样返回
+  const y = +m[1], mm = String(+m[2]);
+  return y === new Date().getFullYear() ? mm + "月" : y + "年" + mm + "月";
+};
 const addDays = (s, n) => { const d = new Date(s+"T00:00:00"); d.setDate(d.getDate()+n); return ymd(d); };
 /* 各时间粒度 → [start, end]；全部返回 null */
 function rangeDates(){
@@ -658,13 +684,14 @@ function renderMain(){
 
   const opts = baseOpts(fmt, F.metric==="cost"?"¥":"");
   if (F.grain === "day") opts.scales.x.ticks.callback = (v, i) => md(labels[i] || v);
+  else if (F.grain === "month") opts.scales.x.ticks.callback = (v, i) => fmtMonth(labels[i] || v);
   opts.plugins.tooltip.callbacks.title = items => {
     if (!items || !items.length) return "";
     const k = items[0].label;
     const tot2 = items.reduce((s,i)=>s+(i.parsed.y||0),0);
     const totTxt = F.metric==="cost" ? fmtCNY(tot2*DATA.cny_rate)
       : F.metric==="tokens" ? fmtTok(tot2)+" tok" : fmtInt(tot2)+" 次";
-    return k + "    " + totTxt;
+    return (F.grain === "month" ? fmtMonth(k) : k) + "    " + totTxt;
   };
   opts.plugins.tooltip.callbacks.label = c => {
     const v = c.parsed.y;
@@ -709,6 +736,9 @@ function sessionLines(date, agent, model, metric){
 
 function miniChart(canvas, pairs, color, tip){
   /* 迷你柱：每日 Token 走势；hover 显示对话分布 */
+  /* 渲染前先销毁同画布上的旧实例（与 MAIN/DONUT 一致），防重复 new 造成泄漏 */
+  const ex = Chart.getChart(canvas);
+  if (ex) ex.destroy();
   return new Chart(canvas, { type: "bar",
     data: { labels: pairs.map(d=>d[0]),
       datasets: [{ data: pairs.map(d=>d[1]), backgroundColor: color,
@@ -828,10 +858,7 @@ function renderModelDist(){
   /* 点击某行 → 跳到「模型成本」视图看明细 */
   box.querySelectorAll(".t10-row").forEach(el=>{
     el.onclick = () => {
-      document.querySelectorAll("#nav a").forEach(a=>
-        a.classList.toggle("active", a.dataset.view === "models"));
-      $("view-overview").hidden = true;
-      $("view-models").hidden = false;
+      switchView("models");
       window.scrollTo({ top: 0, behavior: "smooth" });
     };
   });
@@ -851,7 +878,10 @@ function renderAgentList(){
   }
   const list = [...ag.entries()].sort((a,b)=>b[1].tokens-a[1].tokens);   // 消耗多的在上
   const wrap = $("agentList");
-  if (!list.length){ wrap.innerHTML = '<div class="card"><div class="empty">当前筛选下无数据</div></div>'; return; }
+  if (!list.length){
+    MINIS.forEach(c=>c.destroy()); MINIS.length = 0;   // 空数据时也要清理，避免旧实例悬挂
+    wrap.innerHTML = '<div class="card"><div class="empty">当前筛选下无数据</div></div>'; return;
+  }
 
   MINIS.forEach(c=>c.destroy()); MINIS.length = 0;
   wrap.innerHTML = '<div style="display:flex;align-items:baseline;gap:10px;margin:6px 2px 10px">' +
@@ -933,15 +963,36 @@ function renderModelTable(){
     <td class="num">${fmtInt(o.tokens)}</td><td class="num">${fmtInt(o.requests)}</td>
     <td class="num">${fmtCNY(o.cost*DATA.cny_rate)}</td>
     <td class="num">${avg ? "¥"+avg.toFixed(2) : '<span class="muted">价格未知</span>'}</td>
-    ${barCell(o.cost,max,i<3?"#4D6BFE":"#3A3A41")}</tr>`;
+    ${barCell(o.cost,max,i<3?"#4D6BFE":"#56565F")}</tr>`;
   }).join("") || `<tr><td colspan="6" class="empty">当前筛选下无数据</td></tr>`;
 }
 
 /* ---------- 事件 ---------- */
+function switchView(view){
+  document.querySelectorAll("#nav a").forEach(x=>x.classList.toggle("active", x.dataset.view===view));
+  document.querySelectorAll("#tabbar button[data-view]").forEach(x=>x.classList.toggle("active", x.dataset.view===view));
+  ["overview","models"].forEach(v=>$("view-"+v).hidden = v!==view);
+}
 $("nav").addEventListener("click", e=>{
   const a = e.target.closest("a[data-view]"); if (!a) return;
-  document.querySelectorAll("#nav a").forEach(x=>x.classList.toggle("active", x===a));
-  ["overview","models"].forEach(v=>$("view-"+v).hidden = v!==a.dataset.view);
+  switchView(a.dataset.view);
+});
+/* 窄屏底部标签栏：复用同一套视图切换逻辑；"设置"与 #settingsBtn 共用入口 */
+$("tabbar").addEventListener("click", e=>{
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.settings){ toggleSettings(); return; }
+  if (b.dataset.view) switchView(b.dataset.view);
+});
+function toggleSettings(){
+  const p = $("settingsPop"); if (!p) return;
+  p.hidden = !p.hidden;
+}
+$("settingsBtn").onclick = toggleSettings;
+/* 点击设置浮层外部时收起 */
+document.addEventListener("click", e=>{
+  const p = $("settingsPop");
+  if (p && !p.hidden && !e.target.closest(".settings-pop") && !e.target.closest("#settingsBtn")
+      && !e.target.closest('#tabbar button[data-settings]')) p.hidden = true;
 });
 bindDropdown("ddRange", "ddRangeMenu", k => { F.rangeKey = k; renderAll(); });
 $("segDim").onclick = e => { const b=e.target.closest("button"); if(!b) return;

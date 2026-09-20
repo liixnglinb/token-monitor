@@ -2,15 +2,23 @@
 """自动更新 —— 对比 GitHub Releases，下载新版 exe 并自替换重启。
 
 流程：/api/update → fetch_latest() 找到更新 → download_and_apply()
-     下载新版到临时目录 → 写 update.bat（等待当前进程退出 → move 替换 → 重启）
+     下载新版到临时目录 → 优先用 .sha256 资产做 SHA256 完整性校验
+     （校验失败立即中止，防止镜像返回截断/被篡改的包变砖）
+     → 无校验资产时退回「体积 ≥ 1MB」兜底 → 写 update.bat
+     （等待当前进程退出 → move 替换 → 重启）
      → server 1 秒后 os._exit(0) → bat 接管完成替换。
 """
+import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
 import urllib.request
+
+# 64 位十六进制哈希（SHA256 摘要串）
+_HEX_RE = re.compile(r"^[0-9a-f]{64}$")
 
 REPO = "liixnglinb/token-monitor"
 EXE_NAME = "TokenMonitor.exe"
@@ -69,13 +77,62 @@ def find_exe_asset(assets):
     return None
 
 
+def find_sum_asset(assets):
+    """找 exe 对应的 sha256 校验文件资产（name == EXE_NAME + '.sha256'）。无则返回 None。"""
+    target = EXE_NAME + ".sha256"
+    for a in assets:
+        if (a.get("name") or "") == target:
+            return a
+    return None
+
+
+def _sha256_of(path: str) -> str:
+    """流式计算文件 SHA256，返回小写十六进制摘要（避免大文件一次性读入内存）。"""
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _fetch_sha256(asset, timeout: int = 30):
+    """下载 .sha256 校验文件并用现有三级镜像回退，返回期望哈希（小写 64 位十六进制）。
+
+    解析规则：取文件首行第一个空白分隔 token 并小写化；不是合法 SHA256 则视为
+    不可用，返回 None（交给 download_and_apply 的体积校验兜底，不卡死更新流程）。
+    """
+    url = asset.get("browser_download_url") if isinstance(asset, dict) else None
+    if not url:
+        return None
+    tmp = os.path.join(tempfile.gettempdir(), EXE_NAME + ".sha256.tmp")
+    # 校验文件极小，min_size=0 绕过 _download 的「≥1MB」检查
+    try:
+        _download(url, tmp, timeout=timeout, min_size=0)
+    except Exception:
+        return None
+    try:
+        with open(tmp, "r", encoding="utf-8", errors="replace") as f:
+            line = f.readline()
+        token = line.split()[0].strip().lower() if line.strip() else ""
+        if _HEX_RE.match(token) and len(token) == 64:
+            return token
+        return None
+    except Exception:
+        return None
+    finally:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+
+
 # 下载源顺序：官方直连优先，失败自动回退国内镜像。
 # 实测：国内网络下 github.com 直连常 WinError 10060 超时（release 资产走
 # objects.githubusercontent.com，同样会受影响），没有回退会导致更新彻底失败。
 _MIRRORS = ("", "https://gh-proxy.com/", "https://ghproxy.net/")
 
 
-def _download(url: str, dest: str, timeout: int = 300):
+def _download(url: str, dest: str, timeout: int = 300, min_size: int = 1024 * 1024):
     last_err = None
     for pre in _MIRRORS:
         target = (pre + url) if pre else url
@@ -88,7 +145,7 @@ def _download(url: str, dest: str, timeout: int = 300):
                         break
                     f.write(chunk)
             size = os.path.getsize(dest)
-            if size >= 1024 * 1024:
+            if size >= min_size:
                 return                      # 成功
             last_err = RuntimeError("下载内容异常（%d 字节）" % size)
         except Exception as e:              # 超时 / 连接失败 / HTTP 错误 → 换下一个源
@@ -97,8 +154,14 @@ def _download(url: str, dest: str, timeout: int = 300):
     raise last_err or RuntimeError("所有下载源均失败")
 
 
-def download_and_apply(asset: dict):
-    """下载新版 exe → 写自替换脚本 → 启动脚本。当前进程由 server 侧退出。"""
+def download_and_apply(asset: dict, checksum_asset=None):
+    """下载新版 exe → 校验完整性 → 写自替换脚本 → 启动脚本。当前进程由 server 侧退出。
+
+    完整性校验优先级：
+      1) checksum_asset 不为 None 时，先下载对应 .sha256 并比对 SHA256，不一致直接中止；
+      2) 无 .sha256 资产（checksum_asset 为 None）或校验文件不可用时，退回「体积 ≥ 1MB」
+         兜底检查（兼容 v1.2.x 及更早没有 .sha256 资产的 Release，老用户升级不被卡死）。
+    """
     _, exe = _base()
     if not exe or not os.path.exists(exe):
         raise RuntimeError("仅打包版（PyInstaller exe）支持自更新")
@@ -107,6 +170,21 @@ def download_and_apply(asset: dict):
 
     tmp = os.path.join(tempfile.gettempdir(), EXE_NAME + ".new")
     _download(asset["browser_download_url"], tmp)
+
+    # SHA256 完整性校验（优先）：防镜像返回截断/被篡改的包导致变砖
+    if checksum_asset is not None:
+        expected = _fetch_sha256(checksum_asset)
+        if expected is not None:
+            actual = _sha256_of(tmp)
+            if actual != expected:
+                try:
+                    os.remove(tmp)
+                except OSError:
+                    pass
+                raise RuntimeError("更新包 SHA256 校验失败，已中止（可能下载被篡改或镜像异常）")
+        # expected 为 None（.sha256 下载/解析失败）→ 退回体积校验兜底
+
+    # 体积兜底：无 sha256 或 sha256 不可用时，仍要求至少 1MB，避免错误页直接替换
     if os.path.getsize(tmp) < 1024 * 1024:
         raise RuntimeError("下载的更新包异常，已中止")
 
