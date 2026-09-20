@@ -463,7 +463,7 @@ SOURCES = [
     dict(id="trae-solo", cn="字节 TRAE SOLO（可读）", en="ByteDance TRAE SOLO",
          vendor="字节跳动", region="CN", form="ide",
          paths=["{appdata}/TRAE SOLO CN"], fmt=FMT_JSONL_GEN,
-         status="verified",
+         status="encrypted",
          note="★706 文件 / 606MB，含 usage 字段；与加密的 .trae-cn 不同，此路可读"),
 
     dict(id="tokscale", cn="Tokscale", en="Tokscale",

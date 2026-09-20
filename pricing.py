@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 """模型计价 —— 内置快照兜底 · LiteLLM 主源 · OpenRouter 回退 · CC Switch 补充
 
+口径：套餐/订阅制模型只记 token 用量、有意不计金额（见 is_plan）；
+      按量计费的 API 模型才套单价。两者都不产生金额，但原因不同，必须可区分。
+
 价格单位统一为「每 token 美元」。
 数据来源（优先级由低到高）：
   pricing-bundled.json.gz                      (内置快照, ~12000 条, 兜底基线)
@@ -245,6 +248,45 @@ def _ccswitch_pricing():
     return out
 
 
+# ---------------------------------------------------------------------------
+# 套餐 / 订阅制模型：付的是订阅费，不按 token 结算 —— 只记用量，有意不计金额。
+# 判据是日志里出现的模型命名空间，均有实测来源，不是猜的：
+#   sn- / sensenova   商汤小浣熊（经 Box Agent 等接入）
+#   agnes-            Sapiens Agnes
+#   ox-               OX
+#   ark-              火山方舟
+#   raccoon-          Raccoon
+# 这与『API 但价表缺价』是两回事，界面必须分开说
+# （见 kpi_all 的 plan_tokens / unpriced_tokens）。
+# ---------------------------------------------------------------------------
+PLAN_PREFIXES = ("sn-", "sensenova", "agnes-", "ox-", "ark-", "raccoon-")
+# provider 段出现这些档位名即视为套餐/免费额度（实测 Cline：
+# provider=cline-pass，模型写成 cline-free/kimi-k3）
+PLAN_PROVIDERS = ("cline-free", "cline-pass", "cursor-free", "github-copilot")
+
+
+def is_plan(model):
+    """该模型是否属于套餐/订阅制（只记用量，不计金额）
+
+    ⚠ 必须看**原始**模型名：`sn-` 这类前缀本身正是走套餐入口的证据，
+      而 _norm 会把它剥掉（为了把价格匹配到底层模型），两者不能串用。
+    """
+    m = (model or "").strip().lower()
+    if not m:
+        return False
+    parts = m.split('/')
+    short = parts[-1]
+    for p in PLAN_PREFIXES:
+        if m.startswith(p) or short.startswith(p):
+            return True
+    # provider 段（斜杠前）含套餐档位名，同样只记用量
+    if len(parts) > 1:
+        prov = parts[0]
+        for p in PLAN_PROVIDERS:
+            if p in prov:
+                return True
+    return False
+
 def lookup(model):
     """返回 (in, out, cache_write, cache_read) 每 token 美元；未命中返回 None"""
     idx = _build()
@@ -265,7 +307,14 @@ def lookup(model):
 
 
 def cost(model, inp=0, cw=0, cr=0, out=0):
-    """计算单条记录成本（美元）。未命中价格返回 None。"""
+    """计算单条记录成本（美元）。
+
+    返回 None 有两种含义，调用方用 is_plan() 区分：
+      · 套餐/订阅制 —— 有意不计费（只记用量）
+      · API 但价表缺价 —— 缺数据
+    """
+    if is_plan(model):
+        return None
     t = lookup(model)
     _STATS["total"] += 1
     if t is None:

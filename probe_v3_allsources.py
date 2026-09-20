@@ -753,7 +753,8 @@ AGGREGATOR_IDS = {
     "tokscale", "ai-tools-data", "meituan-catpaw-models",
     "codex-session-delete", "codex-plus",
 }
-# 没有可解析的本地用量（须走官方 API / 已加密）
+# 没有可解析的本地用量（须走官方 API / 已加密）。
+# 注意：这是唯一的过滤依据 —— status 不参与闸门，理由见 build_extra_sources()。
 REG_SKIP_FMT = {"none", "api_sync", "sqlcipher_encrypted"}
 REG_STATUSES = {"verified", "candidate"}
 
@@ -834,6 +835,27 @@ def _has_tok(col):
     return False
 
 
+def _snake(k):
+    """camelCase -> snake_case，兼容 JS/TS 系 agent 的键名风格"""
+    out = []
+    for ch in str(k):
+        if ch.isupper() and out and out[-1] != '_':
+            out.append('_')
+        out.append(ch.lower())
+    return ''.join(out)
+
+
+def _alias_keys(u):
+    """给字典补 snake_case 别名；已存在的键一律不覆盖。"""
+    if not isinstance(u, dict):
+        return u
+    out = dict(u)
+    for k, v in u.items():
+        s = _snake(k)
+        if s != k and s not in out:
+            out[s] = v
+    return out
+
 def _iv(d, *names):
     """取正整数用量；bool 与负值一律不算"""
     if not isinstance(d, dict):
@@ -851,9 +873,13 @@ def usage_from_dict(u):
     """各家用量对象 → (inp, cw, cr, out, think)；识别不出返回 None
     口径：inp = 未命中缓存的输入，cr = 缓存命中，cw = 缓存写入
     返回 (inp, cw, cr, out, think, total_only)；total_only=True 表示
-    只有总量没有拆分 —— 这类值在会话日志里通常是**累计值**，不能逐条相加。"""
+    只有总量没有拆分 —— 这类值在会话日志里通常是**累计值**，不能逐条相加。
+
+    键名先做一次 camelCase 别名镜像：Cline 等 JS/TS 系 agent 写的是
+    inputTokens/outputTokens/cacheReadTokens，不归一会整源判 0。"""
     if not isinstance(u, dict) or not u:
         return None
+    u = _alias_keys(u)
     if ("input_tokens" in u or "cache_read_input_tokens" in u
             or "cache_creation_input_tokens" in u):
         inp = _iv(u, "input_tokens")
@@ -968,11 +994,11 @@ def rec_ctx(obj, fallback=None):
 
     fallback: 本条记录自己没带模型时沿用的值（同文件内上一条已知模型）。
     """
-    boxes = [obj]
+    boxes = [_alias_keys(obj)]
     for k in ("message", "payload", "data", "info"):
         v = obj.get(k)
         if isinstance(v, dict):
-            boxes.append(v)
+            boxes.append(_alias_keys(v))
     date = sess = None
     for b in boxes:
         date = date if date is not None else _first(b, _TS_KEYS)
@@ -1236,7 +1262,7 @@ def scan_reg_sqlite_one(src, agent, seen_real, pre=None):
                             truncated = True
                             break
                         d = dict(zip(cols, row))
-                        got = usage_from_dict(d)
+                        got = usage_from_dict(_alias_keys(d))
                         if not got:
                             continue
                         inp, cw, cr, out, think, total_only = got
@@ -1323,7 +1349,10 @@ def build_extra_sources():
         sid = s.get("id")
         if not sid or sid in HANDLED_IDS or sid in AGGREGATOR_IDS:
             continue
-        if s.get("status") not in REG_STATUSES or s.get("fmt") in REG_SKIP_FMT:
+        # 不看 status：它是"某台机器某一刻"的人工快照，却随产品发给所有人；
+        # 拿它当闸门会把"我这台没装"推广成"谁都别扫"，造成静默少算。
+        # 只按 fmt 过滤（设计上就没有本地用量的），是否存在交给下面的路径检查。
+        if s.get("fmt") in REG_SKIP_FMT:
             continue
         if not any(os.path.exists(reg_path(t)) for t in s.get("paths", [])):
             continue                          # 本机没装，不空转

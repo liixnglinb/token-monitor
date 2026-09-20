@@ -88,12 +88,19 @@ def _build() -> dict:
 
     cells = {}
     unpriced_tokens = 0
+    plan_tokens = 0          # 套餐/订阅制：有意不计费，只记用量
+    plan_models = set()      # 供界面区分『套餐不计费』与『价表缺价』
     for r in recs:
         t = pricing.lookup(r.model)
         c = pricing.cost(r.model, r.inp, r.cw, r.cr, r.out)
-        if c is None:
+        isplan = pricing.is_plan(r.model)
+        if isplan:
+            plan_models.add(r.model)
+            plan_tokens += r.total()      # 套餐：有意不计费
             c = 0.0
-            unpriced_tokens += r.total()
+        elif c is None:
+            c = 0.0
+            unpriced_tokens += r.total()  # API 但价表缺价
         k = (r.date, r.agent, r.model, (r.session or "unknown")[:12])
         cell = cells.get(k)
         if cell is None:
@@ -107,7 +114,7 @@ def _build() -> dict:
         cell["out"] += r.out
         cell["cr"] += r.cr
         cell["cw"] += r.cw
-        cell["unpriced" if t is None else "priced"] += 1
+        cell["unpriced" if (t is None or isplan) else "priced"] += 1
 
     matrix = [{"date": d, "agent": a, "model": m, "session": s, **v}
               for (d, a, m, s), v in cells.items()]
@@ -138,6 +145,8 @@ def _build() -> dict:
             "cost_usd": sum(r["cost"] for r in matrix),
             "cache_rate": sum(r.cr for r in recs) / max(total_cache_base, 1),
             "unpriced_tokens": unpriced_tokens,
+            "plan_tokens": plan_tokens,
+            "plan_models": sorted(plan_models),
         },
         "source_notes": dict(getattr(V3, "SKIP_NOTES", {})),
         "cache_stats": V3.flush_cache(),

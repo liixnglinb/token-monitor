@@ -435,8 +435,11 @@ function renderNote(){
   const k = DATA.kpi_all, box = $("noteBox");
   const range = rangeDates();
   let html = "";
+  window.PLAN_SET = new Set((k.plan_models || []).map(s => String(s).toLowerCase()));
+  if (k.plan_tokens > 0)
+    html += `<div class="note">其中 ${fmtTok(k.plan_tokens)} tokens 来自套餐/订阅制模型（商汤小浣熊、Agnes、OX、火山方舟等）—— 按口径只记用量，不计金额。</div>`;
   if (k.unpriced_tokens > 0)
-    html += `<div class="note">其中 ${fmtTok(k.unpriced_tokens)} tokens（${(k.unpriced_tokens/k.tokens*100).toFixed(1)}%）模型价格未知，未计入金额 — 实际成本更高</div>`;
+    html += `<div class="note">另有 ${fmtTok(k.unpriced_tokens)} tokens 走 API 但单价不在价表中（${(k.unpriced_tokens/k.tokens*100).toFixed(1)}%），未计入金额 — 实际成本会更高。</div>`;
   if (range){
     const unk = DATA.matrix.filter(r=>r.date==="unknown" &&
       true);
@@ -611,7 +614,7 @@ const barW = n => n <= 2 ? 36 : n <= 5 ? 16 : 8;
 function costText(cost, tokens){
   if (cost > 0) return fmtCNY(cost * DATA.cny_rate);
   return fmtCNY(0) + (tokens > 0
-    ? ' <span class="muted" title="该模型单价不在价格库中">价格未知</span>' : '');
+    ? ` <span class="muted" title="${(window.PLAN_SET||new Set()).has(String(m.model||m.name).toLowerCase())? '套餐/订阅制，按口径不计金额' : '单价不在价表中'}">${(window.PLAN_SET||new Set()).has(String(m.model||m.name).toLowerCase()) ? '套餐不计费' : '价格未知'}</span>` : '');
 }
 
 function renderAgentList(){
