@@ -69,14 +69,32 @@ def find_exe_asset(assets):
     return None
 
 
+# 下载源顺序：官方直连优先，失败自动回退国内镜像。
+# 实测：国内网络下 github.com 直连常 WinError 10060 超时（release 资产走
+# objects.githubusercontent.com，同样会受影响），没有回退会导致更新彻底失败。
+_MIRRORS = ("", "https://gh-proxy.com/", "https://ghproxy.net/")
+
+
 def _download(url: str, dest: str, timeout: int = 300):
-    req = urllib.request.Request(url, headers={"User-Agent": _UA})
-    with urllib.request.urlopen(req, timeout=timeout) as r, open(dest, "wb") as f:
-        while True:
-            chunk = r.read(1 << 16)
-            if not chunk:
-                break
-            f.write(chunk)
+    last_err = None
+    for pre in _MIRRORS:
+        target = (pre + url) if pre else url
+        try:
+            req = urllib.request.Request(target, headers={"User-Agent": _UA})
+            with urllib.request.urlopen(req, timeout=timeout) as r, open(dest, "wb") as f:
+                while True:
+                    chunk = r.read(1 << 16)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+            size = os.path.getsize(dest)
+            if size >= 1024 * 1024:
+                return                      # 成功
+            last_err = RuntimeError("下载内容异常（%d 字节）" % size)
+        except Exception as e:              # 超时 / 连接失败 / HTTP 错误 → 换下一个源
+            last_err = e
+            continue
+    raise last_err or RuntimeError("所有下载源均失败")
 
 
 def download_and_apply(asset: dict):
