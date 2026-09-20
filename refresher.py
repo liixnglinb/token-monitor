@@ -114,9 +114,11 @@ class Refresher:
             with self._lock:
                 rm = self.settings["refresh_minutes"]
                 dirty = self._dirty
-            due_data = rm > 0 and (
-                dirty or self._built_at is None
-                or (time.time() - self._last_build_ts()) >= rm * 60)
+            # 进入软件必须自动扫描一次（_built_at 为空），不受自动刷新开关影响；
+            # 开关只控制后续的周期性重扫与脏标记重扫
+            due_data = self._built_at is None or (
+                rm > 0 and (dirty
+                or (time.time() - self._last_build_ts()) >= rm * 60))
             # 更新检查固定策略：启动即查（_version_at 为空）+ 每 30 分钟，不受设置影响
             due_ver = (self._version_fn is not None and (
                 self._version_at is None
