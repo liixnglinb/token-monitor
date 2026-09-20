@@ -131,9 +131,11 @@ def _version_probe():
     info = {"version": local, "latest": None, "has_update": False,
             "repo": updater.REPO}
     try:
-        latest, _assets = updater.fetch_latest()
+        latest, _assets, meta = updater.fetch_latest()
         info["latest"] = latest
         info["has_update"] = updater.is_newer(latest, local)
+        info["body"] = meta.get("body", "")
+        info["date"] = meta.get("date", "")
     except Exception as e:                              # 断网/限流不影响使用
         info["error"] = str(e)[:120]
     return info
@@ -274,7 +276,7 @@ def api_version():
 @app.post("/api/update")
 def api_update():
     try:
-        latest, assets = updater.fetch_latest()
+        latest, assets, _meta = updater.fetch_latest()
         asset = updater.find_exe_asset(assets)
         if asset is None:
             return JSONResponse({"ok": False,

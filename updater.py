@@ -56,7 +56,8 @@ def is_newer(latest: str, local: str) -> bool:
 
 
 def fetch_latest(timeout: int = 8):
-    """返回 (latest_version_without_v, assets)。404 时返回 ("", [])。"""
+    """返回 (latest_version_without_v, assets, info)。info 含 body/date 供浮层展示；
+    404 时 ("", [], {})。"""
     url = f"https://api.github.com/repos/{REPO}/releases/latest"
     req = urllib.request.Request(url, headers={
         "Accept": "application/vnd.github+json", "User-Agent": _UA})
@@ -65,9 +66,11 @@ def fetch_latest(timeout: int = 8):
             rel = json.load(r)
     except urllib.error.HTTPError as e:
         if e.code == 404:
-            return "", []
+            return "", [], {}
         raise
-    return (rel.get("tag_name") or "").lstrip("v"), rel.get("assets") or []
+    info = {"body": (rel.get("body") or "").strip(),
+            "date": ((rel.get("published_at") or "")[:10])}
+    return (rel.get("tag_name") or "").lstrip("v"), rel.get("assets") or [], info
 
 
 def find_exe_asset(assets):
