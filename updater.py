@@ -130,6 +130,8 @@ def download_and_apply(asset: dict):
             f'move /y "{tmp}" "{exe}" >> "%LOG%" 2>&1\r\n'
             'if errorlevel 1 ( echo place new failed >> "%LOG%" & goto giveup )\r\n'
             'echo placed new exe >> "%LOG%"\r\n'
+            'echo waiting for resources release >> "%LOG%"\r\n'
+            'timeout /t 4 /nobreak >nul\r\n'
             f'start "" "{exe}"\r\n'
             'echo started >> "%LOG%"\r\n'
             f'del "{exe_old}" >> "%LOG%" 2>&1\r\n'
