@@ -65,7 +65,7 @@ main{flex:1;min-width:0;padding:20px 28px 48px}
 .note.err{background:rgba(226,75,74,.08);border-color:rgba(226,75,74,.3);color:#F0A2A1}
 
 /* KPI */
-.kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:18px}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:18px}
 .kpi{background:var(--card);border-radius:12px;padding:16px 18px}
 .kpi .l{color:var(--sub);font-size:13px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
 .kpi .l .k-corner{font-size:11px;color:var(--dim);font-weight:400;white-space:nowrap}
@@ -74,6 +74,24 @@ main{flex:1;min-width:0;padding:20px 28px 48px}
 
 /* 卡片与图表 */
 .card{background:var(--card);border-radius:12px;padding:18px 20px;margin-bottom:18px}
+/* 模型用量分布：环形图 + 双列 Top10（参考百炼布局） */
+.dist{display:grid;grid-template-columns:320px minmax(0,1fr);gap:26px;align-items:start}
+.donut-wrap{position:relative;height:230px;margin-top:4px}
+.donut-wrap canvas{position:relative;z-index:1;cursor:pointer}
+.donut-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;gap:2px}
+.donut-center b{font-size:26px;font-weight:600;letter-spacing:-.01em}
+.donut-center span{font-size:12px;color:var(--sub)}
+.donut-legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:14px;font-size:12px;color:var(--sub)}
+.donut-legend i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:6px;vertical-align:middle}
+.t10{display:grid;grid-template-columns:1fr 1fr;gap:0 26px}
+.t10-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer;transition:background .15s}
+.t10-row:hover{background:var(--card2)}
+.t10-row .idx{width:48px;flex:none;font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums;white-space:nowrap}
+.t10-row .dot{width:8px;height:8px;border-radius:2px;flex:none}
+.t10-row .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-family:ui-monospace,Consolas,monospace}
+.t10-row .val{flex:none;font-size:13px;font-variant-numeric:tabular-nums;color:var(--txt)}
+.t10-row .val em{font-style:normal;color:var(--dim);font-size:11px;margin-left:3px}
+@media(max-width:1100px){.dist{grid-template-columns:1fr}.t10{grid-template-columns:1fr}}
 .card-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
 .card-head h3{font-size:14px;font-weight:500}
 .card-head .val{color:var(--sub);font-size:13px}
@@ -201,6 +219,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
       <div class="kpi"><div class="l">消耗金额</div><div class="v" id="kCost">—</div><div class="s" id="kCostSub"></div></div>
       <div class="kpi"><div class="l">API 请求次数</div><div class="v" id="kReq">—</div><div class="s" id="kReqSub"></div></div>
       <div class="kpi"><div class="l">Tokens<span class="k-corner" id="kCache">缓存命中 —</span></div><div class="v" id="kTok">—</div><div class="s" id="kTokSub"></div></div>
+      <div class="kpi"><div class="l">平均单次请求</div><div class="v" id="kAvg">—</div><div class="s" id="kAvgSub"></div></div>
     </div>
 
     <div class="card">
@@ -229,6 +248,21 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
     </div>
 
     <div id="agentList"></div>
+
+    <div class="card dist">
+      <div>
+        <div class="card-head"><h3>模型用量分布</h3><div class="grow"></div><span class="val" id="distSum"></span></div>
+        <div class="donut-wrap">
+          <canvas id="donutChart" role="img" aria-label="各模型 Token 占比环形图">加载中…</canvas>
+          <div class="donut-center"><b id="donutN">—</b><span id="donutCap">个模型</span></div>
+        </div>
+        <div class="donut-legend" id="donutLegend"></div>
+      </div>
+      <div>
+        <div class="card-head"><h3>调用次数 Top 10</h3><div class="grow"></div><span class="val">点击查看该模型明细</span></div>
+        <div class="t10" id="top10"></div>
+      </div>
+    </div>
   </section>
 
   <!-- ── 视图 2：模型成本 ── -->
@@ -389,9 +423,12 @@ function init(){
 }
 
 function renderAll(){
+  /* 套餐模型集合先行设置：renderAgentList / renderModelDist 都要用它区分「套餐」与「缺价」 */
+  window.PLAN_SET = new Set(((DATA.kpi_all && DATA.kpi_all.plan_models) || [])
+    .map(x => String(x).toLowerCase()));
   renderRangeMenu();
   renderKPI(); renderMain(); renderAgentList();
-  renderModelTable(); renderNote(); renderScanInfo();
+  renderModelDist(); renderModelTable(); renderNote(); renderScanInfo();
 }
 
 /* 扫描开销：命中/未命中/判定跳过，让"这次为什么慢"有处可看 */
@@ -473,6 +510,9 @@ function renderKPI(){
   $("kTok").textContent = fmtInt(tokens);           // 对齐 DeepSeek：完整千分位
   $("kTokSub").textContent = fmtTok(tokens) + " tokens";
   $("kCache").textContent = "缓存命中 " + (cr/Math.max(base,1)*100).toFixed(1) + "%";
+  /* 平均单次请求（参考百炼的「平均单次请求Token」） */
+  $("kAvg").textContent = req ? fmtInt(Math.round(tokens / req)) : "—";
+  $("kAvgSub").textContent = req ? "tokens / 次 · 共 " + fmtInt(req) + " 次请求" : "无请求记录";
 }
 
 /* ---------- 主图 ---------- */
@@ -611,10 +651,95 @@ function addMini(id, pairs, color, tip){
 /* 单点/双点时柱太细，看起来像坏图 —— 自适应放宽 */
 const barW = n => n <= 2 ? 36 : n <= 5 ? 16 : 8;
 /* 金额为 0 但有用量时，标注"价格未知"，避免误以为算错 */
-function costText(cost, tokens){
+/* 成本列文案：区分「有计价 / 套餐不计费 / 价表缺价」三态
+   model       —— 模型名，用于查套餐集合（Agent 行传 null）
+   forcePlan   —— Agent 行用：该 Agent 全部为套餐模型时直接标套餐 */
+function costText(cost, tokens, model, forcePlan){
   if (cost > 0) return fmtCNY(cost * DATA.cny_rate);
-  return fmtCNY(0) + (tokens > 0
-    ? ` <span class="muted" title="${(window.PLAN_SET||new Set()).has(String(m.model||m.name).toLowerCase())? '套餐/订阅制，按口径不计金额' : '单价不在价表中'}">${(window.PLAN_SET||new Set()).has(String(m.model||m.name).toLowerCase()) ? '套餐不计费' : '价格未知'}</span>` : '');
+  if (!(tokens > 0)) return fmtCNY(0);
+  const set = window.PLAN_SET || new Set();
+  const isPlan = !!forcePlan || !!(model && set.has(String(model).toLowerCase()));
+  const tip = isPlan ? "套餐/订阅制，按口径只记用量、不计金额" : "单价不在价表中";
+  const label = isPlan ? "套餐不计费" : "价格未知";
+  return fmtCNY(0) + ' <span class="muted" title="' + tip + '">' + label + '</span>';
+}
+
+/* ---------- 模型用量分布（环形图 + 双列 Top10，参考阿里云百炼看板） ---------- */
+let DONUT = null;
+function renderModelDist(){
+  const rows = rowsFor(false);
+  const agg = new Map();
+  for (const r of rows){
+    const o = agg.get(r.model) || { tokens:0, req:0, cost:0 };
+    o.tokens += r.tokens; o.req += r.requests; o.cost += r.cost;
+    agg.set(r.model, o);
+  }
+  const byTok = [...agg.entries()].sort((a,b)=>b[1].tokens-a[1].tokens);
+  const byReq = [...agg.entries()].sort((a,b)=>b[1].req-a[1].req);
+
+  /* 环形图按 Token 占比：前 8 个 + 其余合并，避免色块过碎 */
+  const TOPN = 8;
+  const head = byTok.slice(0, TOPN);
+  const restTok = byTok.slice(TOPN).reduce((s, x)=>s + x[1].tokens, 0);
+  const items = head.map(([n, o])=>({ name:n, val:o.tokens }));
+  if (restTok > 0) items.push({ name:"其他 " + (byTok.length - TOPN) + " 个", val:restTok });
+  const totalTok = items.reduce((s, i)=>s + i.val, 0) || 1;
+
+  $("donutN").textContent = byTok.length;
+  $("donutCap").textContent = "个模型 · " + fmtTok(totalTok);
+  $("distSum").textContent = fmtInt(totalTok) + " tokens";
+
+  if (DONUT){ DONUT.destroy(); DONUT = null; }
+  if (items.length){
+    DONUT = new Chart($("donutChart"), {
+      type: "doughnut",
+      data: {
+        labels: items.map(i=>i.name),
+        datasets: [{
+          data: items.map(i=>i.val),
+          backgroundColor: items.map((_, i)=>PAL[i % PAL.length]),
+          borderColor: "#252528", borderWidth: 2, hoverOffset: 8,
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, cutout: "70%",
+        plugins: {
+          legend: { display: false },
+          tooltip: Object.assign({}, TT, {
+            callbacks: {
+              title: it => it && it.length ? it[0].label : "",
+              label: c => " " + fmtTok(c.parsed) + " · 占 " + (c.parsed / totalTok * 100).toFixed(1) + "%",
+            },
+          }),
+        },
+      },
+    });
+  }
+  $("donutLegend").innerHTML = items.slice(0, 8).map((i, k)=>
+    '<span><i style="background:' + PAL[k % PAL.length] + '"></i>' + esc(i.name) + '</span>').join("");
+
+  /* 双列 Top10：按调用次数排序（与百炼一致） */
+  const top = byReq.slice(0, 10);
+  const col = (arr, start) => arr.map(([n, o], k)=>
+    '<div class="t10-row" data-model="' + esc(n) + '" title="查看 ' + esc(n) + ' 的明细">'
+    + '<span class="idx">Top ' + (start + k + 1) + '</span>'
+    + '<span class="dot" style="background:' + PAL[(start + k) % PAL.length] + '"></span>'
+    + '<span class="nm">' + esc(n) + '</span>'
+    + '<span class="val">' + fmtInt(o.req) + '<em>次</em></span>'
+    + '</div>').join("");
+  const box = $("top10");
+  box.innerHTML = '<div>' + col(top.slice(0, 5), 0) + '</div><div>' + col(top.slice(5, 10), 5) + '</div>';
+
+  /* 点击某行 → 跳到「模型成本」视图看明细 */
+  box.querySelectorAll(".t10-row").forEach(el=>{
+    el.onclick = () => {
+      document.querySelectorAll("#nav a").forEach(a=>
+        a.classList.toggle("active", a.dataset.view === "models"));
+      $("view-overview").hidden = true;
+      $("view-models").hidden = false;
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    };
+  });
 }
 
 function renderAgentList(){
@@ -622,9 +747,11 @@ function renderAgentList(){
   const range = rangeDates();
   const start = range && range[0];
   const ag = new Map();
+  const planSet = window.PLAN_SET || new Set();
   for (const r of rows){
-    const o = ag.get(r.agent) || {tokens:0, cost:0, requests:0};
+    const o = ag.get(r.agent) || {tokens:0, cost:0, requests:0, planTokens:0};
     o.tokens += r.tokens; o.cost += r.cost; o.requests += r.requests;
+    if (planSet.has(String(r.model).toLowerCase())) o.planTokens += r.tokens;
     ag.set(r.agent, o);
   }
   const list = [...ag.entries()].sort((a,b)=>b[1].tokens-a[1].tokens);   // 消耗多的在上
@@ -648,7 +775,7 @@ function renderAgentList(){
           '<span class="ar-fold">▶</span>' +
           '<span class="ar-icon" style="color:' + color + '">' + agentIcon(name) + '</span>' +
           '<span class="nm">' + esc(name) + '</span>' +
-          '<span class="num">Tokens <b>' + fmtInt(o.tokens) + '</b> · ' + fmtInt(o.requests) + ' 次 · ' + costText(o.cost, o.tokens) + '</span>' +
+          '<span class="num">Tokens <b>' + fmtInt(o.tokens) + '</b> · ' + fmtInt(o.requests) + ' 次 · ' + costText(o.cost, o.tokens, null, o.planTokens > 0 && o.planTokens >= o.tokens * 0.995) + '</span>' +
         '</div>' +
         '<div class="ar-chart"><canvas id="ac-' + i + '" role="img" aria-label="' + esc(name) + ' 每日 Token 走势"></canvas></div>' +
         '<div class="ar-models" id="am-' + i + '"></div>' +
@@ -679,7 +806,7 @@ function renderAgentList(){
         row.className = "mrow";
         row.innerHTML =
           '<span class="nm" title="' + esc(mname) + '">' + esc(mname) + '</span>' +
-          '<span class="num">Tokens <b>' + fmtInt(o2.tokens) + '</b> · ' + fmtInt(o2.requests) + ' 次 · ' + costText(o2.cost, o2.tokens) + '</span>' +
+          '<span class="num">Tokens <b>' + fmtInt(o2.tokens) + '</b> · ' + fmtInt(o2.requests) + ' 次 · ' + costText(o2.cost, o2.tokens, mname) + '</span>' +
           '<div class="ch"><canvas id="mc-' + i + '-' + j + '" role="img" aria-label="' + esc(mname) + ' 每日 Token 走势"></canvas></div>';
         boxM.appendChild(row);
         const mrows = arows.filter(r=>r.model===mname);
