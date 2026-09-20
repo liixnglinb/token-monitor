@@ -33,6 +33,7 @@ jobs:
       - name: PyInstaller 打包
         run: >
           pyinstaller --noconfirm --onefile --name TokenMonitor
+          --windowed --icon "icon.ico"
           --add-data "webapp/static;webapp/static"
           --add-data "version.txt;."
           --hidden-import uvicorn --hidden-import uvicorn.loops
@@ -40,6 +41,9 @@ jobs:
           --hidden-import uvicorn.protocols.http --hidden-import uvicorn.protocols.http.auto
           --hidden-import uvicorn.protocols.websockets --hidden-import uvicorn.protocols.websockets.auto
           --hidden-import uvicorn.lifespan --hidden-import uvicorn.lifespan.on
+          --hidden-import webview --hidden-import webview.platforms.winforms
+          --hidden-import webview.platforms.edgechromium
+          --hidden-import clr_loader --hidden-import pythonnet --hidden-import clr
           main.py
 
       - name: 打安装包（Inno Setup）

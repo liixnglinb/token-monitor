@@ -16,7 +16,7 @@
 
 ### 安装版（推荐）
 
-从 [Releases](https://github.com/liixnglinb/token-monitor/releases) 下载 `TokenMonitor-setup-vX.Y.Z.exe`，安装后自动启动并打开浏览器。
+从 [Releases](https://github.com/liixnglinb/token-monitor/releases) 下载 `TokenMonitor-setup-vX.Y.Z.exe`，安装后自动启动，**直接打开应用窗口**（内嵌 WebView2，不跳系统浏览器）。
 
 ### 便携版
 
@@ -26,7 +26,7 @@
 
 ```bash
 pip install -r requirements.txt
-python main.py            # → http://127.0.0.1:8420
+python main.py            # 起内嵌窗口；服务在 http://127.0.0.1:8420
 ```
 
 ## 自动更新机制
@@ -35,7 +35,7 @@ python main.py            # → http://127.0.0.1:8420
 
 1. 下载新版 exe 到临时目录
 2. 生成自替换脚本，等待当前进程退出
-3. 替换 exe 并自动重启，浏览器自动打开新版本
+3. 替换 exe 并自动重启，应用窗口自动打开新版本
 
 整个过程无需重新下载安装包。
 
