@@ -19,6 +19,7 @@ Token Monitor v3 — 全源统一解析（含重叠检测）
 全程只读副本，不触碰原库。
 """
 import json
+import hashlib
 import os
 import shutil
 import time
@@ -197,6 +198,33 @@ def scan_claude():
     return dedupe_by_key(file_cached(files, _claude_file))
 
 
+def _codex_usage(tt):
+    """Codex total_token_usage -> (inp, cw, cr, out, think)。
+
+    `total_tokens` 是供应商口径的权威总量；`input_tokens` 在部分模型上只是
+    未缓存输入，不能假定它包含 `cached_input_tokens`。这里优先保证总量准确，
+    再把缓存读取量分配到总量允许的范围内。
+    """
+    ti = _iv(tt, "input_tokens")
+    raw_cr = _iv(tt, "cached_input_tokens")
+    cw = _iv(tt, "cache_write_input_tokens")
+    out = _iv(tt, "output_tokens")
+    think = _iv(tt, "reasoning_output_tokens")
+    provider_total = _iv(tt, "total_tokens")
+
+    if provider_total:
+        total = max(provider_total, cw + out)
+        budget = total - cw - out
+        cr = min(raw_cr, budget)
+        inp = budget - cr
+    elif raw_cr > ti:
+        # 无权威总量时保留供应商的输入口径，避免把缓存量直接丢掉。
+        inp, cr = ti, raw_cr
+    else:
+        inp, cr = ti - raw_cr, raw_cr
+    return inp, cw, cr, out, think
+
+
 def _codex_file(path):
     """单个 Codex rollout 日志：token_count 是会话内累计值，只取末条"""
     last, model = None, "unknown"
@@ -211,17 +239,10 @@ def _codex_file(path):
     if not last:
         return []
     ts, tt = last
-    ti = tt.get("input_tokens", 0) or 0
-    cr = tt.get("cached_input_tokens", 0) or 0
-    # 非 OpenAI 模型经 Codex 转发时，cached 可能大于 input（口径不同），
-    # 直接相减会得出负 input → 面板显示负成本。缓存不可能超过总输入。
-    if cr > ti:
-        cr = ti
+    inp, cw, cr, out, think = _codex_usage(tt)
     fn = os.path.basename(path)
     return [("codex", to_date(ts), fn, str(model).lower(),
-             ti - cr, tt.get("cache_write_input_tokens") or 0, cr,
-             tt.get("output_tokens") or 0,
-             tt.get("reasoning_output_tokens") or 0, fn)]
+             inp, cw, cr, out, think, fn)]
 
 
 def scan_codex():
@@ -670,7 +691,8 @@ def _hand_files(specs):
                 if kind == "db" and not low.endswith((".db", ".sqlite", ".sqlite3")):
                     continue
                 if kind == "both" and not low.endswith(
-                        (".jsonl", ".ndjson", ".json", ".db", ".sqlite", ".sqlite3")):
+                        (".jsonl", ".ndjson", ".json", ".zstd", ".db",
+                         ".sqlite", ".sqlite3")):
                     continue
                 out.append(os.path.join(dp, fn))
                 n += 1
@@ -702,29 +724,40 @@ def cached_scan(key, files_fn, real_fn):
     """通用包装：文件未变则复用上次解析结果。real_fn 返回 list[R] 或 (list[R], meta)"""
     if scan_cache is None:
         return real_fn()
-    verdict = scan_cache.get_verdict(key)
-    if verdict:
-        CACHE_STATS["verdict"] += 1
-        SKIP_NOTES[key] = verdict
-        return [], {"缓存": "命中上次判定", "说明": verdict}
+    SKIP_NOTES.pop(key, None)
     try:
         files = files_fn()
     except Exception:
         files = []
-    flat = files if not isinstance(files, tuple) else [p for sub in files for p in sub]
+    if isinstance(files, dict):
+        flat = list(files.get("json") or []) + list(files.get("db") or [])
+    elif isinstance(files, tuple):
+        flat = [p for sub in files for p in sub]
+    else:
+        flat = files
     fp = scan_cache.fingerprint(scan_cache.file_entries(flat)) if flat else ""
     if fp:
+        verdict = scan_cache.get_verdict(key, fp)
+        if verdict:
+            CACHE_STATS["verdict"] += 1
+            SKIP_NOTES[key] = verdict
+            return [], {"缓存": "命中同指纹判定", "说明": verdict}
         hit = scan_cache.get_records(key, fp)
         if hit is not None:
             CACHE_STATS["hit"] += 1
             return [_rec_obj(t) for t in hit], {"缓存": "命中（文件未变化）"}
+    else:
+        # 空目录不是稳定事实，不能跨进程永久跳过。
+        scan_cache.forget(key)
     CACHE_STATS["miss"] += 1
     # real_fn 能收清单就传给它（避免重复遍历目录），否则无参调用
     res = real_fn(files) if _takes_arg(real_fn) else real_fn()
     recs = res[0] if isinstance(res, tuple) else res
     truncated = key in SKIP_NOTES
     if not recs:
-        scan_cache.remember_verdict(key, SKIP_NOTES.get(key) or "本机无可用用量")
+        if fp:
+            scan_cache.remember_verdict(
+                key, SKIP_NOTES.get(key) or "本机无可用用量", fp)
     elif fp and not truncated:
         scan_cache.put_records(key, fp, [_rec_tuple(r) for r in recs])
     return res
@@ -758,8 +791,8 @@ AGGREGATOR_IDS = {
 REG_SKIP_FMT = {"none", "api_sync", "sqlcipher_encrypted"}
 REG_STATUSES = {"verified", "candidate"}
 
-MAX_REG_FILES = 600                      # 单源文件数上限，防止超大目录拖死面板
-MAX_WALK_ENTRIES = 60000                 # 单源遍历上界（有源两万多条目、日志在深处）
+MAX_REG_FILES = 5000                     # 单源文件数上限，防止超大目录拖死面板
+MAX_WALK_ENTRIES = 200000                # 单源遍历上界；超大目录只走一遍并明确留痕
 # 截断留痕必须 thread-local：并发扫描时不能让 A 源的标记被 B 源读到
 _TL = threading.local()
 
@@ -770,8 +803,7 @@ def _cap_get():
 
 def _cap_set(v):
     setattr(_TL, 'hit', bool(v))
-_ZERO_RESULT = set()                     # 进程内记忆：上次扫完是空的源，本次直接跳过
-MAX_SOURCE_SECONDS = 25.0                  # 单源时间预算：超预算整源丢弃，不给半截数字
+MAX_SOURCE_SECONDS = 120.0                 # 单源时间预算：超预算整源丢弃，不给半截数字
 CHECK_EVERY_LINES = 4000                   # 行级预算检查粒度（单个会话日志可达 1GB）                   # 单源时间预算：超预算整源跳过，不给半截数字
 
 # 本机主目录下的点目录大量是 junction（真实数据在别处），
@@ -791,8 +823,8 @@ def real_path(p):
 
 SKIP_NOTES = {}                              # agent id -> 跳过原因（供面板说明）
 MAX_JSON_BYTES = 64 * 1048576            # 单个 json/jsonl 上限
-MAX_DB_BYTES = 512 * 1048576             # 单个 sqlite 上限
-MAX_ROWS_PER_TABLE = 200000
+MAX_DB_BYTES = 2 * 1024 * 1048576        # 单个 sqlite 上限
+MAX_ROWS_PER_TABLE = 1000000
 
 _PATH_VARS = (
     ("{home}", HOME),
@@ -804,6 +836,9 @@ _PATH_VARS = (
 )
 
 _MODEL_KEYS = ("model", "model_id", "modelId", "model_name", "modelName", "modelID")
+_RECORD_ID_KEYS = ("message_id", "messageId", "request_id", "requestId",
+                   "response_id", "responseId", "event_id", "eventId",
+                   "uuid", "id")
 _TS_KEYS = ("timestamp", "created_at", "createdAt", "time_created", "timeCreated",
             "started_at", "updated_at", "endTime", "end_time", "date", "ts", "time")
 _SESS_KEYS = ("session_id", "sessionId", "conversation_id", "conversationId",
@@ -886,8 +921,10 @@ def usage_from_dict(u):
         cr = _iv(u, "cache_read_input_tokens", "cached_input_tokens", "cached_tokens")
         cw = _iv(u, "cache_creation_input_tokens", "cache_write_input_tokens")
         out = _iv(u, "output_tokens")
-        # Codex / ZCode 形：input_tokens 已含缓存 → 扣出来，避免与 cr 重复计
-        if cr and inp >= cr:
+        # 只有明确带 cached_input_tokens 的 OpenAI/Codex 形态才从 input 扣除。
+        # Anthropic 的 cache_read_input_tokens 是独立输入，不能扣。
+        cached_in_input = ("cached_input_tokens" in u or "cached_tokens" in u)
+        if cached_in_input and cr and inp >= cr:
             inp -= cr
     elif "prompt_tokens" in u or "completion_tokens" in u:
         pt = _iv(u, "prompt_tokens", "input_tokens")
@@ -900,15 +937,14 @@ def usage_from_dict(u):
         cr = _iv(u, "tokens_cache_read", "cache_read_tokens")
         cw = _iv(u, "tokens_cache_write", "cache_write_tokens")
         out = _iv(u, "tokens_output")
-        if cr and inp >= cr:
+        if (("cached_input_tokens" in u or "cached_tokens" in u)
+                and cr and inp >= cr):
             inp -= cr
     elif "cache_read_tokens" in u or "cache_write_tokens" in u:
         inp = _iv(u, "input_tokens")
         cr = _iv(u, "cache_read_tokens")
         cw = _iv(u, "cache_write_tokens")
         out = _iv(u, "output_tokens")
-        if cr and inp >= cr:
-            inp -= cr
     elif "tokens_in" in u or "tokens_out" in u:
         inp = _iv(u, "tokens_in")
         out = _iv(u, "tokens_out")
@@ -942,7 +978,7 @@ def find_usage(obj, depth=0):
             if r:
                 return r
         elif isinstance(v, list):
-            for it in v[:3]:
+            for it in v:
                 r = find_usage(it, depth + 1)
                 if r:
                     return r
@@ -952,7 +988,7 @@ def find_usage(obj, depth=0):
             if r:
                 return r
         elif isinstance(v, list) and depth <= 2:
-            for it in v[:3]:
+            for it in v:
                 r = find_usage(it, depth + 2)
                 if r:
                     return r
@@ -986,6 +1022,23 @@ def _pick_model(obj, depth=0):
             r = _pick_model(v, depth + 1)
             if r:
                 return r
+    return None
+
+
+def _record_id(obj):
+    """提取稳定的 request/message 标识；没有则返回 None。"""
+    boxes = [obj]
+    for k in ("message", "payload", "data", "info"):
+        v = obj.get(k) if isinstance(obj, dict) else None
+        if isinstance(v, dict):
+            boxes.append(v)
+    for box in boxes:
+        if not isinstance(box, dict):
+            continue
+        for k in _RECORD_ID_KEYS:
+            v = box.get(k)
+            if isinstance(v, (str, int)) and str(v).strip():
+                return str(v).strip()
     return None
 
 
@@ -1026,7 +1079,24 @@ def iter_records(path):
         if isinstance(cur, dict):
             yield cur
         elif isinstance(cur, list):
-            stack.extend(cur[:200])
+            stack.extend(cur)
+
+
+def _prefix_sha256(path, size):
+    """返回文件前 size 字节的 SHA256；用于证明增量缓存的前缀未被重写。"""
+    h = hashlib.sha256()
+    remaining = max(0, int(size))
+    try:
+        with open(path, "rb") as f:
+            while remaining:
+                chunk = f.read(min(1 << 20, remaining))
+                if not chunk:
+                    break
+                h.update(chunk)
+                remaining -= len(chunk)
+    except OSError:
+        return None
+    return h.hexdigest() if remaining == 0 else None
 
 
 def reg_files(root, seen_real):
@@ -1056,10 +1126,11 @@ def reg_files(root, seen_real):
             yield p
             n += 1
             if n >= MAX_REG_FILES:
+                _cap_set(True)
                 return
 
 
-def reg_dbs(root, cap=6, seen_real=None):
+def reg_dbs(root, cap=500, seen_real=None):
     out = []
     seen_real = seen_real if seen_real is not None else set()
     if os.path.isfile(root):
@@ -1085,7 +1156,11 @@ def reg_dbs(root, cap=6, seen_real=None):
                 continue
             p = os.path.join(dp, fn)
             try:
-                if not (0 < os.path.getsize(p) <= MAX_DB_BYTES):
+                size = os.path.getsize(p)
+                if size <= 0:
+                    continue
+                if size > MAX_DB_BYTES:
+                    _cap_set(True)
                     continue
             except OSError:
                 continue
@@ -1094,7 +1169,11 @@ def reg_dbs(root, cap=6, seen_real=None):
                 continue
             seen_real.add(r)
             out.append(p)
-        if capped or len(out) >= cap * 3:
+            if len(out) > cap:
+                _cap_set(True)
+                capped = True
+                break
+        if capped:
             break
     sized = []
     for p in out:
@@ -1146,8 +1225,11 @@ def scan_reg_jsonl_one(src, agent, seen_real, pre=None):
                 truncated = True                # 半截数字不可信，整源作废
                 break
             try:
-                if os.path.getsize(path) > MAX_JSON_BYTES:
-                    continue
+                is_jsonl = path.lower().endswith((".jsonl", ".ndjson"))
+                if not is_jsonl and os.path.getsize(path) > MAX_JSON_BYTES:
+                    _cap_set(True)
+                    truncated = True
+                    break
             except OSError:
                 continue
             nf += 1
@@ -1167,8 +1249,12 @@ def scan_reg_jsonl_one(src, agent, seen_real, pre=None):
                 continue
             base, skip = [], 0
             if cached and 0 < cached.get("s", 0) <= fs:
-                base = list(cached.get("recs") or [])   # 纯追加：只解析新增尾部
-                skip = int(cached.get("n") or 0)
+                old_prefix = _prefix_sha256(path, cached.get("s"))
+                if old_prefix and old_prefix == cached.get("ph"):
+                    base = list(cached.get("recs") or [])  # 前缀一致：只解析新增尾部
+                    skip = int(cached.get("n") or 0)
+                elif ck:
+                    scan_cache.drop_file(ck)
             new, idx, used = [], 0, 0
             if last_model is None:
                 last_model = "unknown"
@@ -1198,9 +1284,14 @@ def scan_reg_jsonl_one(src, agent, seen_real, pre=None):
                     if prev is None or inp > prev[1]:
                         cum[k] = (d, inp)
                     continue
-                # 同一 (日期, 会话, 模型, usage) 只算一次：
-                # request 行与 response 行常各带一份相同 usage，逐条相加必虚高
-                key = "%s|%s|%s|%d|%d|%d|%d" % (d, sess, model, inp, cw, cr, out)
+                # 有稳定 ID 时按 ID 去重；只有确实没有 ID 才退回数值指纹。
+                # 数值指纹可能把同会话内两次合法且数值相同的请求误合并。
+                rid = _record_id(obj)
+                if rid:
+                    key = "id:%s" % rid
+                else:
+                    key = "use:%s|%s|%s|%d|%d|%d|%d" % (
+                        d, sess, model, inp, cw, cr, out)
                 if key in seen:
                     folded[0] += 1
                     continue
@@ -1212,7 +1303,15 @@ def scan_reg_jsonl_one(src, agent, seen_real, pre=None):
             if ck:
                 # 只要没中途截断就写回：mtime 变了但没新增记录时，
                 # 也要把新 mtime 记上（否则下次又整文件重读，缓存白做）
-                scan_cache.put_file(ck, fm, fs, max(used, skip), base + new)
+                try:
+                    st2 = os.stat(path)
+                    stable = (st2.st_mtime_ns == fm and st2.st_size == fs)
+                except OSError:
+                    stable = False
+                if stable:
+                    scan_cache.put_file(
+                        ck, fm, fs, max(used, skip), base + new,
+                        prefix=_prefix_sha256(path, fs))
             for t in base + new:
                 recs.append(_rec_obj(t))
     if truncated:
@@ -1251,12 +1350,16 @@ def scan_reg_sqlite_one(src, agent, seen_real, pre=None):
                         if not any(_has_tok(c) for c in cols):
                             continue
                         rows = con.execute(
-                            'SELECT * FROM "%s" LIMIT %d' % (tn, MAX_ROWS_PER_TABLE)).fetchall()
+                            'SELECT * FROM "%s"' % tn)
                     except sqlite3.Error:
                         continue
                     rn = 0
                     for row in rows:
                         rn += 1
+                        if rn > MAX_ROWS_PER_TABLE:
+                            _cap_set(True)
+                            truncated = True
+                            break
                         if (rn % CHECK_EVERY_LINES == 0
                                 and time.time() - t0 > MAX_SOURCE_SECONDS):
                             truncated = True
@@ -1302,44 +1405,51 @@ def make_registry_scanner(src):
         "走不完"不等于"没有"。零结果判定已由 scan_cache 的 verdicts 跨进程持久化，
         这笔遍历开销只在缓存清空后的第一次付。
         """
+        _cap_set(False)
         fl, dl, s1, s2 = [], [], set(), set()
+        seen_roots = set()
         for t in src.get("paths", []):
             root = reg_path(t)
             if not os.path.exists(root):
                 continue
+            root_key = real_path(root)
+            if root_key in seen_roots:
+                continue
+            seen_roots.add(root_key)
             fl.extend(reg_files(root, s1))
             dl.extend(reg_dbs(root, seen_real=s2))
-        return fl, dl
+        limited = _cap_get()
+        _cap_set(False)
+        return {"json": fl, "db": dl, "limited": limited}
 
     def _raw(filelist=None):
+        if filelist is None:
+            filelist = _files()
+        if isinstance(filelist, dict):
+            fl = filelist.get("json") or []
+            dl = filelist.get("db") or []
+            limited = bool(filelist.get("limited"))
+        else:
+            fl, dl = filelist
+            limited = False
+        if limited:
+            note = "目录或文件数超上限，结果不完整，整源未计入"
+            SKIP_NOTES[agent] = note
+            return [], {"注册表": agent, "说明": note}
+
         seen_real = set()                       # 同一源的 json 与 sqlite 共用
         _cap_set(False)
-        if filelist is None:
-            out = scan_reg_jsonl_one(src, agent, seen_real)
-            out += scan_reg_sqlite_one(src, agent, seen_real)
-            return out
-        fl, dl = filelist
         out = scan_reg_jsonl_one(src, agent, seen_real, pre=fl)
         out += scan_reg_sqlite_one(src, agent, seen_real, pre=dl)
-        return out
         if _cap_get():                     # 遍历被截断 -> 结果不完整，整源作废
             _cap_set(False)
             SKIP_NOTES[agent] = "目录条目超上限，结果不完整，整源未计入"
-            _ZERO_RESULT.add(agent)             # 下次重建直接跳过，别重走 6 万条目
-            if scan_cache:
-                scan_cache.remember_verdict(agent, SKIP_NOTES[agent])
             return [], {"注册表": agent, "说明": SKIP_NOTES[agent]}
         note = SKIP_NOTES.get(agent, "通用解析（注册表驱动）")
         return out, {"注册表": agent, "说明": note}
 
     def _fn():
-        if agent in _ZERO_RESULT:               # 上次就是空，本次不重走目录
-            return [], {"注册表": agent, "说明": "本机无可用用量（已缓存判定）"}
-        res = cached_scan(agent, _files, _raw) if scan_cache else _raw()
-        recs = res[0] if isinstance(res, tuple) else res
-        if not recs and agent not in SKIP_NOTES:
-            _ZERO_RESULT.add(agent)             # 含被截断的源，下次别再重走 6 万条目
-        return res
+        return cached_scan(agent, _files, _raw) if scan_cache else _raw()
     return _fn
 
 

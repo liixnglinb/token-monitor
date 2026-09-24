@@ -1,0 +1,200 @@
+*{box-sizing:border-box;margin:0;padding:0}
+
+body{background:var(--bg);color:var(--txt);font:13px/1.6 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif;display:flex;min-height:100vh}
+
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+/* ---------- 侧边栏 ---------- */
+aside{width:208px;flex:none;background:var(--side);padding:20px 12px;display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
+
+/* 品牌标记：与 exe 图标同源 —— 环形仪表（渐变弧 + 端点亮斑） */
+.logo i{width:22px;height:22px;flex:none;display:inline-flex}
+
+/* ---------- 主区 ---------- */
+main{flex:1;min-width:0;padding:20px 28px 48px}
+
+/* 自定义下拉（对齐 DeepSeek：按钮 + 弹出菜单） */
+.dd{position:relative}
+
+/* 提示条：中性灰底，仅用左侧 2px 细条区分类别（避免大面积彩色） */
+.note{background:#1F1F24;border:.5px solid #27272C;border-left:2px solid #3A3A42;color:#9C9CA4;border-radius:8px;padding:8px 14px;margin-bottom:10px;font-size:12px;line-height:1.7}
+
+/* KPI */
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:18px}
+
+/* 卡片与图表 */
+.card{background:var(--card);border-radius:10px;padding:18px 20px;margin-bottom:18px}
+
+/* 模型用量分布：环形图 + 双列 Top10（参考百炼布局） */
+.dist{display:grid;grid-template-columns:320px minmax(0,1fr);gap:26px;align-items:start}
+
+/* 模型分块（对齐 DeepSeek：模型名在卡片外，每模型两卡） */
+.mb{margin-bottom:6px}
+
+.mb > h4{font-size:14px;font-weight:500;margin:14px 2px 10px;cursor:pointer;display:flex;align-items:center;gap:8px}
+
+.mb > h4:hover{color:#A9B8FF}
+
+.mb > h4 .dot{width:9px;height:9px;border-radius:3px;flex:none}
+
+.mb > h4 .focus-hint{font-size:11px;color:var(--dim);font-weight:400}
+
+.mb-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+
+.mini-card{background:var(--card);border-radius:10px;padding:16px 18px;margin-bottom:0}
+
+.mini-card.focus{outline:.5px solid var(--blue)}
+
+.mini-head{font-size:13px;color:var(--sub);margin-bottom:10px}
+
+.mini-head b{color:var(--txt);font-weight:500;font-variant-numeric:tabular-nums}
+
+/* Agent 用量榜（可折叠） */
+.agent-card{background:var(--card);border-radius:10px;margin-bottom:14px;overflow:hidden}
+
+/* ── ZCode 风格：侧栏与主区融合 ── */
+aside{border-right:1px solid rgba(255,255,255,.05)}
+
+/* 更新小按钮 */
+.upd-mini{position:relative;width:30px;height:30px;flex:none;border-radius:8px;border:1px solid transparent;
+  background:transparent;color:var(--sub);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;
+  transition:background .18s,color .18s,border-color .18s}
+
+@keyframes rot{to{transform:rotate(360deg)}}
+
+/* 更新悬停说明 */
+.upd-tip{position:fixed;z-index:60;max-width:320px;background:#1E1F24;border:1px solid rgba(255,255,255,.08);
+  border-radius:10px;padding:12px 14px;font-size:12.5px;color:var(--sub);line-height:1.7;
+  box-shadow:0 14px 34px -12px rgba(0,0,0,.7);pointer-events:auto}
+
+/* 更新日志排版（对齐 ZCode 浮层）：日期行 / 彩色小节标题 / 圆点列表 */
+.upd-tip .date{font-size:11px;color:var(--dim);margin-bottom:8px}
+
+/* 底部设置按钮 */
+.side-btn{width:100%;display:flex;align-items:center;gap:9px;background:transparent;border:0;
+  color:var(--sub);border-radius:6px;padding:8px 10px;cursor:pointer;font-size:12.5px;
+  transition:background .15s,color .15s}
+
+/* 侧栏设置导航 */
+#setNav{display:none}
+
+/* 设置主区 */
+.set-main{max-width:760px;margin:0 auto;padding:30px 10px 60px}
+
+/* 开关（胶囊） */
+.switch{position:relative;width:34px;height:20px;flex:none}
+
+/* 自绘下拉 */
+.set-sel{appearance:none;-webkit-appearance:none;
+  background:#202024 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%239C9CA4' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 10px center;
+  background-size:10px;border:.5px solid var(--line);border-radius:6px;font:12px/1.4 inherit;color:var(--txt);
+  padding:5px 28px 5px 10px;min-width:150px;cursor:pointer}
+
+/* 扫描状态 / 版本说明小字 */
+.set-scan{font-size:12px;color:var(--sub);margin-top:7px;line-height:1.6}
+
+/* 说明区（沿用原 sp-notes 左细条语义） */
+.set-notes{font-size:11.5px;color:var(--dim);line-height:1.7;margin-top:10px;border-top:1px solid var(--line);padding-top:10px}
+
+/* 窄屏：设置分块各自带标题 */
+.set-cat-h{font-size:13px;font-weight:600;margin:18px 2px 10px;display:none}
+
+/* 主区顶部提示条（仅错误显示） */
+#noteBox .note{background:rgba(226,75,74,.10);border:.5px solid rgba(226,75,74,.28);
+  border-left:2px solid #E24B4A;color:#F0A2A1;border-radius:8px;padding:8px 14px;
+  margin-bottom:14px;font-size:12px;line-height:1.7}
+
+#noteBox:empty{display:none}
+
+/* 环形图空态 */
+.donut-wrap.empty canvas{visibility:hidden}
+
+/* ZCode 主区氛围：居中品牌缺角方块水印（极低存在感） */
+#view-overview{position:relative}
+
+/* 表格视图 */
+table{width:100%;border-collapse:collapse}
+
+tr:last-child td{border-bottom:0}
+
+/* 底部标签栏：窄屏（≤860px）替代侧栏导航，避免侧栏隐藏后无法切换视图 */
+#tabbar{display:none}
+
+html,body{height:100%}
+
+body{
+  overflow:hidden;
+  background:var(--bg);
+  color:var(--txt);
+  font:13.5px/1.55 "Segoe UI","Microsoft YaHei",sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+
+button,input,select{font:inherit}
+
+.top-sep{width:1px;height:16px;background:var(--line);margin:0 2px}
+
+.k-corner{color:var(--dim);font-size:11px}
+
+/* Codex-style sidebar: dense navigation, grouped projects, quiet account footer */
+aside{
+  width:264px;
+  padding:0;
+  background:#111315;
+  border-right:1px solid #202326;
+}
+
+html{color-scheme:dark}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible{
+  outline:2px solid rgba(79,124,255,.85);
+  outline-offset:2px;
+}
+
+/* 2026 clarity pass: sharper text, cleaner contrast, calmer surfaces */
+html{
+  background:var(--bg);
+}
+
+body{
+  background:var(--bg);
+  color:var(--txt);
+  text-rendering:optimizeLegibility;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+}
+
+::selection{
+  background:rgba(91,130,255,.34);
+  color:#FFFFFF;
+}
+
+*{
+  scrollbar-width:thin;
+  scrollbar-color:#3A4553 transparent;
+}
+
+::-webkit-scrollbar{
+  width:9px;
+  height:9px;
+}
+
+::-webkit-scrollbar-thumb{
+  border:2px solid transparent;
+  border-radius:999px;
+  background:#394553;
+  background-clip:padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover{
+  background:#4A5868;
+  background-clip:padding-box;
+}
+
+img,
+svg{
+  image-rendering:auto;
+}

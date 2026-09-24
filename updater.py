@@ -15,7 +15,14 @@ import re
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 import urllib.request
+from concurrent.futures import (
+    ThreadPoolExecutor,
+    TimeoutError as FuturesTimeoutError,
+    as_completed,
+)
 
 # 64 位十六进制哈希（SHA256 摘要串）
 _HEX_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -23,6 +30,28 @@ _HEX_RE = re.compile(r"^[0-9a-f]{64}$")
 REPO = "liixnglinb/token-monitor"
 EXE_NAME = "TokenMonitor.exe"
 _UA = "TokenMonitor-Updater"
+_PROGRESS_LOCK = threading.Lock()
+_PROGRESS = {
+    "state": "idle",
+    "percent": 0,
+    "downloaded": 0,
+    "total": 0,
+    "version": None,
+    "message": "",
+    "source": None,
+}
+
+
+def set_progress(**patch):
+    """Thread-safe progress snapshot for the local UI."""
+    with _PROGRESS_LOCK:
+        _PROGRESS.update(patch)
+        return dict(_PROGRESS)
+
+
+def update_progress():
+    with _PROGRESS_LOCK:
+        return dict(_PROGRESS)
 
 
 def _base():
@@ -98,7 +127,7 @@ def _sha256_of(path: str) -> str:
     return h.hexdigest()
 
 
-def _fetch_sha256(asset, timeout: int = 30):
+def _fetch_sha256(asset, timeout: int = 30, preferred_source=None):
     """下载 .sha256 校验文件并用现有三级镜像回退，返回期望哈希（小写 64 位十六进制）。
 
     解析规则：取文件首行第一个空白分隔 token 并小写化；不是合法 SHA256 则视为
@@ -110,7 +139,14 @@ def _fetch_sha256(asset, timeout: int = 30):
     tmp = os.path.join(tempfile.gettempdir(), EXE_NAME + ".sha256.tmp")
     # 校验文件极小，min_size=0 绕过 _download 的「≥1MB」检查
     try:
-        _download(url, tmp, timeout=timeout, min_size=0)
+        _download(
+            url,
+            tmp,
+            timeout=timeout,
+            min_size=0,
+            speed_test=False,
+            preferred_source=preferred_source,
+        )
     except Exception:
         return None
     try:
@@ -129,27 +165,135 @@ def _fetch_sha256(asset, timeout: int = 30):
             pass
 
 
-# 下载源顺序：官方直连优先，失败自动回退国内镜像。
-# 实测：国内网络下 github.com 直连常 WinError 10060 超时（release 资产走
-# objects.githubusercontent.com，同样会受影响），没有回退会导致更新彻底失败。
-_MIRRORS = ("", "https://gh-proxy.com/", "https://ghproxy.net/")
+# 候选源。正式下载前会并发采样，按本机到各源的实际吞吐率排序。
+_SOURCES = (
+    ("GitHub 直连", ""),
+    ("GH Proxy", "https://gh-proxy.com/"),
+    ("ghproxy.net", "https://ghproxy.net/"),
+)
+_PROBE_BYTES = 384 * 1024
+_PROBE_MIN_BYTES = 32 * 1024
+_PROBE_TIMEOUT = 1.6
+_PROBE_BUDGET = 2.4
+_SOURCE_CACHE_TTL = 5 * 60
+_SOURCE_CACHE_LOCK = threading.Lock()
+_SOURCE_CACHE = {}
 
 
-def _download(url: str, dest: str, timeout: int = 300, min_size: int = 1024 * 1024):
+def _source_url(url: str, prefix: str) -> str:
+    return prefix + url if prefix else url
+
+
+def _probe_source(source, url: str):
+    """在 3 秒预算内采样，返回该源在本机网络下的实际吞吐率。"""
+    label, prefix = source
+    target = _source_url(url, prefix)
+    req = urllib.request.Request(target, headers={
+        "User-Agent": _UA,
+        "Accept-Encoding": "identity",
+        "Range": "bytes=0-%d" % (_PROBE_BYTES - 1),
+    })
+    started = time.perf_counter()
+    received = 0
+    with urllib.request.urlopen(req, timeout=_PROBE_TIMEOUT) as r:
+        while received < _PROBE_BYTES:
+            if time.perf_counter() - started >= _PROBE_BUDGET:
+                break
+            chunk = r.read(min(64 * 1024, _PROBE_BYTES - received))
+            if not chunk:
+                break
+            received += len(chunk)
+    elapsed = max(time.perf_counter() - started, 0.001)
+    if received < _PROBE_MIN_BYTES:
+        raise RuntimeError("%s 测速样本不足" % label)
+    return label, prefix, received / elapsed
+
+
+def _rank_sources(url: str):
+    """并发测速并缓存排名；全部失败时保留原始顺序兜底。"""
+    now = time.monotonic()
+    with _SOURCE_CACHE_LOCK:
+        cached = _SOURCE_CACHE.get(url)
+        if cached and cached[0] > now:
+            return list(cached[1])
+
+    results = {}
+    pool = ThreadPoolExecutor(max_workers=len(_SOURCES))
+    try:
+        futures = {
+            pool.submit(_probe_source, source, url): source
+            for source in _SOURCES
+        }
+        for future in as_completed(futures, timeout=_PROBE_BUDGET):
+            source = futures[future]
+            try:
+                label, prefix, speed = future.result()
+                results[(label, prefix)] = speed
+            except Exception:
+                # 单个源探测失败不影响其余源，也不阻断正式下载。
+                continue
+    except FuturesTimeoutError:
+        # 排名只负责选优，不允许慢源拖住更新启动。
+        pass
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
+
+    if results:
+        ordered = sorted(_SOURCES, key=lambda s: (
+            -results.get((s[0], s[1]), -1.0),
+            _SOURCES.index(s),
+        ))
+    else:
+        ordered = list(_SOURCES)
+
+    if results:
+        with _SOURCE_CACHE_LOCK:
+            _SOURCE_CACHE[url] = (now + _SOURCE_CACHE_TTL, tuple(ordered))
+    return ordered
+
+
+def _ordered_sources(url: str, speed_test: bool = True, preferred_source=None):
+    sources = _rank_sources(url) if speed_test else list(_SOURCES)
+    if preferred_source:
+        preferred = tuple(preferred_source)
+        moved = [s for s in sources if s != preferred]
+        sources = ([preferred] if preferred in _SOURCES else []) + moved
+    return sources
+
+
+def _download(
+    url: str,
+    dest: str,
+    timeout: int = 20,
+    min_size: int = 1024 * 1024,
+    progress_cb=None,
+    speed_test: bool = True,
+    preferred_source=None,
+):
     last_err = None
-    for pre in _MIRRORS:
-        target = (pre + url) if pre else url
+    for label, prefix in _ordered_sources(url, speed_test, preferred_source):
+        target = _source_url(url, prefix)
         try:
-            req = urllib.request.Request(target, headers={"User-Agent": _UA})
+            req = urllib.request.Request(target, headers={
+                "User-Agent": _UA,
+                "Accept-Encoding": "identity",
+            })
             with urllib.request.urlopen(req, timeout=timeout) as r, open(dest, "wb") as f:
+                total = int(r.headers.get("Content-Length") or 0)
+                done = 0
+                if progress_cb:
+                    progress_cb(done, total, label)
                 while True:
-                    chunk = r.read(1 << 16)
+                    chunk = r.read(1 << 19)
                     if not chunk:
                         break
                     f.write(chunk)
+                    done += len(chunk)
+                    if progress_cb:
+                        progress_cb(done, total, label)
             size = os.path.getsize(dest)
             if size >= min_size:
-                return                      # 成功
+                return label, prefix         # 成功
             last_err = RuntimeError("下载内容异常（%d 字节）" % size)
         except Exception as e:              # 超时 / 连接失败 / HTTP 错误 → 换下一个源
             last_err = e
@@ -178,11 +322,63 @@ def download_staged(asset: dict, checksum_asset=None, version: str = None) -> st
         raise RuntimeError("更新包异常过大，已中止")
 
     tmp = os.path.join(tempfile.gettempdir(), EXE_NAME + ".new")
-    _download(asset["browser_download_url"], tmp)
+    declared_total = int(asset.get("size") or 0)
+    set_progress(
+        state="downloading",
+        percent=0,
+        downloaded=0,
+        total=declared_total,
+        version=version,
+        message="正在测速并选择最快下载源",
+        source=None,
+    )
+
+    def on_progress(done, total, source):
+        known_total = total or declared_total
+        percent = round(done / known_total * 100, 1) if known_total else 0
+        set_progress(
+            state="downloading",
+            percent=min(percent, 100),
+            downloaded=done,
+            total=known_total,
+            version=version,
+            message="正在从 %s 下载新版本" % source,
+            source=source,
+        )
+
+    try:
+        source_label, source_prefix = _download(
+            asset["browser_download_url"],
+            tmp,
+            min_size=declared_total or 1024 * 1024,
+            progress_cb=on_progress,
+        )
+    except Exception as exc:
+        set_progress(
+            state="error",
+            percent=0,
+            version=version,
+            message=str(exc)[:160],
+            source=None,
+        )
+        raise
+
+    set_progress(
+        state="verifying",
+        percent=100,
+        downloaded=declared_total,
+        total=declared_total,
+        version=version,
+        message="正在校验 %s 下载的更新包" % source_label,
+        source=source_label,
+    )
 
     # SHA256 完整性校验（优先）：防镜像返回截断/被篡改的包导致变砖
     if checksum_asset is not None:
-        expected = _fetch_sha256(checksum_asset)
+        expected = _fetch_sha256(
+            checksum_asset,
+            preferred_source=(source_label, source_prefix),
+        )
         if expected is not None:
             actual = _sha256_of(tmp)
             if actual != expected:
@@ -190,15 +386,43 @@ def download_staged(asset: dict, checksum_asset=None, version: str = None) -> st
                     os.remove(tmp)
                 except OSError:
                     pass
+                set_progress(
+                    state="error",
+                    percent=0,
+                    version=version,
+                    message="更新包 SHA256 校验失败",
+                    source=source_label,
+                )
                 raise RuntimeError("更新包 SHA256 校验失败，已中止（可能下载被篡改或镜像异常）")
         # expected 为 None（.sha256 下载/解析失败）→ 退回体积校验兜底
 
     # 体积兜底：无 sha256 或 sha256 不可用时，仍要求至少 1MB，避免错误页直接替换
     if os.path.getsize(tmp) < 1024 * 1024:
+        set_progress(
+            state="error",
+            percent=0,
+            version=version,
+            message="下载的更新包异常",
+            source=source_label,
+        )
         raise RuntimeError("下载的更新包异常，已中止")
 
     STAGED.clear()
-    STAGED.update({"tmp": tmp, "asset": dict(asset), "version": version})
+    STAGED.update({
+        "tmp": tmp,
+        "asset": dict(asset),
+        "version": version,
+        "source": source_label,
+    })
+    set_progress(
+        state="ready",
+        percent=100,
+        downloaded=os.path.getsize(tmp),
+        total=os.path.getsize(tmp),
+        version=version,
+        message="已从 %s 下载完成，准备安装" % source_label,
+        source=source_label,
+    )
     return tmp
 
 
@@ -210,6 +434,12 @@ def apply_staged(tmp: str = None) -> None:
         raise RuntimeError("仅打包版（PyInstaller exe）支持自更新")
     if not tmp or not os.path.exists(tmp):
         raise RuntimeError("暂存的更新包不存在，请重新下载")
+    set_progress(
+        state="applying",
+        percent=100,
+        message="正在准备安装更新",
+        source=STAGED.get("source"),
+    )
 
     pid = os.getpid()
     exe_old = exe + ".old"

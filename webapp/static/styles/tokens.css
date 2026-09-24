@@ -1,0 +1,30 @@
+:root{
+  color-scheme:light;
+  --bg:#F3F5F8;
+  --side:#0D1117;
+  --card:#FFFFFF;
+  --card-soft:#F8FAFC;
+  --card-hover:#F0F3F7;
+  --card2:#E9EEF4;
+  --line:#DDE3EA;
+  --line-soft:#E8EDF2;
+  --line-strong:#C9D2DC;
+  --txt:#151A20;
+  --sub:#5F6B78;
+  --dim:#8B97A4;
+  --blue:#3F73F5;
+  --blue-bright:#5A88FF;
+  --cyan:#1EAFC4;
+  --green:#159B85;
+  --amber:#C98518;
+  --purple:#686FE0;
+  --red:#D84E55;
+  --radius:8px;
+  --radius-sm:6px;
+  --radius-lg:10px;
+  --sidebar-width:252px;
+  --topbar-height:64px;
+  --shadow:0 14px 32px rgba(27,39,55,.08);
+  --shadow-sm:0 1px 0 rgba(255,255,255,.9) inset,0 6px 18px rgba(27,39,55,.06);
+  --ease:.16s ease;
+}

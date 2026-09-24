@@ -1,0 +1,430 @@
+/* Codex-like hybrid shell: dark workspace rail, light analytical canvas. */
+html,
+body{
+  background:#F3F5F8;
+  color:#151A20;
+}
+
+aside{
+  color-scheme:dark;
+}
+
+main,
+.content{
+  background:#F3F5F8;
+  color:#151A20;
+}
+
+.topbar{
+  background:rgba(250,251,252,.96);
+  border-bottom:1px solid #E1E6EC;
+  box-shadow:0 1px 0 rgba(255,255,255,.9) inset,0 1px 8px rgba(27,39,55,.035);
+}
+
+.page-heading h1{
+  color:#11161C;
+}
+
+.page-heading p{
+  color:#7B8794;
+}
+
+.top-status{
+  color:#66717E;
+}
+
+.top-status b{
+  color:#202833;
+}
+
+.top-sep{
+  background:#DDE3EA;
+}
+
+.top-actions .btn{
+  color:#66717E;
+}
+
+.top-actions .btn:hover{
+  border-color:#D7DEE7;
+  background:#EEF2F6;
+  color:#18202A;
+}
+
+.top-actions .export-btn{
+  border-color:#3F73F5;
+  background:#3F73F5;
+  color:#FFFFFF;
+  box-shadow:0 8px 20px rgba(63,115,245,.22);
+}
+
+.top-actions .export-btn:hover{
+  border-color:#5A88FF;
+  background:#5A88FF;
+}
+
+/* Download progress: green rounded rectangle with a direct percentage label. */
+.update-progress{
+  min-width:68px;
+  height:34px;
+  padding:0 12px;
+  border:1px solid #1E9C68;
+  border-radius:8px;
+  background:#22A06B;
+  color:#FFFFFF;
+  font-size:12.5px;
+  font-weight:750;
+  font-variant-numeric:tabular-nums;
+  box-shadow:0 7px 18px rgba(34,160,107,.22);
+  cursor:default;
+}
+
+.update-progress[hidden]{
+  display:none;
+}
+
+#updBtn[data-pending="1"],
+#updBtn.is-downloading,
+#updBtn.is-done{
+  border-color:#1E9C68;
+  background:#22A06B;
+  color:#FFFFFF;
+  font-weight:700;
+  box-shadow:0 7px 18px rgba(34,160,107,.20);
+}
+
+#updBtn.is-downloading{
+  min-width:88px;
+  font-variant-numeric:tabular-nums;
+}
+
+#updBtn.is-done{
+  border-color:#17895B;
+  background:#17895B;
+}
+
+.dl-progress{
+  height:6px;
+  overflow:hidden;
+  margin:10px 0 9px;
+  border-radius:999px;
+  background:#29323D;
+}
+
+.dl-progress i{
+  display:block;
+  height:100%;
+  border-radius:999px;
+  background:#22A06B;
+  box-shadow:0 0 12px rgba(34,160,107,.28);
+  transition:width .18s ease;
+}
+
+.upd-tip .dl-source{
+  overflow:hidden;
+  color:#A9B1BB;
+  font-size:11px;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+.upd-tip .dl-row{
+  margin-top:7px;
+  color:#8A8A90;
+  font-size:11px;
+}
+
+.filters .dd-btn{
+  border-color:#D9E0E8;
+  background:#FFFFFF;
+  color:#5F6B78;
+  box-shadow:0 1px 0 rgba(255,255,255,.9) inset,0 1px 3px rgba(27,39,55,.04);
+}
+
+.filters .dd-btn:hover,
+.filters .dd.open .dd-btn{
+  border-color:#BAC5D1;
+  background:#F8FAFC;
+}
+
+.filters .dd-btn .dd-icon{
+  color:#66717E;
+}
+
+.filters .dd-btn b{
+  color:#1D2630;
+}
+
+.dd-menu{
+  border-color:#D6DEE7;
+  background:#FFFFFF;
+  box-shadow:0 22px 50px rgba(27,39,55,.16);
+}
+
+.dd-menu button{
+  color:#596572;
+}
+
+.dd-menu button:hover{
+  background:#F1F4F7;
+  color:#17202A;
+}
+
+.dd-menu button.on{
+  background:#E9EFFC;
+  color:#2458C6;
+}
+
+.kpis{
+  border-color:#DCE3EA;
+  background:#FFFFFF;
+  box-shadow:0 14px 34px rgba(27,39,55,.07),0 1px 0 rgba(255,255,255,.9) inset;
+}
+
+.kpi + .kpi{
+  border-left-color:#E5EAF0;
+}
+
+.kpi .l{
+  color:#596572;
+}
+
+.kpi .v{
+  color:#11161C;
+}
+
+.kpi .s,
+.k-corner{
+  color:#7E8A97;
+}
+
+.kpi-icon{
+  border-color:color-mix(in srgb,var(--kpi-accent) 24%,#E4EAF0);
+  background:color-mix(in srgb,var(--kpi-accent) 10%,#FFFFFF);
+}
+
+.card,
+.agent-panel,
+.mini-card,
+.model-stat,
+.set-card{
+  border-color:#DCE3EA;
+  background:#FFFFFF;
+  box-shadow:0 14px 34px rgba(27,39,55,.07),0 1px 0 rgba(255,255,255,.95) inset;
+}
+
+.card-head h3,
+.agent-panel-head h3,
+.section-heading h2,
+.model-stat b,
+.set-info .t{
+  color:#11161C;
+}
+
+.card-head .val,
+.agent-panel-head p,
+.agent-panel-count,
+.section-heading p,
+.model-stat small,
+.set-info .d{
+  color:#687482;
+}
+
+.seg{
+  border-color:#D7DFE8;
+  background:#EEF2F6;
+  box-shadow:0 1px 0 rgba(255,255,255,.8) inset;
+}
+
+.seg button{
+  color:#697582;
+}
+
+.seg button:hover{
+  color:#1D2630;
+}
+
+.seg button.on{
+  border:1px solid #C9D3DF;
+  background:#FFFFFF;
+  color:#1D2630;
+  box-shadow:0 2px 5px rgba(27,39,55,.10);
+}
+
+.chart-empty .t1{
+  color:#4D5966;
+}
+
+.chart-empty .t2{
+  color:#7E8A97;
+}
+
+.agent-panel-head{
+  background:#FAFBFC;
+  border-bottom-color:#E5EAF0;
+}
+
+.agent-entry + .agent-entry{
+  border-top-color:#E5EAF0;
+}
+
+.ar-head:hover,
+.t10-row:hover,
+tbody tr:hover{
+  background:#F6F8FA;
+}
+
+.ar-rank,
+.ar-metrics small{
+  color:#7E8A97;
+}
+
+.ar-head .nm{
+  color:#1B232C;
+}
+
+.ar-metrics b{
+  color:#18202A;
+}
+
+.ar-metrics .muted,
+.muted{
+  color:#7E8A97;
+}
+
+.mrow{
+  border-color:#E4E9EF;
+  background:#F8FAFC;
+}
+
+.mrow .nm{
+  color:#2B3540;
+}
+
+.mrow .num{
+  color:#5E6A77;
+}
+
+.donut-center b{
+  color:#11161C;
+}
+
+.donut-center span,
+.donut-legend{
+  color:#66727F;
+}
+
+.t10-row .nm{
+  color:#2B3540;
+}
+
+.t10-row .val{
+  color:#1A222C;
+}
+
+.t10-bar{
+  background:#E5EAF0;
+}
+
+.model-stat{
+  background:#FFFFFF;
+}
+
+thead th{
+  border-bottom-color:#E1E7ED;
+  background:#F8FAFC;
+  color:#687482;
+}
+
+tbody td{
+  border-bottom-color:#E8EDF2;
+  color:#46515E;
+}
+
+td.mono{
+  color:#1B232C;
+}
+
+td.num{
+  color:#1A222C;
+}
+
+.bar{
+  background:#E5EAF0;
+}
+
+.set-card{
+  background:#FFFFFF;
+}
+
+.set-info .d{
+  color:#687482;
+}
+
+.set-sel{
+  border-color:#D7DEE7;
+  background-color:#FFFFFF;
+  color:#1B232C;
+}
+
+.set-sel:hover{
+  border-color:#BAC5D1;
+}
+
+.switch i{
+  background:#C7D0DA;
+}
+
+.switch input:checked + i{
+  background:#159B85;
+}
+
+.set-notes,
+.set-notes .note{
+  color:#687482;
+}
+
+.note{
+  border-color:#E1E7ED;
+  border-left-color:#AAB5C0;
+  background:#F8FAFC;
+  color:#596572;
+}
+
+.note b{
+  color:#27313C;
+}
+
+.note.err{
+  border-color:#F1C8CB;
+  border-left-color:#D84E55;
+  background:#FFF5F5;
+  color:#A83E45;
+}
+
+#tabbar{
+  background:rgba(250,251,252,.97);
+  border-top-color:#E1E7ED;
+}
+
+#tabbar button{
+  color:#7A8693;
+}
+
+#tabbar button.active{
+  color:#1B232C;
+}
+
+#tabbar button.active svg{
+  color:#3F73F5;
+}
+
+::-webkit-scrollbar-thumb{
+  background:#C6D0DB;
+  background-clip:padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover{
+  background:#AEBAC7;
+  background-clip:padding-box;
+}

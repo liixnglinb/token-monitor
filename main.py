@@ -20,7 +20,7 @@ import urllib.request
 import webview
 
 WINDOW_TITLE = "Token Monitor"
-BG = "#0B0C0E"          # 与面板底色一致，加载时不闪白
+BG = "#0B0D10"          # 与面板底色一致，加载时不闪白
 
 SERVE_ERROR = []        # 服务线程崩溃时记录最近一条错误；main() 据此决定是否提示退出
 _INSTANCE_MUTEX = None  # 单实例互斥体句柄，存模块级防 GC（进程结束前一直持有）

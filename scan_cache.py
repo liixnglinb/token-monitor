@@ -25,7 +25,7 @@ _DIR = None
 _PATH = None
 _MEM = None                      # dict 或 None（未加载）
 LAST_ERROR = [None]              # 最近一次落盘失败原因（供面板显示）
-_FMT = 4                         # 结构版本；改记录字段时 +1 让旧缓存自动作废
+_FMT = 8                         # 结构版本；改记录字段时 +1 让旧缓存自动作废
 
 # (agent, date, session, model, inp, cw, cr, out, think, key)
 FIELDS = 10
@@ -113,18 +113,26 @@ def put_records(agent, fp, recs):
         d["verdicts"].pop(agent, None)
 
 
-def remember_verdict(agent, note):
-    """记住"这个源是空的/被截断"，跨进程生效"""
+def remember_verdict(agent, note, fp=None):
+    """记住某个文件指纹下的空/截断判定，文件变化后自动失效。"""
     with _LOCK:
         d = _load()
-        d["verdicts"][agent] = {"note": note, "saved_at": int(time.time())}
+        d["verdicts"][agent] = {
+            "note": note,
+            "saved_at": int(time.time()),
+            "fp": fp,
+        }
         d["sources"].pop(agent, None)
 
 
-def get_verdict(agent):
+def get_verdict(agent, fp=None):
     with _LOCK:
         v = _load()["verdicts"].get(agent)
-        return (v or {}).get("note") if v else None
+        if not v:
+            return None
+        if fp is not None and v.get("fp") != fp:
+            return None
+        return v.get("note")
 
 
 def forget(agent):
@@ -162,15 +170,16 @@ def save():
 
 # ---------------- 文件级增量缓存 ----------------
 def get_file(real):
-    '"""返回 {m: mtime_ns, s: size, n: 已消费记录数, recs: [元组]} 或 None"""'
+    """返回 {m, s, n, ph, recs}；ph 是已缓存前缀的 SHA256。"""
     with _LOCK:
         return _load()["files"].get(real)
 
 
-def put_file(real, m, s, n, recs):
+def put_file(real, m, s, n, recs, prefix=None):
     with _LOCK:
         d = _load()
         d["files"][real] = {"m": m, "s": s, "n": int(n),
+                            "ph": prefix,
                             "recs": [list(r) for r in recs]}
 
 

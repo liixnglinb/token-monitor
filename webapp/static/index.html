@@ -4,519 +4,337 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Token Monitor · 用量总览</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='1' x2='1' y2='0'%3E%3Cstop offset='0' stop-color='%234D6BFE'/%3E%3Cstop offset='1' stop-color='%235DC3F0'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='256' height='256' rx='58' fill='%23161619'/%3E%3Ccircle cx='128' cy='128' r='72' fill='none' stroke='%2326262C' stroke-width='26'/%3E%3Cpath d='M128 56 A 72 72 0 1 1 56 128' fill='none' stroke='url(%23g)' stroke-width='26' stroke-linecap='round'/%3E%3Ccircle cx='56' cy='128' r='15' fill='%238FE3FF'/%3E%3C/svg%3E">
-<style>
-:root{
-  /* ZCode 质感：近黑底 + 极低对比分割 + 一档亮卡片 */
-  --bg:#0F0F11; --side:#161619; --card:#1B1B1F; --card2:#242429;
-  --line:#27272C; --txt:#ECECEF; --sub:#9C9CA4; --dim:#6B6B73;
-  --blue:#4D6BFE; --cyan:#5DC3F0; --purple:#8E7CFF; --green:#37B48F;
-  --amber:#EF9F27; --red:#E24B4A;
-}
-*{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--bg);color:var(--txt);font:13px/1.6 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif;display:flex;min-height:100vh}
-.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+<link rel="icon" href="/static/favicon.svg?v=20260924-2151" type="image/svg+xml">
+<link rel="stylesheet" href="/static/styles/tokens.css">
+<link rel="stylesheet" href="/static/styles/base.css">
+<link rel="stylesheet" href="/static/styles/sidebar.css">
+<link rel="stylesheet" href="/static/styles/shell.css">
+<link rel="stylesheet" href="/static/styles/overview.css">
+<link rel="stylesheet" href="/static/styles/models.css">
+<link rel="stylesheet" href="/static/styles/settings.css">
+<link rel="stylesheet" href="/static/styles/responsive.css">
+<link rel="stylesheet" href="/static/styles/canvas.css?v=20260923-2326">
+<link rel="stylesheet" href="/static/styles/modern.css?v=20260924-1846">
 
-/* ---------- 侧边栏 ---------- */
-aside{width:208px;flex:none;background:var(--side);padding:20px 12px;display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
-.logo{display:flex;align-items:center;gap:8px;padding:4px 10px 20px;font-size:15px;font-weight:500}
-/* 品牌标记：与 exe 图标同源 —— 环形仪表（渐变弧 + 端点亮斑） */
-.logo i{width:22px;height:22px;flex:none;display:inline-flex}
-.logo i svg{width:22px;height:22px;display:block}
-nav a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;color:#B6B6BE;cursor:pointer;margin-bottom:2px}
-nav a svg{width:16px;height:16px;flex:none}
-nav a:hover{background:#1D1D21;color:var(--txt)}
-nav a.active{background:#26262B;color:var(--txt)}
-.side-foot{margin-top:auto;padding:10px;font-size:12px;color:var(--dim)}
-.side-foot .t{margin-bottom:8px}
-.side-foot button{width:100%;background:transparent;border:.5px solid var(--line);color:var(--sub);border-radius:6px;padding:7px 0;cursor:pointer;font-size:12px}
-.side-foot button:hover{color:var(--txt);border-color:#333339}
-.side-foot button:disabled{opacity:.5;cursor:default}
 
-/* ---------- 主区 ---------- */
-main{flex:1;min-width:0;padding:20px 28px 48px}
-.filters{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:18px}
-.filters .lbl{color:var(--sub)}
-
-/* 自定义下拉（对齐 DeepSeek：按钮 + 弹出菜单） */
-.dd{position:relative}
-.dd-btn{display:inline-flex;align-items:center;gap:8px;background:var(--card);border:.5px solid var(--line);color:var(--sub);border-radius:6px;padding:7px 12px;cursor:pointer;font-size:13px}
-.dd-btn:hover{border-color:#333339}
-.dd-btn b{color:var(--txt);font-weight:400;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dd-btn i{font-style:normal;font-size:9px;color:var(--dim);transition:transform .15s}
-.dd.open .dd-btn i{transform:rotate(180deg)}
-.dd.open .dd-btn{border-color:#333339;background:var(--card2)}
-.dd-menu{position:absolute;top:calc(100% + 6px);left:0;z-index:40;background:#1F1F24;border:.5px solid #333339;border-radius:8px;padding:6px;min-width:148px;max-height:320px;overflow:auto;box-shadow:0 10px 28px rgba(0,0,0,.45)}
-.dd-menu button{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;border:0;background:transparent;color:var(--sub);padding:8px 12px;border-radius:6px;cursor:pointer;font-size:13px;text-align:left}
-.dd-menu button:hover{background:#26262B;color:var(--txt)}
-.dd-menu button.on{color:var(--txt)}
-.dd-menu button .ck{visibility:hidden;font-size:11px}
-.dd-menu button.on .ck{visibility:visible}
-
-.btn{background:var(--card);border:.5px solid var(--line);color:var(--txt);border-radius:6px;padding:7px 14px;cursor:pointer;font-size:13px}
-.btn:hover{border-color:#333339;background:var(--card2)}
-.btn.primary{background:#ECECEF;border-color:#ECECEF;color:#17171A;font-weight:500}
-.btn.primary:hover{background:#fff}
-.chip{display:inline-flex;align-items:center;gap:6px;background:rgba(77,107,254,.16);color:#A9B8FF;border:.5px solid rgba(77,107,254,.4);border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer}
-.chip[hidden]{display:none}
-.chip b{font-weight:500}
-.chip i{font-style:normal;opacity:.7;font-size:14px;line-height:1}
-.spacer{flex:1}
-
-/* 提示条：中性灰底，仅用左侧 2px 细条区分类别（避免大面积彩色） */
-.note{background:#1F1F24;border:.5px solid #27272C;border-left:2px solid #3A3A42;color:#9C9CA4;border-radius:8px;padding:8px 14px;margin-bottom:10px;font-size:12px;line-height:1.7}
-.note b{color:#D6D6DA;font-weight:500}
-.note.plan{border-left-color:#4D6BFE}
-.note.unpriced{border-left-color:#C98A3C}
-.note.time{border-left-color:#3A3A42}
-.note.err{background:rgba(226,75,74,.10);border-color:rgba(226,75,74,.28);border-left-color:#E24B4A;color:#F0A2A1}
-
-/* KPI */
-.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:18px}
-.kpi{background:var(--card);border-radius:10px;padding:16px 18px}
-.kpi .l{color:var(--sub);font-size:13px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
-.kpi .l .k-corner{font-size:11px;color:var(--dim);font-weight:400;white-space:nowrap}
-.kpi .v{font-size:24px;font-weight:500;letter-spacing:.2px;white-space:nowrap}
-.kpi .s{color:var(--dim);font-size:12px;margin-top:4px}
-
-/* 卡片与图表 */
-.card{background:var(--card);border-radius:10px;padding:18px 20px;margin-bottom:18px}
-/* 模型用量分布：环形图 + 双列 Top10（参考百炼布局） */
-.dist{display:grid;grid-template-columns:320px minmax(0,1fr);gap:26px;align-items:start}
-.donut-wrap{position:relative;height:230px;margin-top:4px}
-.donut-wrap canvas{position:relative;z-index:1;cursor:pointer}
-.donut-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;gap:2px}
-.donut-center b{font-size:26px;font-weight:600;letter-spacing:-.01em}
-.donut-center span{font-size:12px;color:var(--sub)}
-.donut-legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:14px;font-size:12px;color:var(--sub)}
-.donut-legend i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:6px;vertical-align:middle}
-.t10{display:grid;grid-template-columns:1fr 1fr;gap:0 26px}
-.t10-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;cursor:pointer;transition:background .15s}
-.t10-row:hover{background:#242429}
-.t10-row .idx{width:48px;flex:none;font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums;white-space:nowrap}
-.t10-row .dot{width:8px;height:8px;border-radius:2px;flex:none}
-.t10-row .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-family:ui-monospace,Consolas,monospace}
-.t10-row .val{flex:none;font-size:13px;font-variant-numeric:tabular-nums;color:var(--txt)}
-.t10-row .val em{font-style:normal;color:var(--dim);font-size:11px;margin-left:3px}
-@media(max-width:1100px){.dist{grid-template-columns:1fr}.t10{grid-template-columns:1fr}}
-.card-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
-.card-head h3{font-size:14px;font-weight:500}
-.card-head .val{color:var(--sub);font-size:13px}
-.card-head .grow{flex:1}
-.seg{display:flex;background:#242429;border-radius:6px;padding:2px;gap:2px}
-.seg button{border:0;background:transparent;color:var(--sub);padding:5px 12px;border-radius:6px;cursor:pointer;font-size:12px}
-.seg button.on{background:#333339;color:var(--txt)}
-.chart-wrap{position:relative;width:100%;height:320px}
-.chart-wrap.mini{height:190px}
-.chart-empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--dim);text-align:center;padding:0 24px}
-.chart-empty .t1{font-size:14px;color:var(--sub)}
-.chart-empty .t2{font-size:12px}
-.chart-empty[hidden]{display:none}
-.empty{color:var(--dim);text-align:center;padding:60px 0}
-
-/* 模型分块（对齐 DeepSeek：模型名在卡片外，每模型两卡） */
-.mb{margin-bottom:6px}
-.mb > h4{font-size:14px;font-weight:500;margin:14px 2px 10px;cursor:pointer;display:flex;align-items:center;gap:8px}
-.mb > h4:hover{color:#A9B8FF}
-.mb > h4 .dot{width:9px;height:9px;border-radius:3px;flex:none}
-.mb > h4 .focus-hint{font-size:11px;color:var(--dim);font-weight:400}
-.mb-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
-.mini-card{background:var(--card);border-radius:10px;padding:16px 18px;margin-bottom:0}
-.mini-card.focus{outline:.5px solid var(--blue)}
-.mini-head{font-size:13px;color:var(--sub);margin-bottom:10px}
-.mini-head b{color:var(--txt);font-weight:500;font-variant-numeric:tabular-nums}
-@media(max-width:1100px){.kpis{grid-template-columns:repeat(1,minmax(0,1fr))}.mb-grid{grid-template-columns:1fr}}
-@media(max-width:860px){aside{display:none}}
-
-/* Agent 用量榜（可折叠） */
-.agent-card{background:var(--card);border-radius:10px;margin-bottom:14px;overflow:hidden}
-.ar{border-bottom:.5px solid #27272C}
-.ar:last-child{border-bottom:0}
-.ar-head{display:flex;align-items:center;gap:10px;padding:12px 18px;cursor:pointer}
-.ar-head:hover{background:#1F1F24}
-.ar-fold{width:14px;text-align:center;color:var(--dim);font-size:11px;flex:none;transition:transform .15s}
-.ar.open .ar-fold{transform:rotate(90deg)}
-.ar-head .dot{width:9px;height:9px;border-radius:3px;flex:none}
-.ar-icon{width:20px;height:20px;flex:none;display:inline-flex;align-items:center;justify-content:center}
-.ar-icon svg{width:20px;height:20px;display:block}
-.ar-head .nm{font-weight:500}
-.ar-head .num{margin-left:auto;color:var(--sub);font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}
-.ar-head .num b{color:var(--txt);font-weight:500}
-.ar-chart{height:56px;margin:0 18px 10px 42px}
-.ar-models{display:none;padding:2px 18px 14px 42px}
-.ar.open .ar-models{display:block}
-.mrow{display:flex;align-items:center;gap:12px;padding:8px 12px;border-radius:6px;margin-bottom:6px;background:#242429}
-.mrow .nm{font-family:ui-monospace,Consolas,monospace;font-size:12px;max-width:30%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.mrow .num{margin-left:auto;color:var(--sub);font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}
-.mrow .num b{color:var(--txt);font-weight:500}
-.mrow .ch{width:200px;height:38px;flex:none}
-
-/* ── ZCode 风格：侧栏与主区融合 ── */
-aside{border-right:1px solid rgba(255,255,255,.05)}
-.aside-top{display:flex;align-items:center;gap:6px;padding:2px 6px 14px}
-.aside-top .logo{flex:1 1 auto;min-width:0;padding:0}
-.aside-top .logo span.logo-t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-/* 更新小按钮 */
-.upd-mini{position:relative;width:30px;height:30px;flex:none;border-radius:8px;border:1px solid transparent;
-  background:transparent;color:var(--sub);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;
-  transition:background .18s,color .18s,border-color .18s}
-.upd-mini:hover{background:var(--card2);color:var(--txt);border-color:var(--line)}
-.upd-mini svg{width:15px;height:15px}
-.upd-mini .dot{position:absolute;top:4px;right:4px;width:7px;height:7px;border-radius:50%;border:1.5px solid var(--bg)}
-.upd-mini .dot.update{background:var(--blue);box-shadow:0 0 8px rgba(77,107,254,.8);animation:pulse 2s infinite}
-.upd-mini .dot.done{background:var(--green)}
-.upd-mini .spin{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
-.upd-mini .spin i{width:14px;height:14px;border-radius:50%;border:2px solid rgba(255,255,255,.15);border-top-color:var(--cyan);animation:rot .8s linear infinite}
-@keyframes rot{to{transform:rotate(360deg)}}
-/* 更新悬停说明 */
-.upd-tip{position:fixed;z-index:60;max-width:320px;background:#1E1F24;border:1px solid rgba(255,255,255,.08);
-  border-radius:10px;padding:12px 14px;font-size:12.5px;color:var(--sub);line-height:1.7;
-  box-shadow:0 14px 34px -12px rgba(0,0,0,.7);pointer-events:auto}
-.upd-tip .t1{color:var(--txt);font-weight:600;margin-bottom:2px}
-/* 更新日志排版（对齐 ZCode 浮层）：日期行 / 彩色小节标题 / 圆点列表 */
-.upd-tip .date{font-size:11px;color:var(--dim);margin-bottom:8px}
-.upd-tip .body{max-height:240px;overflow:auto;color:#B6B6BE;margin-bottom:8px}
-.upd-tip .body .sec{color:#E8A15C;font-weight:600;font-size:12px;margin:10px 0 4px}
-.upd-tip .body .sec:first-child{margin-top:0}
-.upd-tip .body .li{position:relative;padding-left:15px;margin:3px 0}
-.upd-tip .body .li::before{content:"•";position:absolute;left:3px;color:#8A8A93}
-.upd-tip .body .p{margin:4px 0}
-.upd-tip .body b{color:#DADADF;font-weight:600}
-.upd-tip .body code{font-family:ui-monospace,Consolas,monospace;font-size:11px;background:rgba(255,255,255,.07);border-radius:4px;padding:1px 5px}
-.upd-tip .hint{color:var(--dim);font-size:11.5px;border-top:.5px solid #2E2E34;padding-top:8px;margin-top:4px}
-/* 左下角更新胶囊（对齐 ZCode）：已下载待安装时常驻，点击重启安装 */
-#updPill{position:fixed;left:10px;bottom:10px;z-index:56;display:inline-flex;align-items:center;gap:7px;
-  background:#1E1F24;border:1px solid rgba(255,255,255,.10);border-radius:9px;
-  padding:8px 14px;font-size:12.5px;color:var(--sub);cursor:pointer;
-  box-shadow:0 12px 30px -10px rgba(0,0,0,.7);animation:popIn .22s cubic-bezier(.22,1,.36,1)}
-#updPill svg{width:14px;height:14px;color:var(--cyan);flex:none}
-#updPill:hover{color:var(--txt);border-color:rgba(255,255,255,.2)}
-#updPill[hidden]{display:none}
-.upd-tip .go{display:inline-flex;align-items:center;gap:6px;background:var(--blue);color:#fff;border:0;
-  border-radius:7px;padding:6px 13px;font-size:12.5px;font-weight:600;cursor:pointer}
-.upd-tip .go:hover{filter:brightness(1.15)}
-.upd-tip .later{background:transparent;border:0;color:var(--dim);cursor:pointer;font-size:12px;margin-left:10px}
-.upd-tip .later:hover{color:var(--txt)}
-/* 底部设置按钮 */
-.side-btn{width:100%;display:flex;align-items:center;gap:9px;background:transparent;border:0;
-  color:var(--sub);border-radius:6px;padding:8px 10px;cursor:pointer;font-size:12.5px;
-  transition:background .15s,color .15s}
-.side-btn:hover{background:#1D1D21;color:var(--txt)}
-.side-btn svg{width:16px;height:16px;flex:none}
-.side-foot .t.tiny{font-size:11px;color:var(--dim)}
-/* ── 全屏设置页（ZCode 式） ──
-   注：#updMini 在设置模式下保持可见 —— 后台每 30 分钟自动检查更新，
-   发现新版时指示点在任何视图都要能看到 */
-body.mode-set aside #nav,
-body.mode-set aside .side-foot,
-body.mode-set .aside-top .logo{display:none}
-body.mode-set #setNav{display:block}
-body.mode-set main .filters,
-body.mode-set main #noteBox{display:none}
-
-/* 侧栏设置导航 */
-#setNav{display:none}
-.set-back{background:transparent;border:0;color:var(--sub);font-size:13px;cursor:pointer;padding:4px 2px;margin-bottom:6px}
-.set-back:hover{color:var(--txt)}
-.set-group{font-size:11px;color:var(--dim);margin:14px 8px 4px}
-.set-item{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;color:#B6B6BE;cursor:pointer;font-size:13px}
-.set-item:hover{background:#1D1D21;color:var(--txt)}
-.set-item.active{background:#26262B;color:var(--txt)}
-
-/* 设置主区 */
-.set-main{max-width:760px;margin:0 auto;padding:30px 10px 60px}
-#setTitle{font-size:24px;font-weight:600;margin:4px 2px 18px}
-.set-cards{display:flex;flex-direction:column;gap:14px;margin-bottom:22px}
-.set-cards[hidden]{display:none}
-.set-card{background:var(--card);border-radius:10px;padding:0;overflow:hidden}
-.set-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 16px}
-.set-row+.set-row{border-top:.5px solid var(--line)}
-.set-info .t{font-size:13px;font-weight:500;color:var(--txt)}
-.set-info .d{font-size:12px;color:var(--sub);line-height:1.6;margin-top:3px;max-width:440px}
-.set-info .d a{color:var(--blue);text-decoration:none}
-.set-info .d a:hover{text-decoration:underline}
-
-/* 开关（胶囊） */
-.switch{position:relative;width:34px;height:20px;flex:none}
-.switch input{position:absolute;inset:0;margin:0;opacity:0;cursor:pointer}
-.switch i{position:absolute;inset:0;display:block;border-radius:20px;background:#34343B;transition:background .15s;pointer-events:none}
-.switch i::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;
-  background:#F2F2F5;transition:transform .15s}
-.switch input:checked + i{background:#4E4E58}
-.switch input:checked + i::after{transform:translateX(14px)}
-
-/* 自绘下拉 */
-.set-sel{appearance:none;-webkit-appearance:none;
-  background:#202024 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%239C9CA4' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 10px center;
-  background-size:10px;border:.5px solid var(--line);border-radius:6px;font:12px/1.4 inherit;color:var(--txt);
-  padding:5px 28px 5px 10px;min-width:150px;cursor:pointer}
-.set-sel:disabled{opacity:.5;cursor:default}
-
-/* 扫描状态 / 版本说明小字 */
-.set-scan{font-size:12px;color:var(--sub);margin-top:7px;line-height:1.6}
-
-/* 说明区（沿用原 sp-notes 左细条语义） */
-.set-notes{font-size:11.5px;color:var(--dim);line-height:1.7;margin-top:10px;border-top:1px solid var(--line);padding-top:10px}
-.set-notes .note{background:transparent;border:0;border-left:2px solid #3A3A42;
-  border-radius:0;padding:4px 0 4px 9px;margin:0 0 7px;font-size:11.5px}
-.set-notes .note.plan{border-left-color:var(--blue)}
-.set-notes .note.unpriced{border-left-color:#C98A3C}
-.set-notes .note.time{border-left-color:#3A3A42}
-.set-notes .note.err{border-left-color:#E24B4A;color:#F0A2A1}
-
-/* 窄屏：设置分块各自带标题 */
-.set-cat-h{font-size:13px;font-weight:600;margin:18px 2px 10px;display:none}
-/* 主区顶部提示条（仅错误显示） */
-#noteBox .note{background:rgba(226,75,74,.10);border:.5px solid rgba(226,75,74,.28);
-  border-left:2px solid #E24B4A;color:#F0A2A1;border-radius:8px;padding:8px 14px;
-  margin-bottom:14px;font-size:12px;line-height:1.7}
-#noteBox:empty{display:none}
-/* 环形图空态 */
-.donut-wrap.empty canvas{visibility:hidden}
-.donut-wrap.empty::before{content:"";position:absolute;inset:22px;border-radius:50%;
-  border:3px dashed #333339;animation:rot 24s linear infinite}
-.donut-wrap.empty::after{content:"暂无数据";position:absolute;inset:0;display:flex;
-  align-items:center;justify-content:center;color:var(--dim);font-size:13px}
-
-/* ZCode 主区氛围：居中品牌缺角方块水印（极低存在感） */
-#view-overview{position:relative}
-#view-overview .wm{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:0}
-#view-overview .wm i{display:block;width:392px;height:392px;border:38px solid #FFFFFF;opacity:.022;border-radius:50%}
-#view-overview > .kpis, #view-overview > .card, #view-overview > #agentList{position:relative;z-index:1}
-@media(max-width:860px){#view-overview .wm{display:none}}
-
-/* 表格视图 */
-table{width:100%;border-collapse:collapse}
-th{color:var(--sub);font-weight:400;text-align:left;padding:10px 14px;border-bottom:.5px solid var(--line);font-size:12px;white-space:nowrap}
-td{padding:11px 14px;border-bottom:.5px solid #27272C;white-space:nowrap}
-tr:last-child td{border-bottom:0}
-tbody tr:hover{background:#1F1F24}
-td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
-.bar{height:6px;border-radius:3px;background:#26262B;min-width:120px;overflow:hidden}
-.bar i{display:block;height:100%;border-radius:3px}
-.mono{font-family:ui-monospace,Consolas,monospace;font-size:12px}
-.muted{color:var(--dim);font-size:12px}
-
-/* 底部标签栏：窄屏（≤860px）替代侧栏导航，避免侧栏隐藏后无法切换视图 */
-#tabbar{display:none}
-@media(max-width:860px){
-  #tabbar{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:50;width:100%;
-    height:54px;padding-bottom:env(safe-area-inset-bottom);
-    background:#161619;border-top:1px solid rgba(255,255,255,.05)}
-  #tabbar button{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-    gap:3px;border:0;background:transparent;color:var(--sub);cursor:pointer;font-size:11px;line-height:1}
-  #tabbar button svg{width:19px;height:19px}
-  #tabbar button.active{color:var(--txt)}
-  #tabbar button.active svg{color:var(--blue)}
-  main{padding-bottom:72px}
-  body{padding-bottom:env(safe-area-inset-bottom)}
-  #setNav{display:none}
-  #setTitle{display:none}
-  .set-cat-h{display:block}
-  .set-cards[hidden]{display:flex}
-}
-</style>
-<style>
-</style>
 </head>
 <body>
 <h2 class="sr-only">本地 Agent Token 用量面板：按时间与数据源筛选，展示消耗金额、请求次数、Token 量与缓存命中率，并按模型分块展示明细。</h2>
 
 <aside>
   <div class="aside-top">
-    <div class="logo"><i><svg viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="lg1" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#4D6BFE"/><stop offset="1" stop-color="#5DC3F0"/></linearGradient></defs><rect width="256" height="256" rx="58" fill="#161619"/><circle cx="128" cy="128" r="72" fill="none" stroke="#2A2A30" stroke-width="26"/><path d="M128 56 A 72 72 0 1 1 56 128" fill="none" stroke="url(#lg1)" stroke-width="26" stroke-linecap="round"/><circle cx="56" cy="128" r="15" fill="#8FE3FF"/></svg></i><span class="logo-t">Token Monitor</span></div>
-    <button id="updMini" class="upd-mini" title="检查更新" aria-label="检查更新">
-      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
-        <path d="M8 2.5v7M5.5 7L8 9.5 10.5 7M3.5 11h9"/>
-      </svg>
-      <span class="dot update" id="updBadge" hidden></span>
-      <span class="spin" id="updSpin" hidden><i></i></span>
-    </button>
+    <div class="brand-menu" title="Token Monitor">
+      <i><img src="/static/favicon.svg?v=20260923-231018" alt=""></i>
+      <span class="logo-t">Token Monitor</span>
+    </div>
+    <div class="aside-tools">
+      <button id="sideReload" class="side-icon-btn" title="重新扫描数据源" aria-label="重新扫描数据源">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13.4 7A5.5 5.5 0 1 0 12 11.7"/><path d="M13.4 3.8V7H10"/></svg>
+      </button>
+    </div>
   </div>
-  <nav id="nav">
-    <a data-view="overview" class="active"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 13.5V8M6 13.5V3M10 13.5V6M14 13.5V9.5"/></svg>用量总览</a>
-    <a data-view="models"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="5.5"/><path d="M8 2.5v11M2.5 8h11"/></svg>模型成本</a>
-  </nav>
+
+  <div class="side-scroll">
+    <nav id="nav">
+      <a data-view="overview" class="active"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 13.5V8M6 13.5V3M10 13.5V6M14 13.5V9.5"/></svg><span>用量总览</span></a>
+      <a data-view="models"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="5.5"/><path d="M8 2.5v11M2.5 8h11"/></svg><span>模型成本</span></a>
+    </nav>
+
+    <section class="side-section" id="sideAgentBox">
+      <button class="side-section-head" type="button" data-side-toggle="agents" aria-expanded="true">
+        <span>数据源</span>
+        <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.3"><path d="m3 4.5 3 3 3-3"/></svg>
+      </button>
+      <div class="side-section-body">
+        <button class="side-project active" type="button" data-agent-filter="all">
+          <span class="side-project-icon"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><ellipse cx="8" cy="4" rx="5" ry="2.2"/><path d="M3 4v4c0 1.2 2.2 2.2 5 2.2s5-1 5-2.2V4M3 8v4c0 1.2 2.2 2.2 5 2.2s5-1 5-2.2V8"/></svg></span>
+          <span class="side-project-name">全部数据源</span>
+          <em id="sideAgentTotal">0</em>
+        </button>
+        <div id="sideAgents"></div>
+      </div>
+    </section>
+
+    <section class="side-section">
+      <button class="side-section-head" type="button" data-side-toggle="recent" aria-expanded="true">
+        <span>最近</span>
+        <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.3"><path d="m3 4.5 3 3 3-3"/></svg>
+      </button>
+      <div class="side-section-body">
+        <button class="side-recent" type="button" data-view="overview">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="8" cy="8" r="5.5"/><path d="M8 4.8V8l2.2 1.5"/></svg>
+          <span class="sr-only">本次扫描</span>
+          <small id="sideBuiltAt">—</small>
+        </button>
+      </div>
+    </section>
+  </div>
+
   <div id="setNav" hidden>
     <button id="setBack" class="set-back">← 返回总览</button>
     <div class="set-group">常规</div>
-    <a class="set-item active" data-cat="general">通用偏好</a>
+    <a class="set-item active" data-cat="general">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M3 4.5h10M3 8h10M3 11.5h6"/></svg>
+      <span>通用偏好</span>
+    </a>
     <div class="set-group">数据</div>
-    <a class="set-item" data-cat="data">扫描与缓存</a>
+    <a class="set-item" data-cat="data">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><ellipse cx="8" cy="4" rx="5" ry="2.2"/><path d="M3 4v4c0 1.2 2.2 2.2 5 2.2s5-1 5-2.2V4M3 8v4c0 1.2 2.2 2.2 5 2.2s5-1 5-2.2V8"/></svg>
+      <span>扫描与缓存</span>
+    </a>
     <div class="set-group">其他</div>
-    <a class="set-item" data-cat="about">关于</a>
+    <a class="set-item" data-cat="about">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="8" cy="8" r="5.5"/><path d="M8 7.2v4M8 4.8h.01"/></svg>
+      <span>关于</span>
+    </a>
   </div>
-  <div style="flex:1 1 auto"></div>
+
   <div class="side-foot">
-    <button id="settingsBtn" class="side-btn" title="设置">
-      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="8" cy="8" r="2.2"/>
-        <path d="M13 8a5 5 0 0 0-.1-1l1.6-1.2-1.3-2.3-1.9.8a5 5 0 0 0-.9-.5L10 2H6l-.3 1.8a5 5 0 0 0-.9.5l-1.9-.8-1.3 2.3L3.1 7a5 5 0 0 0 0 2l-1.6 1.2 1.3 2.3 1.9-.8c.27.2.57.37.9.5l.3 1.8h4l.3-1.8a5 5 0 0 0 1.6-1.1"/>
-      </svg><span>设置</span>
+    <button id="settingsBtn" class="side-settings" type="button" title="设置" aria-label="打开设置">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="2.2"/><path d="M13 8a5 5 0 0 0-.1-1l1.6-1.2-1.3-2.3-1.9.8a5 5 0 0 0-.9-.5L10 2H6l-.3 1.8a5 5 0 0 0-.9.5l-1.9-.8-1.3 2.3L3.1 7a5 5 0 0 0 0 2l-1.6 1.2 1.3 2.3 1.9-.8c.27.2.57.37.9.5l.3 1.8h4l.3-1.8a5 5 0 0 0 1.6-1.1"/></svg>
+      <span>设置</span>
     </button>
-    <div class="t tiny">数据截至 <span id="builtAt">—</span></div>
+    <div class="side-account">
+      <span class="side-avatar">TM</span>
+      <span class="side-account-copy"><b>本机</b></span>
+      <span class="side-online" title="本机只读模式"></span>
+    </div>
   </div>
 </aside>
-
 <main>
-  <div class="filters">
-    <div class="dd" id="ddRange">
-      <button class="dd-btn"><span class="lbl">时间粒度</span><b id="ddRangeVal">今天</b><i>▼</i></button>
-      <div class="dd-menu" id="ddRangeMenu" hidden></div>
+  <header class="topbar">
+    <div class="page-heading">
+      <h1 id="pageTitle">用量总览</h1>
+      <p id="pageSubtitle">本机 AI 编程工具 Token 与成本</p>
     </div>
-    <div class="spacer"></div>
-    <button class="btn primary" id="fExport">导出</button>
-  </div>
+    <div class="top-status" title="数据由本机日志只读扫描生成">
+      <span class="sync-dot" id="syncDot"></span>
+      <span id="topScanState">等待同步</span>
+      <span class="top-sep"></span>
+      <span>数据截至 <b id="builtAt">—</b></span>
+    </div>
+    <div class="top-actions">
+      <button class="btn icon-btn" id="reloadTop" title="重新扫描本机数据源">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.4 7A5.5 5.5 0 1 0 12 11.7"/><path d="M13.4 3.8V7H10"/></svg>
+        <span>重新扫描</span>
+      </button>
+      <button class="update-progress" id="updateProgress" type="button" hidden aria-live="polite" title="正在下载新版本">0%</button>
+      <button class="btn icon-btn export-btn" id="fExport" title="导出当前筛选为 CSV" aria-label="导出当前筛选为 CSV">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v7M5.5 7 8 9.5 10.5 7M3 11.5v2h10v-2"/></svg>
+        <span class="sr-only">导出 CSV</span>
+      </button>
+    </div>
+  </header>
 
-  <div id="noteBox"></div>
-
-  <!-- ── 视图 1：用量总览 ── -->
-  <section id="view-overview">
-    <div class="wm" aria-hidden="true"><i></i></div>
-    <div class="kpis">
-      <div class="kpi"><div class="l">消耗金额</div><div class="v" id="kCost">—</div><div class="s" id="kCostSub"></div></div>
-      <div class="kpi"><div class="l">API 请求次数</div><div class="v" id="kReq">—</div><div class="s" id="kReqSub"></div></div>
-      <div class="kpi"><div class="l">Tokens<span class="k-corner" id="kCache">缓存命中 —</span></div><div class="v" id="kTok">—</div><div class="s" id="kTokSub"></div></div>
-      <div class="kpi"><div class="l">平均单次请求</div><div class="v" id="kAvg">—</div><div class="s" id="kAvgSub"></div></div>
+  <div class="content">
+    <div class="filters">
+      <div class="dd" id="ddRange">
+        <button class="dd-btn" aria-label="选择时间范围">
+          <svg class="dd-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="2.5" y="3.5" width="11" height="10" rx="1.5"/><path d="M5 2.5v2M11 2.5v2M2.5 6.5h11"/></svg>
+          <span class="sr-only">时间范围</span>
+          <b id="ddRangeVal">近 7 天</b>
+          <i>▼</i>
+        </button>
+        <div class="dd-menu" id="ddRangeMenu" hidden></div>
+      </div>
+      <div class="spacer"></div>
     </div>
 
-    <div class="card">
-      <div class="card-head">
-        <h3 id="mainTitle">消耗金额（CNY）</h3>
-        <span class="val" id="mainSum"></span>
-        <div class="grow"></div>
-        <div class="seg" id="segDim">
-          <button data-d="agent" class="on">数据源</button>
-          <button data-d="model">模型</button>
+    <div id="noteBox"></div>
+
+    <!-- ── 视图 1：用量总览 ── -->
+    <section id="view-overview">
+      <div class="wm" aria-hidden="true"><i></i></div>
+      <div class="kpis">
+        <div class="kpi accent-cost">
+          <div class="kpi-head"><span class="kpi-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M10 2.5v15M14 6.4c-.7-1-2-1.6-3.8-1.6-2 0-3.4.9-3.4 2.3 0 3.5 7.3 1.7 7.3 5.2 0 1.5-1.5 2.4-3.7 2.4-1.9 0-3.3-.6-4.1-1.7"/></svg></span><span class="l">消耗金额</span></div>
+          <div class="v" id="kCost">—</div><div class="s" id="kCostSub"></div>
         </div>
-        <div class="seg" id="segMetric">
-          <button data-m="cost" class="on">金额</button>
-          <button data-m="tokens">Tokens</button>
-          <button data-m="requests">请求</button>
+        <div class="kpi accent-request">
+          <div class="kpi-head"><span class="kpi-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5h14v9H8l-4 3v-3H3z"/><path d="M6 8h8M6 10.8h5"/></svg></span><span class="l">API 请求次数</span></div>
+          <div class="v" id="kReq">—</div><div class="s" id="kReqSub"></div>
         </div>
-        <div class="seg" id="segGrain">
-          <button data-g="day" class="on">按日</button>
-          <button data-g="month">按月</button>
+        <div class="kpi accent-token">
+          <div class="kpi-head"><span class="kpi-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h5v5H4zM11 4h5v5h-5zM4 11h5v5H4zM11 11h5v5h-5z"/></svg></span><span class="l">Tokens</span><span class="k-corner" id="kCache">缓存命中 —</span></div>
+          <div class="v" id="kTok">—</div><div class="s" id="kTokSub"></div>
+        </div>
+        <div class="kpi accent-average">
+          <div class="kpi-head"><span class="kpi-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3.5 15.5h13M5.5 12V8M10 12V4.5M14.5 12V6.5"/></svg></span><span class="l">平均单次请求</span></div>
+          <div class="v" id="kAvg">—</div><div class="s" id="kAvgSub"></div>
         </div>
       </div>
-      <div class="chart-wrap">
-        <canvas id="mainChart" role="img" aria-label="主图表：随时间变化的金额、Token 或请求量柱状图">加载中…</canvas>
-        <div class="chart-empty" id="mainEmpty" hidden></div>
-      </div>
-    </div>
 
-    <div id="agentList"></div>
-
-    <div class="card dist">
-      <div>
-        <div class="card-head"><h3>模型用量分布</h3><div class="grow"></div><span class="val" id="distSum"></span></div>
-        <div class="donut-wrap">
-          <canvas id="donutChart" role="img" aria-label="各模型 Token 占比环形图">加载中…</canvas>
-          <div class="donut-center"><b id="donutN">—</b><span id="donutCap">个模型</span></div>
-        </div>
-        <div class="donut-legend" id="donutLegend"></div>
-      </div>
-      <div>
-        <div class="card-head"><h3>调用次数 Top 10</h3><div class="grow"></div><span class="val">点击查看该模型明细</span></div>
-        <div class="t10" id="top10"></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ── 视图 2：模型成本 ── -->
-  <section id="view-models" hidden>
-    <div class="card" style="padding:6px 4px">
-      <table><thead><tr>
-        <th>模型</th><th class="num">Tokens</th><th class="num">请求次数</th>
-        <th class="num">消耗金额</th><th class="num">均价（¥/百万 tok）</th>
-        <th style="width:22%">占比（金额）</th>
-      </tr></thead><tbody id="tbModel"></tbody></table>
-    </div>
-  </section>
-
-  <!-- ── 视图 3：设置（全屏 ZCode 式） ── -->
-  <section id="view-settings" hidden>
-    <div class="set-main">
-      <h2 id="setTitle">通用偏好</h2>
-
-      <div class="set-cards" data-cat="general">
-        <div class="set-cat-h">通用偏好</div>
-        <div class="set-card">
-          <div class="set-row">
-            <div class="set-info">
-              <div class="t">自动刷新数据</div>
-              <div class="d">进入软件自动扫描一次；此后按固定间隔在后台重新扫描，关闭后仅不再周期刷新（仍可手动扫描）。</div>
+      <div class="card chart-card">
+        <div class="card-head">
+          <h3 id="mainTitle">Tokens</h3>
+          <span class="val" id="mainSum"></span>
+          <div class="grow"></div>
+          <div class="chart-controls">
+            <div class="seg" id="segDim">
+              <button data-d="total" class="on" title="总用量趋势" aria-label="总用量趋势"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 11.5 5.5 8l2.6 2 5.4-6"/><path d="M11 4h2.5v2.5"/></svg></button>
+              <button data-d="agent" title="按数据源拆分" aria-label="按数据源拆分"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.45"><ellipse cx="8" cy="4" rx="5" ry="2.2"/><path d="M3 4v4c0 1.2 2.2 2.2 5 2.2s5-1 5-2.2V4M3 8v4c0 1.2 2.2 2.2 5 2.2s5-1 5-2.2V8"/></svg></button>
+              <button data-d="model" title="按模型拆分" aria-label="按模型拆分"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.45"><path d="M3 4.5h4v4H3zM9 4.5h4v4H9zM3 10.5h4v4H3zM9 10.5h4v4H9z"/></svg></button>
             </div>
-            <label class="switch"><input type="checkbox" id="autoChk"><i></i></label>
-          </div>
-          <div class="set-row">
-            <div class="set-info">
-              <div class="t">刷新间隔</div>
-              <div class="d">后台自动重扫的频率。</div>
+            <div class="seg" id="segMetric">
+              <button data-m="cost" title="消耗金额" aria-label="消耗金额"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linecap="round"><path d="M8 2v12M11.2 5.1c-.6-.8-1.6-1.2-3.1-1.2-1.6 0-2.8.7-2.8 1.8 0 2.8 6 1.3 6 4.2 0 1.2-1.2 1.9-3 1.9-1.5 0-2.7-.5-3.3-1.4"/></svg></button>
+              <button data-m="tokens" class="on" title="Token 用量" aria-label="Token 用量"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.45"><path d="M3.5 3.5h3v3h-3zM9.5 3.5h3v3h-3zM3.5 9.5h3v3h-3zM9.5 9.5h3v3h-3z"/></svg></button>
+              <button data-m="requests" title="API 请求次数" aria-label="API 请求次数"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linecap="round"><path d="M2.5 13.5V8M6.2 13.5V4.5M9.8 13.5V7M13.5 13.5V5.5"/></svg></button>
             </div>
-            <select id="autoMin" class="set-sel" aria-label="刷新间隔">
-              <option value="0">关闭</option>
-              <option value="1">每 1 分钟</option>
-              <option value="3">每 3 分钟</option>
-              <option value="5">每 5 分钟</option>
-              <option value="10">每 10 分钟</option>
-              <option value="30">每 30 分钟</option>
-              <option value="60">每 1 小时</option>
-            </select>
+            <div class="seg" id="segGrain">
+              <button data-g="day" class="on" title="按日" aria-label="按日"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.45"><rect x="2.5" y="3.5" width="11" height="10" rx="1.5"/><path d="M5 2.5v2M11 2.5v2M2.5 6.5h11"/></svg></button>
+              <button data-g="month" title="按月" aria-label="按月"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.45"><rect x="2.5" y="3.5" width="11" height="10" rx="1.5"/><path d="M5 2.5v2M11 2.5v2M2.5 6.5h11M5.5 9.5h2M9 9.5h2"/></svg></button>
+            </div>
           </div>
         </div>
-        <div class="set-card">
-          <div class="set-info">
-            <div class="t">软件更新</div>
-            <div class="d">启动时自动检查一次新版本，之后每 30 分钟检查一次；发现新版会亮起左上角的更新按钮。此策略固定，无需配置。</div>
-          </div>
+        <div class="trend-summary" id="trendSummary"></div>
+        <div class="chart-wrap trend-chart">
+          <canvas id="mainChart" role="img" aria-label="主图表：随时间变化的金额、Token 或请求量趋势图">加载中…</canvas>
+          <div class="chart-empty" id="mainEmpty" hidden></div>
         </div>
+        <section class="daily-panel">
+          <div class="daily-panel-head">
+            <div>
+              <h4 id="dailyTitle">每日明细</h4>
+              <p id="dailyHint">按日期查看用量、成本和请求次数</p>
+            </div>
+            <span id="dailyCount"></span>
+          </div>
+          <div class="daily-list" id="dailyList"></div>
+        </section>
       </div>
 
-      <div class="set-cards" data-cat="data" hidden>
-        <div class="set-cat-h">扫描与缓存</div>
-        <div class="set-card">
-          <div class="set-row">
-            <div class="set-info">
-              <div class="t">重新扫描数据源</div>
-              <div class="d">立即全量重扫并重建聚合（有缓存，通常 20~30 秒）。</div>
-            </div>
-            <button id="reload" class="btn">重新扫描</button>
+      <div id="agentList"></div>
+
+      <div class="card dist">
+        <div>
+          <div class="card-head"><h3>模型用量分布</h3><div class="grow"></div><span class="val" id="distSum"></span></div>
+          <div class="donut-wrap">
+            <canvas id="donutChart" role="img" aria-label="各模型 Token 占比环形图">加载中…</canvas>
+            <div class="donut-center"><b id="donutN">—</b><span id="donutCap">个模型</span></div>
           </div>
-          <div class="set-row">
+          <div class="donut-legend" id="donutLegend"></div>
+        </div>
+        <div>
+          <div class="card-head"><h3>调用次数 Top 10</h3></div>
+          <div class="t10" id="top10"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── 视图 2：模型成本 ── -->
+    <section id="view-models" hidden>
+      <div class="section-heading">
+        <div><h2>成本明细</h2><p>按模型查看 Token、请求次数和估算金额</p></div>
+      </div>
+      <div class="model-summary">
+        <div class="model-stat">
+          <span class="model-stat-icon accent-cost"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.45"><path d="M3.5 3.5h3v3h-3zM9.5 3.5h3v3h-3zM3.5 9.5h3v3h-3zM9.5 9.5h3v3h-3z"/></svg></span>
+          <span><small>模型数量</small><b id="msModels">—</b></span>
+        </div>
+        <div class="model-stat">
+          <span class="model-stat-icon accent-token"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.45"><circle cx="8" cy="8" r="5.5"/><path d="M5.5 8h5M8 5.5v5"/></svg></span>
+          <span><small>Token 总量</small><b id="msTokens">—</b></span>
+        </div>
+        <div class="model-stat">
+          <span class="model-stat-icon accent-request"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linecap="round"><path d="M8 2v12M11.2 5.1c-.6-.8-1.6-1.2-3.1-1.2-1.6 0-2.8.7-2.8 1.8 0 2.8 6 1.3 6 4.2 0 1.2-1.2 1.9-3 1.9-1.5 0-2.7-.5-3.3-1.4"/></svg></span>
+          <span><small>估算成本</small><b id="msCost">—</b></span>
+        </div>
+      </div>
+      <div class="card table-card" style="padding:6px 4px">
+        <div class="table-scroll">
+          <table><thead><tr>
+            <th>模型</th><th class="num">Tokens</th><th class="num">请求次数</th>
+            <th class="num">消耗金额</th><th class="num">均价（¥/百万 tok）</th>
+            <th style="width:22%">占比（金额）</th>
+          </tr></thead><tbody id="tbModel"></tbody></table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── 视图 3：设置（全屏 ZCode 式） ── -->
+    <section id="view-settings" hidden>
+      <div class="set-main">
+        <h2 id="setTitle">通用偏好</h2>
+
+        <div class="set-cards" data-cat="general">
+          <div class="set-cat-h">通用偏好</div>
+          <div class="set-card">
+            <div class="set-row">
+              <div class="set-info">
+                <div class="t">自动刷新数据</div>
+                <div class="d">启动时扫描一次，之后按间隔自动更新。</div>
+              </div>
+              <label class="switch"><input type="checkbox" id="autoChk"><i></i></label>
+            </div>
+            <div class="set-row">
+              <div class="set-info">
+                <div class="t">刷新间隔</div>
+                <div class="d">后台自动重扫频率。</div>
+              </div>
+              <select id="autoMin" class="set-sel" aria-label="刷新间隔">
+                <option value="0">关闭</option>
+                <option value="1">每 1 分钟</option>
+                <option value="3">每 3 分钟</option>
+                <option value="5">每 5 分钟</option>
+                <option value="10">每 10 分钟</option>
+                <option value="30">每 30 分钟</option>
+                <option value="60">每 1 小时</option>
+              </select>
+            </div>
+          </div>
+          <div class="set-card">
+            <div class="set-info">
+              <div class="t">软件更新</div>
+              <div class="d">启动时检查一次，之后每 30 分钟检查。</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="set-cards" data-cat="data" hidden>
+          <div class="set-cat-h">扫描与缓存</div>
+          <div class="set-card">
+            <div class="set-row">
+              <div class="set-info">
+                <div class="t">重新扫描数据源</div>
+                <div class="d">立即全量重扫并重建聚合。</div>
+              </div>
+              <button id="reload" class="btn">重新扫描</button>
+            </div>
+            <div class="set-row">
+              <div class="set-info" style="max-width:none">
+                <div id="scanState" class="set-scan" style="color:#e0a92b"></div>
+                <div id="scanInfo" class="set-scan" style="color:#7e858f"></div>
+              </div>
+            </div>
+          </div>
+          <div class="set-card">
             <div class="set-info" style="max-width:none">
-              <div id="scanState" class="set-scan" style="color:#e0a92b"></div>
-              <div id="scanInfo" class="set-scan" style="color:#7e858f"></div>
+              <div id="sideNotes" class="set-notes"></div>
             </div>
           </div>
         </div>
-        <div class="set-card">
-          <div class="set-info" style="max-width:none">
-            <div id="sideNotes" class="set-notes"></div>
-          </div>
-        </div>
-      </div>
 
-      <div class="set-cards" data-cat="about" hidden>
-        <div class="set-cat-h">关于</div>
-        <div class="set-card">
-          <div class="set-row">
-            <div class="set-info">
-              <div class="t">版本</div>
-              <div class="d" id="verLine">版本 —</div>
+        <div class="set-cards" data-cat="about" hidden>
+          <div class="set-cat-h">关于</div>
+          <div class="set-card">
+            <div class="set-row">
+              <div class="set-info">
+                <div class="t">版本</div>
+                <div class="d" id="verLine">版本 —</div>
+              </div>
+              <button id="updBtn" class="btn">检查更新</button>
             </div>
-            <button id="updBtn" class="btn">检查更新</button>
-          </div>
-          <div class="set-row">
-            <div class="set-info">
-              <div class="t">项目仓库</div>
-              <div class="d"><a href="https://github.com/liixnglinb/token-monitor" target="_blank" rel="noopener">github.com/liixnglinb/token-monitor</a></div>
+            <div class="set-row">
+              <div class="set-info">
+                <div class="t">项目仓库</div>
+                <div class="d"><a href="https://github.com/liixnglinb/token-monitor" target="_blank" rel="noopener">github.com/liixnglinb/token-monitor</a></div>
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
-  </section>
+    </section>
+  </div>
 </main>
 
 <nav id="tabbar" aria-label="底部导航">
@@ -525,928 +343,14 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
   <button data-settings="1" aria-label="设置"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="2.2"/><path d="M13 8a5 5 0 0 0-.1-1l1.6-1.2-1.3-2.3-1.9.8a5 5 0 0 0-.9-.5L10 2H6l-.3 1.8a5 5 0 0 0-.9.5l-1.9-.8-1.3 2.3L3.1 7a5 5 0 0 0 0 2l-1.6 1.2 1.3 2.3 1.9-.8c.27.2.57.37.9.5l.3 1.8h4l.3-1.8a5 5 0 0 0 1.6-1.1"/></svg><span>设置</span></button>
 </nav>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-<script>
-"use strict";
-let DATA = null, MAIN = null;
-const MINIS = [];
-const F = { rangeKey: "today", agent: "all", metric: "cost", grain: "day", dim: "agent", open: new Set() };
-const PAL = ["#4D6BFE","#8E7CFF","#5DC3F0","#37B48F","#EF9F27","#E24B4A","#85B7EB","#F09595","#B4B2A9"];
-const METRIC_NAME = { cost: "消耗金额（CNY）", tokens: "Tokens", requests: "API 请求次数" };
-const DIM_NAME = { agent: "数据源", model: "模型" };
-/* 时间粒度菜单（对齐 DeepSeek 选项） */
-const RANGES = [
-  ["today",     "今天"],
-  ["yesterday", "昨天"],
-  ["last7",     "近 7 天"],
-  ["last30",    "近 30 天"],
-  ["last90",    "近 90 天"],
-  ["thismonth", "本月"],
-  ["lastmonth", "上月"],
-  ["all",       "全部"],
-];
-const RANGE_LABEL = Object.fromEntries(RANGES);
-/* Agent 软件图标（内联 SVG，24×24，继承 currentColor） */
-const AGENT_ICONS = {
-  "claude-code": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 2.8v5.4M12 15.8v5.4M2.8 12h5.4M15.8 12h5.4M5.5 5.5l3.8 3.8M14.7 14.7l3.8 3.8M18.5 5.5l-3.8 3.8M9.3 14.7L5.5 18.5"/></svg>',
-  "codex": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 2.6l7.6 4.4v8.8L12 20.2l-7.6-4.4V7z"/><path d="M12 8.1l3.8 2.2v4.4L12 16.9l-3.8-2.2v-4.4z"/></svg>',
-  "zcode": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 5h12L9 12h9l-9 7"/></svg>',
-  "opencode": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6.5l-5.5 5.5L9 17.5M15 6.5l5.5 5.5L15 17.5"/></svg>',
-  "hermes": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 8.2c3.6-3.2 7.2-3.2 9.4 0 2.2-3.2 5.8-3.2 9.4 0-1.9 6.2-5 10.2-9.4 13.2-4.4-3-7.5-7-9.4-13.2z"/><path d="M12 8.4v9.6"/></svg>',
-  "mhagent": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3.8" y="3.8" width="16.4" height="16.4" rx="3.4"/><path d="M8.6 16.4V8.4l3.4 4.4 3.4-4.4v8"/></svg>',
-  "openclaw-autoclaw": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21.2c-3.1 0-5.2-1.4-5.2-3.4 0-1.5 1.3-2.4 2.7-2.7M12 21.2c3.1 0 5.2-1.4 5.2-3.4 0-1.5-1.3-2.4-2.7-2.7"/><path d="M7.4 6.4c0-2.1 2-3.6 4.6-3.6s4.6 1.5 4.6 3.6"/><path d="M7.9 11.6V9M12 11.2V8.4M16.1 11.6V9"/></svg>',
-  "agnes": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><circle cx="12" cy="12" r="8.6"/><path d="M8.3 16.3l3.7-9.2 3.7 9.2M9.7 13.4h4.6"/></svg>',
-  "dsh": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.6 6.2h7.2M3.6 12h11.4M3.6 17.8h5.6"/><path d="M17.4 5.2l3.4 13.6"/></svg>',
-};
-function agentIcon(name){
-  return AGENT_ICONS[name] ||
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="4.2" y="4.2" width="15.6" height="15.6" rx="4"/><circle cx="12" cy="12" r="2.4"/></svg>';
-}
-const $ = id => document.getElementById(id);
-
-/* ---------- 格式化 ---------- */
-const fmtInt = n => Math.round(n).toLocaleString("en-US");
-const fmtTok = n => n >= 1e9 ? (n/1e9).toFixed(2)+" B" : n >= 1e6 ? (n/1e6).toFixed(1)+" M"
-  : n >= 1e3 ? (n/1e3).toFixed(1)+" k" : String(Math.round(n));
-const fmtCNY = n => "¥" + n.toLocaleString("en-US",{minimumFractionDigits:2, maximumFractionDigits:2});
-const fmtUSD = n => "$" + n.toLocaleString("en-US",{minimumFractionDigits:2, maximumFractionDigits:2});
-const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-
-/* ---------- 工具 ---------- */
-const ymd = d => d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
-const md  = s => { const [,m,d] = s.split("-"); return String(+m)+"/"+String(+d); };   // 2026-09-16 → 9/16
-/* 月份 key（2026-09）→ 图表显示用：同年显示 "9月"，跨年显示 "2025年12月"（保留完整 key 用于排序/tooltip 取数，不动原始数据） */
-const fmtMonth = s => {
-  const m = /^(\d{4})-(\d{2})$/.exec(s);
-  if (!m) return s;                       // 非月份 key（如 2026-09-16）原样返回
-  const y = +m[1], mm = String(+m[2]);
-  return y === new Date().getFullYear() ? mm + "月" : y + "年" + mm + "月";
-};
-const addDays = (s, n) => { const d = new Date(s+"T00:00:00"); d.setDate(d.getDate()+n); return ymd(d); };
-/* 各时间粒度 → [start, end]；全部返回 null */
-function rangeDates(){
-  const max = DATA.range.max || ymd(new Date());
-  const now = new Date(), today = ymd(now);
-  switch (F.rangeKey){
-    case "today":     return [today, today];
-    case "yesterday": return [addDays(today,-1), addDays(today,-1)];
-    case "last7":     return [addDays(max,-6), max];
-    case "last30":    return [addDays(max,-29), max];
-    case "last90":    return [addDays(max,-89), max];
-    case "thismonth": return [ymd(new Date(now.getFullYear(), now.getMonth(), 1)), today];
-    case "lastmonth": return [ymd(new Date(now.getFullYear(), now.getMonth()-1, 1)),
-                              ymd(new Date(now.getFullYear(), now.getMonth(), 0))];
-    default:          return null;
-  }
-}
-/* 填充连续日期轴：无数据的日期补 0，与 DeepSeek 一致 */
-function fillDays(pairs, start){
-  if (!DATA.range.min || !DATA.range.max) return pairs;
-  const map = new Map(pairs);
-  const out = [];
-  const s = start || DATA.range.min;
-  const e = DATA.range.max;
-  if (s > e) return pairs;
-  for (let d = new Date(s+"T00:00:00"); d <= new Date(e+"T00:00:00"); d.setDate(d.getDate()+1))
-    out.push([ymd(d), map.get(ymd(d)) || 0]);
-  return out;
-}
-function rowsFor(keepUnknown){
-  const range = rangeDates();
-  return DATA.matrix.filter(r => {
-    if (range){
-      if (r.date === "unknown") return !!keepUnknown;
-      if (r.date < range[0] || r.date > range[1]) return false;
-    }
-    return true;
-  });
-}
-const cellVal = (r, m) => m === "cost" ? r.cost : m === "tokens" ? r.tokens : r.requests;
-
-function groupSeries(rows, metric, grain){
-  const map = new Map();
-  for (const r of rows){
-    if (r.date === "unknown") continue;
-    const k = grain === "month" ? r.date.slice(0,7) : r.date;
-    map.set(k, (map.get(k)||0) + cellVal(r, metric));
-  }
-  return [...map.entries()].sort((a,b)=>a[0]<b[0]?-1:1);
-}
-
-/* ---------- 图表公共样式 ---------- */
-const TT = { backgroundColor:"#1F1F23", borderColor:"#2E2E34", borderWidth:1,
-  titleColor:"#ECECEF", bodyColor:"#B6B6BE", padding:12, cornerRadius:10,
-  displayColors:true, usePointStyle:true, boxWidth:8, boxHeight:8, boxPadding:4,
-  bodySpacing:6, titleSpacing:6, titleMarginBottom:8 };
-/* hover 竖直参考线（对齐 DeepSeek） */
-const crosshair = { id: "crosshair",
-  afterDatasetsDraw(c){
-    const a = c.tooltip && c.tooltip._active;
-    if (!a || !a.length) return;
-    const x = a[0].element.x, ctx = c.ctx, top = c.chartArea.top, bot = c.chartArea.bottom;
-    ctx.save();
-    ctx.strokeStyle = "rgba(255,255,255,.16)";
-    ctx.lineWidth = 1; ctx.setLineDash([4,4]);
-    ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, bot); ctx.stroke();
-    ctx.restore();
-  } };
-function baseOpts(fmt, legend){
-  return { responsive:true, maintainAspectRatio:false,
-    interaction:{ mode:"index", intersect:false },
-    plugins:{ legend:{display:false},
-      tooltip:{ ...TT, filter: i => i.parsed.y !== 0,
-        callbacks:{ label:c => " " + fmt(c.parsed.y) } } },
-    scales:{
-      x:{ stacked:true, ticks:{ color:"#9C9CA3", font:{size:11}, maxRotation:0, autoSkip:true, maxTicksLimit:10 },
-          grid:{ display:false }, border:{ color:"#2C2C32" } },
-      y:{ stacked:true, beginAtZero:true, ticks:{ color:"#9C9CA3", font:{size:11}, maxTicksLimit:6, callback:fmt },
-          grid:{ color:"rgba(255,255,255,.06)" }, border:{ display:false } } } };
-}
-const fmtTick = {
-  cost: v => "¥" + (v>=1e4 ? (v/1e4).toFixed(1)+"k" : v.toFixed(0)),
-  tokens: v => v>=1e9 ? (v/1e9).toFixed(1)+"B" : v>=1e6 ? (v/1e6).toFixed(0)+"M" : v>=1e3 ? (v/1e3).toFixed(0)+"k" : v,
-  requests: v => v>=1e3 ? (v/1e3).toFixed(1)+"k" : v
-};
-
-/* ---------- 主流程 ---------- */
-init();
-function init(){
-  fetch("/api/summary").then(r=>r.json()).then(d=>{ DATA=d; renderAll();
-    if (d._meta) { LAST_BUILT = d._meta.built_at || null; syncSettings(d._meta); } })
-    .catch(e=>{ $("noteBox").innerHTML = `<div class="note err">数据加载失败：${esc(e.message)}</div>`; });
-  if (!$("updBtn").dataset.pending) checkUpdate(true);
-}
-
-function renderAll(){
-  /* 首扫期间 /api/summary 返回 building 占位（无 range/matrix），此时不渲染也不报错，
-     等后台扫描完成后 pollMeta 会拉到真数据再走一遍这里 */
-  if (!DATA || DATA.building || !(DATA.range && DATA.range.max)) return;
-  /* 套餐模型集合先行设置：renderAgentList / renderModelDist 都要用它区分「套餐」与「缺价」 */
-  window.PLAN_SET = new Set(((DATA.kpi_all && DATA.kpi_all.plan_models) || [])
-    .map(x => String(x).toLowerCase()));
-  renderRangeMenu();
-  renderKPI(); renderMain(); renderAgentList();
-  renderModelDist(); renderModelTable(); renderNote(); renderScanInfo();
-}
-
-/* 扫描开销：命中/未命中/判定跳过，让"这次为什么慢"有处可看 */
-function renderScanInfo(){
-  const el = $("scanInfo"); if (!el) return;
-  const c = DATA && DATA.cache_stats;
-  if (!c) { el.textContent = ""; return; }
-  el.textContent = "扫描：命中 " + (c.hit||0) + " · 重扫 " + (c.miss||0)
-    + " · 跳过 " + (c.verdict||0);
-  el.title = "命中=文件未变化直接复用上次解析；重扫=本次真正解析；跳过=此前判定无可用数据";
-}
-
-/* ---------- 下拉菜单 ---------- */
-function renderRangeMenu(){
-  const menu = $("ddRangeMenu");
-  menu.innerHTML = RANGES.map(([k, label]) =>
-    `<button data-k="${k}" class="${F.rangeKey===k ? "on" : ""}"><span>${label}</span><span class="ck">✓</span></button>`).join("");
-  $("ddRangeVal").textContent = RANGE_LABEL[F.rangeKey];
-}
-function bindDropdown(ddId, menuId, onPick){
-  const dd = $(ddId), menu = $(menuId);
-  dd.querySelector(".dd-btn").onclick = e => {
-    e.stopPropagation();
-    const wasOpen = dd.classList.contains("open");
-    closeAllDropdowns();
-    if (!wasOpen){ dd.classList.add("open"); menu.hidden = false; }
-  };
-  menu.onclick = e => {
-    const b = e.target.closest("button[data-k]"); if (!b) return;
-    onPick(b.dataset.k);
-    closeAllDropdowns();
-  };
-}
-function closeAllDropdowns(){
-  document.querySelectorAll(".dd.open").forEach(d => d.classList.remove("open"));
-  document.querySelectorAll(".dd-menu").forEach(m => m.hidden = true);
-}
-document.addEventListener("click", closeAllDropdowns);
-
-function renderNote(){
-  /* 说明性内容移到侧栏「设置」浮层，主区只保留扫描错误 —— 顶部不再有大段说明 */
-  const main = $("noteBox"), side = $("sideNotes");
-  if (!main || !side) return;
-  const k = DATA.kpi_all;
-  window.PLAN_SET = new Set((k.plan_models || []).map(x => String(x).toLowerCase()));
-  let side_html = "";
-  if (k.plan_tokens > 0)
-    side_html += `<div class="note plan">其中 ${fmtTok(k.plan_tokens)} tokens 来自套餐/订阅制模型（商汤小浣熊、Agnes、OX、火山方舟等）—— 按口径只记用量，不计金额。</div>`;
-  if (k.unpriced_tokens > 0)
-    side_html += `<div class="note unpriced">另有 ${fmtTok(k.unpriced_tokens)} tokens 走 API 但单价不在价表中（${(k.unpriced_tokens/k.tokens*100).toFixed(1)}%），未计入金额 — 实际成本会更高。</div>`;
-  const range = rangeDates();
-  if (range){
-    const t = DATA.matrix.filter(r=>r.date==="unknown").reduce((s,r)=>s+r.tokens,0);
-    if (t > 0) side_html += `<div class="note time">时间筛选生效中：另有 ${fmtTok(t)} tokens 因日志缺失日期戳，仅在「全部」时计入</div>`;
-  }
-  main.innerHTML = (DATA.scan_errors && DATA.scan_errors.length)
-    ? `<div class="note err">部分数据源扫描失败：${esc(DATA.scan_errors.map(e=>e.agent).join("、"))}</div>` : "";
-  side.innerHTML = side_html;
-}
-
-
-function renderKPI(){
-  const rows = rowsFor(true);                       // KPI 含日期未知行
-  const tokens = rows.reduce((s,r)=>s+r.tokens,0);
-  const req = rows.reduce((s,r)=>s+r.requests,0);
-  const cost = rows.reduce((s,r)=>s+r.cost,0);
-  const cr = rows.reduce((s,r)=>s+r.cr,0);
-  const base = rows.reduce((s,r)=>s+r.inp+r.cw+r.cr,0);
-
-  $("kCost").textContent = fmtCNY(cost * DATA.cny_rate);
-  $("kCostSub").textContent = (cost === 0 && tokens > 0)
-    ? "模型单价不在价格库，未计入金额"
-    : fmtUSD(cost) + " · 汇率 " + DATA.cny_rate;
-  $("kReq").textContent = fmtInt(req);
-  const range = rangeDates();
-  const days = range ? Math.round((new Date(range[1]) - new Date(range[0]))/864e5) + 1
-    : (DATA.range.max && DATA.range.min
-      ? Math.round((new Date(DATA.range.max) - new Date(DATA.range.min))/864e5)+1 : 0);
-  $("kReqSub").textContent = days ? "日均 " + fmtInt(req/days) : "全部时间";
-  $("kTok").textContent = fmtInt(tokens);           // 对齐 DeepSeek：完整千分位
-  $("kTokSub").textContent = fmtTok(tokens) + " tokens";
-  $("kCache").textContent = "缓存命中 " + (cr/Math.max(base,1)*100).toFixed(1) + "%";
-  /* 平均单次请求（参考百炼的「平均单次请求Token」） */
-  $("kAvg").textContent = req ? fmtInt(Math.round(tokens / req)) : "—";
-  $("kAvgSub").textContent = req ? "tokens / 次 · 共 " + fmtInt(req) + " 次请求" : "无请求记录";
-}
-
-/* ---------- 主图 ---------- */
-function renderMain(){
-  const rows = rowsFor(false);
-  const range = rangeDates();
-  const fmt = fmtTick[F.metric];
-  $("mainTitle").textContent = METRIC_NAME[F.metric] + (F.grain==="month" ? "（按月）" : "");
-
-  /* 日期轴（与单序列版一致） */
-  const raw = groupSeries(rows, F.metric, F.grain);
-  const data = F.grain === "day" ? fillDays(raw, range && range[0]) : raw;
-  const labels = data.map(d=>d[0]);
-  const total = data.reduce((s,d)=>s+d[1],0);
-  $("mainSum").textContent = F.metric==="cost" ? fmtCNY(total*DATA.cny_rate)
-    : F.metric==="tokens" ? fmtTok(total)+" tok" : fmtInt(total)+" 次";
-
-  /* 空状态：指标无值时给友好提示（含"价格未知"的口径说明） */
-  const emp = $("mainEmpty");
-  if (total === 0){
-    const hasTok = rows.some(r=>r.tokens > 0);
-    let t1 = "当前筛选下无记录";
-    let t2 = "试试把时间粒度切到「近 7 天」或「全部」";
-    if (F.metric === "cost" && hasTok){
-      t1 = "消耗金额为 ¥0.00";
-      t2 = "这些模型的单价不在价格库中，未计入金额 · 切换到 Tokens / 请求 可查看用量";
-    } else if (hasTok){
-      t1 = "当前筛选下无" + (F.metric === "tokens" ? " Token" : "请求") + "记录";
-      t2 = "试试切换时间粒度或指标";
-    }
-    emp.innerHTML = '<div class="t1">' + t1 + '</div><div class="t2">' + t2 + '</div>';
-    emp.hidden = false;
-  } else {
-    emp.hidden = true;
-  }
-
-  /* 堆叠成员：TOP 6 + 其他 */
-  const tot = new Map();
-  for (const r of rows) tot.set(r[F.dim], (tot.get(r[F.dim])||0) + cellVal(r, F.metric));
-  const topNames = [...tot.entries()].sort((a,b)=>b[1]-a[1]).slice(0,6).map(e=>e[0]);
-  const others = rows.filter(r=>!topNames.includes(r[F.dim]));
-  const members = topNames.map(name=>({ name, rows: rows.filter(r=>r[F.dim]===name) }));
-  if (others.length) members.push({ name: "其他", rows: others });
-  const series = members.map(m=>{
-    const mm = new Map(groupSeries(m.rows, F.metric, F.grain));
-    return { name: m.name, data: labels.map(l=>mm.get(l)||0) };
-  });
-
-  const opts = baseOpts(fmt, F.metric==="cost"?"¥":"");
-  if (F.grain === "day") opts.scales.x.ticks.callback = (v, i) => md(labels[i] || v);
-  else if (F.grain === "month") opts.scales.x.ticks.callback = (v, i) => fmtMonth(labels[i] || v);
-  opts.plugins.tooltip.callbacks.title = items => {
-    if (!items || !items.length) return "";
-    const k = items[0].label;
-    const tot2 = items.reduce((s,i)=>s+(i.parsed.y||0),0);
-    const totTxt = F.metric==="cost" ? fmtCNY(tot2*DATA.cny_rate)
-      : F.metric==="tokens" ? fmtTok(tot2)+" tok" : fmtInt(tot2)+" 次";
-    return (F.grain === "month" ? fmtMonth(k) : k) + "    " + totTxt;
-  };
-  opts.plugins.tooltip.callbacks.label = c => {
-    const v = c.parsed.y;
-    const txt = F.metric==="cost" ? fmtCNY(v*DATA.cny_rate)
-      : F.metric==="tokens" ? fmtTok(v)+" tok" : fmtInt(v)+" 次";
-    return " " + c.dataset.label + "   " + txt;
-  };
-
-  if (MAIN) MAIN.destroy();
-  MAIN = new Chart($("mainChart"), {
-    type: "bar",
-    data: { labels, datasets: series.map((s,i)=>({
-      label: s.name, data: s.data, backgroundColor: PAL[i % PAL.length],
-      stack: "s", maxBarThickness: 26, barPercentage: .72, categoryPercentage: .72,
-      borderRadius: i === series.length-1 ? { topLeft:3, topRight:3 } : 0,
-      borderSkipped: false })) },
-    options: opts,
-    plugins: [crosshair]
-  });
-}
-
-/* ---------- Agent 用量榜（可折叠 + 会话明细） ---------- */
-function sessionLines(date, agent, model, metric){
-  /* 指定日期与维度下的对话分布（TOP 5 + 其余合计） */
-  const byS = new Map();
-  for (const r of DATA.matrix){
-    if (r.date !== date || r.agent !== agent) continue;
-    if (model && r.model !== model) continue;
-    const o = byS.get(r.session) || {t:0, c:0, q:0};
-    o.t += r.tokens; o.c += r.cost; o.q += r.requests;
-    byS.set(r.session, o);
-  }
-  const list = [...byS.entries()].sort((a,b)=>b[1].t-a[1].t);
-  if (!list.length) return [];
-  const val = o => metric==="cost" ? fmtCNY(o.c*DATA.cny_rate)
-    : metric==="tokens" ? fmtTok(o.t) : fmtInt(o.q)+" 次";
-  const out = list.slice(0,5).map(([s,o]) =>
-    "· " + (s==="unknown" ? "未知对话" : s) + "   " + val(o));
-  if (list.length > 5) out.push("… 另有 " + (list.length-5) + " 个对话");
-  return out;
-}
-
-function miniChart(canvas, pairs, color, tip){
-  /* 迷你柱：每日 Token 走势；hover 显示对话分布 */
-  /* 渲染前先销毁同画布上的旧实例（与 MAIN/DONUT 一致），防重复 new 造成泄漏 */
-  const ex = Chart.getChart(canvas);
-  if (ex) ex.destroy();
-  return new Chart(canvas, { type: "bar",
-    data: { labels: pairs.map(d=>d[0]),
-      datasets: [{ data: pairs.map(d=>d[1]), backgroundColor: color,
-        borderRadius: 2, maxBarThickness: barW(pairs.length) }] },
-    options: { responsive:true, maintainAspectRatio:false,
-      interaction: { mode: "index", intersect: false },
-      plugins: { legend:{display:false},
-        tooltip: { ...TT, displayColors:false,
-          filter: it => it.parsed.y > 0,          // 空日期不弹泡
-          callbacks: { title: it => it && it.length ? md(it[0].label) : "",
-            label: c => {
-              /* 会话明细并入 body 多行 */
-              const base = " " + fmtTok(c.parsed.y) + " tok";
-              const lines = c.label ? tip(c.label) : [];
-              return lines.length ? [base, ...lines] : base;
-            } } },
-      scales: {
-        /* ⚠️ 不用顶层 display:false —— Chart.js 深合并会把它覆盖回 true，
-           分别隐藏 ticks/grid/border 才可靠 */
-        x: { ticks:{display:false}, grid:{display:false}, border:{display:false} },
-        y: { ticks:{display:false}, grid:{display:false}, border:{display:false} }
-      }
-    }
-  } });
-}
-
-function addMini(id, pairs, color, tip){
-  const c = miniChart($(id), pairs, color, tip);
-  /* Chart.js 深合并对 display:false 的覆盖有怪癖，构造后强制关闭最可靠 */
-  c.options.scales.x.display = false;
-  c.options.scales.y.display = false;
-  c.update();
-  return c;
-}
-/* 单点/双点时柱太细，看起来像坏图 —— 自适应放宽 */
-const barW = n => n <= 2 ? 36 : n <= 5 ? 16 : 8;
-/* 金额为 0 但有用量时，标注"价格未知"，避免误以为算错 */
-/* 成本列文案：区分「有计价 / 套餐不计费 / 价表缺价」三态
-   model       —— 模型名，用于查套餐集合（Agent 行传 null）
-   forcePlan   —— Agent 行用：该 Agent 全部为套餐模型时直接标套餐 */
-function costText(cost, tokens, model, forcePlan){
-  if (cost > 0) return fmtCNY(cost * DATA.cny_rate);
-  if (!(tokens > 0)) return fmtCNY(0);
-  const set = window.PLAN_SET || new Set();
-  const isPlan = !!forcePlan || !!(model && set.has(String(model).toLowerCase()));
-  const tip = isPlan ? "套餐/订阅制，按口径只记用量、不计金额" : "单价不在价表中";
-  const label = isPlan ? "套餐不计费" : "价格未知";
-  return fmtCNY(0) + ' <span class="muted" title="' + tip + '">' + label + '</span>';
-}
-
-/* ---------- 模型用量分布（环形图 + 双列 Top10，参考阿里云百炼看板） ---------- */
-let DONUT = null;
-function renderModelDist(){
-  const rows = rowsFor(false);
-  const agg = new Map();
-  for (const r of rows){
-    const o = agg.get(r.model) || { tokens:0, req:0, cost:0 };
-    o.tokens += r.tokens; o.req += r.requests; o.cost += r.cost;
-    agg.set(r.model, o);
-  }
-  const byTok = [...agg.entries()].sort((a,b)=>b[1].tokens-a[1].tokens);
-  const byReq = [...agg.entries()].sort((a,b)=>b[1].req-a[1].req);
-
-  /* 环形图按 Token 占比：前 8 个 + 其余合并，避免色块过碎 */
-  const TOPN = 8;
-  const head = byTok.slice(0, TOPN);
-  const restTok = byTok.slice(TOPN).reduce((s, x)=>s + x[1].tokens, 0);
-  const items = head.map(([n, o])=>({ name:n, val:o.tokens }));
-  if (restTok > 0) items.push({ name:"其他 " + (byTok.length - TOPN) + " 个", val:restTok });
-  const totalTok = items.reduce((s, i)=>s + i.val, 0) || 1;
-
-  $("donutN").textContent = byTok.length;
-  $("donutCap").textContent = "个模型 · " + fmtTok(totalTok);
-  $("distSum").textContent = fmtInt(totalTok) + " tokens";
-
-  if (DONUT){ DONUT.destroy(); DONUT = null; }
-  if (items.length){
-    DONUT = new Chart($("donutChart"), {
-      type: "doughnut",
-      data: {
-        labels: items.map(i=>i.name),
-        datasets: [{
-          data: items.map(i=>i.val),
-          backgroundColor: items.map((_, i)=>PAL[i % PAL.length]),
-          borderColor: "#1B1B1F", borderWidth: 2, hoverOffset: 8,
-        }],
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false, cutout: "70%",
-        plugins: {
-          legend: { display: false },
-          tooltip: Object.assign({}, TT, {
-            callbacks: {
-              title: it => it && it.length ? it[0].label : "",
-              label: c => " " + fmtTok(c.parsed) + " · 占 " + (c.parsed / totalTok * 100).toFixed(1) + "%",
-            },
-          }),
-        },
-      },
-    });
-  }
-  $("donutLegend").innerHTML = items.slice(0, 8).map((i, k)=>
-    '<span><i style="background:' + PAL[k % PAL.length] + '"></i>' + esc(i.name) + '</span>').join("");
-
-  /* 双列 Top10：按调用次数排序（与百炼一致） */
-  const top = byReq.slice(0, 10);
-  const col = (arr, start) => arr.map(([n, o], k)=>
-    '<div class="t10-row" data-model="' + esc(n) + '" title="查看 ' + esc(n) + ' 的明细">'
-    + '<span class="idx">Top ' + (start + k + 1) + '</span>'
-    + '<span class="dot" style="background:' + PAL[(start + k) % PAL.length] + '"></span>'
-    + '<span class="nm">' + esc(n) + '</span>'
-    + '<span class="val">' + fmtInt(o.req) + '<em>次</em></span>'
-    + '</div>').join("");
-  const box = $("top10");
-  box.innerHTML = '<div>' + col(top.slice(0, 5), 0) + '</div><div>' + col(top.slice(5, 10), 5) + '</div>';
-
-  /* 点击某行 → 跳到「模型成本」视图看明细 */
-  box.querySelectorAll(".t10-row").forEach(el=>{
-    el.onclick = () => {
-      switchView("models");
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    };
-  });
-}
-
-function renderAgentList(){
-  const rows = rowsFor(false);
-  const range = rangeDates();
-  const start = range && range[0];
-  const ag = new Map();
-  const planSet = window.PLAN_SET || new Set();
-  for (const r of rows){
-    const o = ag.get(r.agent) || {tokens:0, cost:0, requests:0, planTokens:0};
-    o.tokens += r.tokens; o.cost += r.cost; o.requests += r.requests;
-    if (planSet.has(String(r.model).toLowerCase())) o.planTokens += r.tokens;
-    ag.set(r.agent, o);
-  }
-  const list = [...ag.entries()].sort((a,b)=>b[1].tokens-a[1].tokens);   // 消耗多的在上
-  const wrap = $("agentList");
-  if (!list.length){
-    MINIS.forEach(c=>c.destroy()); MINIS.length = 0;   // 空数据时也要清理，避免旧实例悬挂
-    wrap.innerHTML = '<div class="card"><div class="empty">当前筛选下无数据</div></div>'; return;
-  }
-
-  MINIS.forEach(c=>c.destroy()); MINIS.length = 0;
-  wrap.innerHTML = '<div style="display:flex;align-items:baseline;gap:10px;margin:6px 2px 10px">' +
-    '<h3 style="font-size:14px;font-weight:500">Agent 用量排行</h3>' +
-    '<span class="muted">按 Tokens 降序 · 点击展开模型明细 · 悬停柱状图查看对话分布</span></div><div id="agCards"></div>';
-  const box = $("agCards");
-
-  list.forEach(([name, o], i)=>{
-    const color = PAL[i % PAL.length];
-    const open = F.open.has(name);
-    const sec = document.createElement("div");
-    sec.className = "agent-card";
-    sec.innerHTML =
-      '<div class="ar' + (open ? " open" : "") + '">' +
-        '<div class="ar-head">' +
-          '<span class="ar-fold">▶</span>' +
-          '<span class="ar-icon" style="color:' + color + '">' + agentIcon(name) + '</span>' +
-          '<span class="nm">' + esc(name) + '</span>' +
-          '<span class="num">Tokens <b>' + fmtInt(o.tokens) + '</b> · ' + fmtInt(o.requests) + ' 次 · ' + costText(o.cost, o.tokens, null, o.planTokens > 0 && o.planTokens >= o.tokens * 0.995) + '</span>' +
-        '</div>' +
-        '<div class="ar-chart"><canvas id="ac-' + i + '" role="img" aria-label="' + esc(name) + ' 每日 Token 走势"></canvas></div>' +
-        '<div class="ar-models" id="am-' + i + '"></div>' +
-      '</div>';
-    box.appendChild(sec);
-    const arEl = sec.querySelector(".ar");
-    arEl.querySelector(".ar-head").onclick = () => {
-      F.open.has(name) ? F.open.delete(name) : F.open.add(name);
-      renderAgentList();
-    };
-
-    const arows = rows.filter(r=>r.agent===name);
-    const sA = fillDays(groupSeries(arows, "tokens", "day"), start);
-    MINIS.push(addMini("ac-"+i, sA, color,
-      d => sessionLines(d, name, null, "tokens")));
-
-    if (open){
-      const mm = new Map();
-      for (const r of arows){
-        const o2 = mm.get(r.model) || {tokens:0, cost:0, requests:0};
-        o2.tokens += r.tokens; o2.cost += r.cost; o2.requests += r.requests;
-        mm.set(r.model, o2);
-      }
-      const mlist = [...mm.entries()].sort((a,b)=>b[1].tokens-a[1].tokens);
-      const boxM = arEl.querySelector(".ar-models");
-      mlist.forEach(([mname, o2], j)=>{
-        const row = document.createElement("div");
-        row.className = "mrow";
-        row.innerHTML =
-          '<span class="nm" title="' + esc(mname) + '">' + esc(mname) + '</span>' +
-          '<span class="num">Tokens <b>' + fmtInt(o2.tokens) + '</b> · ' + fmtInt(o2.requests) + ' 次 · ' + costText(o2.cost, o2.tokens, mname) + '</span>' +
-          '<div class="ch"><canvas id="mc-' + i + '-' + j + '" role="img" aria-label="' + esc(mname) + ' 每日 Token 走势"></canvas></div>';
-        boxM.appendChild(row);
-        const mrows = arows.filter(r=>r.model===mname);
-        const sM = fillDays(groupSeries(mrows, "tokens", "day"), start);
-        MINIS.push(addMini("mc-"+i+"-"+j, sM, color,
-          d => sessionLines(d, name, mname, "tokens")));
-      });
-    }
-  });
-}
-
-/* ---------- 表格视图 ---------- */
-function barCell(v, max, color){
-  return `<td><div class="bar"><i style="width:${max?Math.max(v/max*100,1):0}%;background:${color}"></i></div></td>`;
-}
-function renderModelTable(){
-  const rows = rowsFor(true);
-  const agg = new Map();
-  for (const r of rows){
-    const o = agg.get(r.model) || {tokens:0, cost:0, requests:0};
-    o.tokens += r.tokens; o.cost += r.cost; o.requests += r.requests;
-    agg.set(r.model, o);
-  }
-  const list = [...agg.entries()].sort((a,b)=>b[1].cost-a[1].cost);
-  const max = list.length ? Math.max(list[0][1].cost, 1e-9) : 1;
-  $("tbModel").innerHTML = list.map(([name,o],i)=>{
-    const avg = o.tokens ? o.cost*DATA.cny_rate/o.tokens*1e6 : 0;
-    return `<tr><td class="mono">${esc(name)}</td>
-    <td class="num">${fmtInt(o.tokens)}</td><td class="num">${fmtInt(o.requests)}</td>
-    <td class="num">${fmtCNY(o.cost*DATA.cny_rate)}</td>
-    <td class="num">${avg ? "¥"+avg.toFixed(2) : '<span class="muted">价格未知</span>'}</td>
-    ${barCell(o.cost,max,i<3?"#4D6BFE":"#56565F")}</tr>`;
-  }).join("") || `<tr><td colspan="6" class="empty">当前筛选下无数据</td></tr>`;
-}
-
-/* ---------- 事件 ---------- */
-function switchView(view){
-  const isSet = view === "settings";
-  document.body.classList.toggle("mode-set", isSet);
-  document.querySelectorAll("#nav a").forEach(x=>x.classList.toggle("active", x.dataset.view===view));
-  document.querySelectorAll("#tabbar button").forEach(x=>
-    x.classList.toggle("active", isSet ? !!x.dataset.settings : x.dataset.view===view));
-  $("view-overview").hidden = view !== "overview";
-  $("view-models").hidden   = view !== "models";
-  $("view-settings").hidden = !isSet;
-  if (isSet){
-    const cur = document.querySelector("#setNav .set-item.active");
-    setCat((cur && cur.dataset.cat) || "general");
-  }
-}
-function setCat(cat){
-  document.querySelectorAll("#setNav .set-item").forEach(x=>x.classList.toggle("active", x.dataset.cat===cat));
-  document.querySelectorAll(".set-cards[data-cat]").forEach(c=>c.hidden = c.dataset.cat !== cat);
-  const titles = { general:"通用偏好", data:"扫描与缓存", about:"关于" };
-  const t = $("setTitle"); if (t) t.textContent = titles[cat] || "设置";
-}
-$("nav").addEventListener("click", e=>{
-  const a = e.target.closest("a[data-view]"); if (!a) return;
-  switchView(a.dataset.view);
-});
-/* 窄屏底部标签栏：复用同一套视图切换逻辑；"设置"与 #settingsBtn 共用入口 */
-$("tabbar").addEventListener("click", e=>{
-  const b = e.target.closest("button"); if (!b) return;
-  if (b.dataset.settings){ switchView("settings"); return; }
-  if (b.dataset.view) switchView(b.dataset.view);
-});
-$("settingsBtn").onclick = () => switchView("settings");
-$("setNav").addEventListener("click", e=>{
-  const a = e.target.closest(".set-item"); if (!a) return;
-  setCat(a.dataset.cat);
-});
-$("setBack").onclick = () => switchView("overview");
-bindDropdown("ddRange", "ddRangeMenu", k => { F.rangeKey = k; renderAll(); });
-$("segDim").onclick = e => { const b=e.target.closest("button"); if(!b) return;
-  F.dim=b.dataset.d;
-  document.querySelectorAll("#segDim button").forEach(x=>x.classList.toggle("on",x===b));
-  renderMain(); };
-$("segMetric").onclick = e => { const b=e.target.closest("button"); if(!b) return;
-  F.metric=b.dataset.m;
-  document.querySelectorAll("#segMetric button").forEach(x=>x.classList.toggle("on",x===b));
-  renderMain(); };
-$("segGrain").onclick = e => { const b=e.target.closest("button"); if(!b) return;
-  F.grain=b.dataset.g;
-  document.querySelectorAll("#segGrain button").forEach(x=>x.classList.toggle("on",x===b));
-  renderMain(); };
-$("fExport").onclick = () => {
-  const rows = rowsFor(true);
-  const head = "date,agent,model,session,tokens,input,output,cache_read,cache_write,requests,cost_usd,cost_cny";
-  const lines = rows.map(r=>[r.date,r.agent,r.model,r.session,r.tokens,r.inp,r.out,r.cr,r.cw,
-    r.requests,(r.cost).toFixed(6),(r.cost*DATA.cny_rate).toFixed(4)].join(","));
-  const blob = new Blob(["\uFEFF"+head+"\n"+lines.join("\n")], {type:"text/csv;charset=utf-8"});
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = `token-usage-${F.rangeKey}.csv`;
-  a.click(); URL.revokeObjectURL(a.href);
-};
-$("reload").onclick = async function(){
-  this.disabled = true; this.textContent = "已在后台扫描…";
-  try { await fetch("/api/reload"); } finally {
-    setTimeout(() => { this.disabled = false; this.textContent = "重新扫描数据源"; }, 1200);
-  }
-};
-
-/* ---------- 自动刷新：只轮询轻量的 /api/settings，built_at 变了才拉数据 ---------- */
-let LAST_BUILT = null, POLL_MS = 15000;
-function syncSettings(s){
-  if (!s) return;
-  const minutes = (s.settings && (s.settings.refresh_minutes ?? 0)) || 0;
-  const el = $("autoMin");
-  if (el && document.activeElement !== el)
-    el.value = String(minutes);
-  const chk = $("autoChk");
-  if (chk){
-    chk.checked = minutes > 0;
-    if (el) el.disabled = minutes === 0;
-  }
-  const ba = $("builtAt");
-  if (ba && s.built_at){
-    const d = new Date(s.built_at);
-    ba.textContent = isNaN(d) ? String(s.built_at).slice(11, 16)
-      : d.toLocaleString("zh-CN", {month:"2-digit", day:"2-digit",
-        hour:"2-digit", minute:"2-digit", hour12:false});
-  }
-  const st = $("scanState");
-  if (st) st.textContent = s.busy ? "正在后台扫描…"
-    : (s.queued ? "已排队，等待当前扫描完成…" : (s.error ? "上次扫描失败：" + s.error : ""));
-}
-async function pollMeta(){
-  try {
-    const r = await (await fetch("/api/settings")).json();
-    syncSettings(r);
-    if (r.built_at && r.built_at !== LAST_BUILT){
-      LAST_BUILT = r.built_at;
-      DATA = await (await fetch("/api/summary")).json();
-      renderAll();
-      const b = $("reload");
-      if (b){ b.disabled = false; b.textContent = "重新扫描数据源"; }
-    }
-  } catch(e){ /* 后端重启中，下一轮再试 */ }
-}
-setInterval(pollMeta, POLL_MS);
-$("autoMin").onchange = async function(){
-  const m = parseInt(this.value, 10) || 0;
-  try {
-    await fetch("/api/settings", { method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refresh_minutes: m }) });
-  } catch(e){}
-  pollMeta();
-};
-async function pushSettings(patch){
-  try {
-    await fetch("/api/settings", { method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(patch) });
-  } catch(e){}
-  pollMeta();
-}
-$("autoChk").onchange = async function(){
-  const el = $("autoMin");
-  const on = this.checked;
-  if (el){
-    if (on && (parseInt(el.value, 10) || 0) === 0) el.value = "30";
-    el.disabled = !on;
-  }
-  const m = on ? (parseInt(el && el.value, 10) || 0) : 0;
-  try {
-    await fetch("/api/settings", { method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refresh_minutes: m }) });
-  } catch(e){}
-  pollMeta();
-};
-
-/* ---------- 更新状态机：左上角小按钮 + tooltip ---------- */
-const UPD = window.__UPD_STATE = { state: "idle", latest: null, ver: null, body: "", date: "" };
-let tipPinned = false, tipHovered = false;
-
-/* 把 /api/version 的结果回写进状态机。
-   此前 checkUpdate 只刷新设置页按钮、从不回写 UPD —— 悬停提示与
-   红点指示整条链路处于死状态（v1.2.x 改版时断线），这里补上 */
-function syncUpd(v){
-  if (UPD.state === "ready"){
-    /* 已下载待安装：周期检查不改写状态，否则会把确认胶囊打断回「发现新版本」 */
-    setUpdUI(); return;
-  }
-  UPD.ver = v.version || null;
-  UPD.latest = v.latest || null;
-  UPD.body = v.body || "";
-  UPD.date = v.date || "";
-  if (v.has_update && v.latest){
-    UPD.state = "update";
-  } else if (UPD.state !== "dl" && UPD.state !== "done"){
-    UPD.state = v.checking ? "checking" : "idle";
-  }
-  setUpdUI();
-}
-
-/* release notes 轻量排版：**小节** → 彩色标题、- 列表 → 圆点、行内 **加粗** 与 `代码`。
-   先整体 HTML 转义再套结构，防注入（对齐 ZCode 更新浮层的阅读体验） */
-function fmtReleaseBody(t){
-  const inline = s => esc(s)
-    .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")
-    .replace(/`([^`]+)`/g, "<code>$1</code>");
-  let html = "";
-  for (const raw of String(t).split(/\r?\n/)){
-    const line = raw.trim();
-    if (!line) continue;
-    const sec = line.match(/^\*\*(.+?)\*\*:?$/);
-    if (sec){ html += '<div class="sec">' + inline(sec[1]) + "</div>"; continue; }
-    const li = line.match(/^[-*•]\s+(.*)$/);
-    if (li){ html += '<div class="li">' + inline(li[1]) + "</div>"; continue; }
-    html += '<div class="p">' + inline(line) + "</div>";
-  }
-  return html;
-}
-
-function setUpdUI(){
-  const dot = $("updBadge"), spin = $("updSpin"), mini = $("updMini");
-  if (!dot || !spin || !mini) return;
-  const st = UPD.state;
-  dot.hidden = !(st === "update" || st === "done" || st === "ready");
-  dot.className = "dot " + (st === "done" ? "done" : "update");
-  spin.hidden = st !== "dl";
-  mini.title = st === "update" ? "发现新版本 v" + (UPD.latest || "") + "，点击查看"
-    : st === "ready" ? "v" + (UPD.latest || "") + " 已下载，点击立即安装"
-    : st === "dl" ? "正在下载更新…"
-    : st === "done" ? "更新完成，正在重启" : "检查更新";
-}
-
-function renderUpdTip(confirmed){
-  const tip = $("updTip"); if (!tip) return;
-  let html;
-  if (UPD.state === "dl"){
-    html = '<div class="t1">正在下载新版本…</div>'
-      + '<div class="dl-row"><span class="dl-ring"></span>下载完成后会提示你确认安装，期间可正常使用。</div>';
-  } else if (UPD.state === "update" && UPD.latest){
-    /* 悬停即展示完整更新日志（对齐 ZCode）；点击图标才钉住并出现确认按钮 */
-    html = '<div class="t1">v' + esc(UPD.latest) + ' 更新日志</div>'
-      + (UPD.date ? '<div class="date">' + esc(UPD.date) + '</div>' : "")
-      + (UPD.body ? '<div class="body">' + fmtReleaseBody(UPD.body) + '</div>' : "")
-      + (confirmed
-          ? '<button class="go" onclick="startUpdate()">立即更新</button>'
-            + '<button class="later" onclick="hideUpdTip()">稍后</button>'
-          : '<div class="hint">点击图标确认更新</div>');
-  } else if (UPD.state === "ready" && UPD.latest){
-    /* 已下载待安装：提示去哪确认 */
-    html = '<div class="t1">v' + esc(UPD.latest) + ' 已下载</div>'
-      + '<div class="hint" style="border-top:0;padding-top:0">重启应用即自动完成安装——点击左下角胶囊，或再次点击此图标立即安装。</div>';
-  } else {
-    html = '<div class="t1">' + (UPD.ver ? "当前 v" + esc(UPD.ver) : "Token Monitor") + '</div>'
-      + '<div style="color:#8A8A90;margin-top:3px">'
-      + (UPD.state === "checking" ? "正在检查更新…" : "已是最新版本") + '</div>';
-  }
-  tip.innerHTML = html;
-  tip.hidden = false;
-  const r = $("updMini").getBoundingClientRect();
-  tip.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 350)) + "px";
-  tip.style.top = (r.bottom + 8) + "px";
-}
-function hideUpdTip(){ const t = $("updTip"); if (t) t.hidden = true; }
-window.hideUpdTip = hideUpdTip;
-
-window.startUpdate = function(){
-  hideUpdTip();
-  const btn = $("updBtn");
-  if (btn && btn.dataset.pending === "1") btn.click();
-};
-
-/* 左上角小按钮：悬停简提示 / 点击展开确认 */
-const miniEl = $("updMini");
-if (miniEl){
-  miniEl.addEventListener("mouseenter", () => {
-    if (UPD.state === "update" && !tipPinned) renderUpdTip(false);
-    else if (UPD.state === "ready") renderUpdTip(true);
-    else if (UPD.state === "dl") renderUpdTip(false);
-  });
-  miniEl.addEventListener("mouseleave", () => {
-    setTimeout(() => { if (!tipPinned && !tipHovered) hideUpdTip(); }, 150);
-  });
-  miniEl.addEventListener("click", () => {
-    if (UPD.state === "update"){ tipPinned = !tipPinned; renderUpdTip(true); }
-    else if (UPD.state === "ready"){ applyUpdate(); }
-    else if (UPD.state === "dl"){ tipPinned = !tipPinned; renderUpdTip(false); }
-    else { checkUpdate(false); }
-  });
-  document.addEventListener("click", e => {
-    if (!e.target.closest(".upd-tip") && !e.target.closest("#updMini")){
-      tipPinned = false; hideUpdTip();
-    }
-  });
-  document.addEventListener("keyup", e => { if (e.key === "Escape") hideUpdTip(); });
-}
-
-/* ---------- 自动更新 ---------- */
-async function checkUpdate(silent){
-  const btn = $("updBtn");
-  if (!silent){ btn.disabled = true; btn.textContent = "检查中…"; }
-  try {
-    const v = await (await fetch("/api/version")).json();
-    syncUpd(v);
-    $("verLine").textContent = "版本 " + (v.version ? "v" + v.version : "dev") +
-      (v.has_update && v.latest ? " · 可更新 v" + v.latest : "");
-    if (v.has_update){
-      btn.disabled = false;
-      btn.textContent = "⬆ 更新到 v" + v.latest;
-      btn.dataset.pending = "1";
-    } else {
-      btn.disabled = false;
-      btn.textContent = v.latest ? "已是最新" : (v.version ? "已是最新" : "开发模式");
-      btn.dataset.pending = "";
-    }
-  } catch(e){
-    btn.disabled = false;
-    btn.textContent = "检查更新";
-    btn.dataset.pending = "";
-  }
-}
-/* ---------- 左下角更新胶囊（对齐 ZCode）：下载完成后常驻，点击重启安装 ---------- */
-function showReadyPill(v){
-  const pill = $("updPill"); if (!pill) return;
-  $("updPillT").textContent = "v" + v + " 已下载，重启即可安装";
-  pill.hidden = false;
-  pill.onclick = () => applyUpdate();
-}
-function hidePill(){ const p = $("updPill"); if (p) p.hidden = true; }
-
-async function applyUpdate(){
-  hideUpdTip(); hidePill();
-  const btn = $("updBtn");
-  btn.disabled = true; btn.textContent = "安装中，即将重启…";
-  UPD.state = "done"; setUpdUI();
-  try {
-    const r = await (await fetch("/api/update/apply", { method: "POST" })).json();
-    if (!r.ok) throw new Error(r.error || "安装失败");
-    let tries = 0;
-    const t = setInterval(async () => {
-      tries++;
-      try {
-        const v = await (await fetch("/api/version")).json();
-        clearInterval(t);
-        $("verLine").textContent = "版本 v" + v.version;
-        btn.disabled = false; btn.textContent = "已是最新"; btn.dataset.pending = "";
-        UPD.state = "idle"; setUpdUI();
-        location.reload();
-      } catch(_){ /* 新进程未就绪，继续等 */ }
-      if (tries > 45){ clearInterval(t); btn.textContent = "更新超时，请重启应用"; }
-    }, 2000);
-  } catch(e){
-    /* 暂存包丢失（如服务重启过）→ 回到发现新版本态，让用户重新下载 */
-    btn.disabled = false; btn.textContent = "安装失败：重新下载";
-    UPD.state = "idle"; setUpdUI(); checkUpdate(true);
-  }
-}
-window.applyUpdate = applyUpdate;
-
-$("updBtn").onclick = async function(){
-  if (UPD.state === "ready"){ applyUpdate(); return; }
-  if (this.dataset.pending !== "1"){ checkUpdate(false); return; }
-  this.disabled = true;
-  this.textContent = "下载新版本…"; UPD.state = "dl"; setUpdUI();
-  try {
-    /* 两段式：先只下载校验（不重启），成功后出「已下载，重启即可安装」胶囊 */
-    const r = await (await fetch("/api/update/download", { method: "POST" })).json();
-    if (!r.ok) throw new Error(r.error || "下载失败");
-    UPD.state = "ready"; setUpdUI();
-    this.disabled = false; this.textContent = "重启安装 v" + r.latest;
-    this.dataset.pending = "1";
-    UPD.latest = r.latest;
-    showReadyPill(r.latest);
-  } catch(e){
-    this.disabled = false; this.textContent = "更新失败：重试";
-    UPD.state = "idle"; setUpdUI();
-  }
-};
-</script>
   <div class="upd-tip" id="updTip" hidden></div>
-  <div id="updPill" hidden><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 2.5v7M5.5 7L8 9.5 10.5 7M3.5 11h9"/></svg><span id="updPillT"></span></div>
+<script src="/static/vendor/chart.umd.min.js"></script>
+<script src="/static/js/core.js?v=20260924-1846"></script>
+<script src="/static/js/data.js?v=20260924-1846"></script>
+<script src="/static/js/charts.js?v=20260924-1846"></script>
+<script src="/static/js/render.js?v=20260924-1846"></script>
+<script src="/static/js/interactions.js?v=20260924-1846"></script>
+<script src="/static/js/updater.js?v=20260924-1846"></script>
+<script src="/static/js/app.js?v=20260924-1846"></script>
 </body>
 </html>
