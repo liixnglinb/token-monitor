@@ -218,6 +218,89 @@ aside{background:linear-gradient(180deg,#0C1015 0%,#090C10 100%);border-right:1p
 .ar-icon .agent-mono{width:21px;height:21px}
 .side-empty{padding:9px;color:var(--dim);font-size:11.5px;line-height:1.7}
 
+/* ── 更新入口与按钮：状态化设计（无箭头） ──
+   idle 安静 → checking 转圈 → update 主按钮+脉冲点 → dl 按钮内联进度条 → done 绿 / error 红 */
+#updBtn{
+  position:relative;min-width:112px;
+  transition:background-color .18s,border-color .18s,color .18s,background-size .3s ease;
+}
+#updBtn.is-checking::after{
+  content:"";display:inline-block;width:11px;height:11px;margin-left:7px;vertical-align:-1px;
+  border-radius:50%;border:2px solid rgba(255,255,255,.18);border-top-color:var(--blue-bright);
+  animation:rot .7s linear infinite;
+}
+#updBtn.is-update{
+  background:linear-gradient(180deg,#5C8AF5,#3F73F5);
+  border-color:rgba(108,155,255,.5);color:#fff;
+  box-shadow:0 10px 26px rgba(63,115,245,.34);
+}
+#updBtn.is-update::before{
+  content:"";display:inline-block;width:7px;height:7px;margin-right:8px;vertical-align:1px;
+  border-radius:50%;background:#fff;animation:updPulse 1.8s ease-out infinite;
+}
+#updBtn.is-update:hover{background:linear-gradient(180deg,#6B96FF,#4A7EF8)}
+#updBtn.is-downloading{
+  background-color:rgba(63,115,245,.12);
+  background-image:linear-gradient(90deg,rgba(63,115,245,.55),rgba(108,155,255,.38));
+  background-size:var(--p,0%) 100%;background-repeat:no-repeat;
+  border-color:rgba(108,155,255,.42);color:#CFE0FF;cursor:progress;
+}
+#updBtn.is-done{background:rgba(74,192,138,.16);border-color:rgba(74,192,138,.42);color:#7FE0B4}
+#updBtn.is-error{background:rgba(240,115,122,.14);border-color:rgba(240,115,122,.4);color:#F79AA0}
+@keyframes updPulse{
+  0%{box-shadow:0 0 0 0 rgba(255,255,255,.55)}
+  70%{box-shadow:0 0 0 7px rgba(255,255,255,0)}
+  100%{box-shadow:0 0 0 0 rgba(255,255,255,0)}
+}
+/* 侧栏更新点呼吸（原样式引用了未定义的 pulse，动画一直是死的） */
+@keyframes pulse{
+  0%,100%{transform:scale(1);opacity:1}
+  50%{transform:scale(1.35);opacity:.72}
+}
+/* 顶栏进度胶囊：同样用内联填充 */
+#updateProgress{
+  background-color:rgba(63,115,245,.12);
+  background-image:linear-gradient(90deg,rgba(63,115,245,.55),rgba(108,155,255,.38));
+  background-size:var(--p,0%) 100%;background-repeat:no-repeat;
+  border:1px solid rgba(108,155,255,.42);color:#CFE0FF;
+  border-radius:999px;padding:6px 12px;font-variant-numeric:tabular-nums;
+  transition:background-size .3s ease;
+}
+/* 侧栏更新入口：悬停出更新日志浮层 */
+.upd-mini{position:relative}
+.upd-mini .dot{position:absolute;top:5px;right:5px;width:7px;height:7px;border-radius:50%;
+  border:1.5px solid var(--side)}
+.upd-mini .dot.update{background:var(--blue);box-shadow:0 0 8px rgba(108,155,255,.85);animation:pulse 2s infinite}
+.upd-mini .dot.done{background:var(--green)}
+.upd-mini .spin{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+.upd-mini .spin i{width:14px;height:14px;border-radius:50%;border:2px solid rgba(255,255,255,.14);
+  border-top-color:var(--blue-bright);animation:rot .8s linear infinite}
+/* 更新浮层：现代卡片（面板渐变 + 发丝线 + 柔影） */
+.upd-tip{
+  background:linear-gradient(180deg,#141922 0%,#0F131A 100%);
+  border:1px solid rgba(255,255,255,.12);border-radius:14px;
+  box-shadow:0 24px 54px rgba(0,0,0,.6),0 1px 0 rgba(255,255,255,.04) inset;
+  backdrop-filter:blur(10px);
+}
+.upd-tip .t1{font-size:13px}
+.upd-tip .body .sec{color:var(--blue-bright)}
+.upd-tip .dl-progress{height:5px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden;margin:8px 0 6px}
+.upd-tip .dl-progress i{display:block;height:100%;border-radius:999px;
+  background:linear-gradient(90deg,#3F73F5,#8FB2FF);transition:width .3s ease}
+.upd-tip .dl-source,.upd-tip .dl-row{color:var(--dim);font-size:11.5px}
+.upd-tip .go{
+  height:30px;padding:0 14px;border-radius:8px;border:1px solid rgba(108,155,255,.5);
+  background:linear-gradient(180deg,#5C8AF5,#3F73F5);color:#fff;font-size:12.5px;font-weight:600;
+  cursor:pointer;box-shadow:0 10px 24px rgba(63,115,245,.3);
+}
+.upd-tip .go:hover{background:linear-gradient(180deg,#6B96FF,#4A7EF8)}
+.upd-tip .later{
+  height:30px;padding:0 12px;margin-left:8px;border-radius:8px;border:1px solid var(--line-strong);
+  background:transparent;color:var(--sub);font-size:12.5px;cursor:pointer;
+}
+.upd-tip .later:hover{background:rgba(255,255,255,.06);color:var(--txt)}
+.upd-tip .hint{color:var(--dim);font-size:11.5px}
+
 /* ── 设置页 ── */
 .set-cat-h{color:var(--dim)}
 .set-sel,select.set-sel{background:#12161D;border-color:var(--line-strong);color:var(--txt);border-radius:9px}

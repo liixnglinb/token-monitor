@@ -67,15 +67,22 @@ function setUpdUI(){
   if (progress){
     progress.hidden = st !== "dl";
     progress.textContent = pct + "%";
+    progress.style.setProperty("--p", pct + "%");
     progress.title = (UPD.source ? "正在从 " + UPD.source + " 下载 " : "正在选择最快下载源 ")
       + pct + "%";
   }
 
   const btn = $("updBtn");
   if (btn){
+    /* 状态化按钮：类名驱动样式（无箭头，下载时按钮本身就是进度条） */
+    btn.classList.toggle("is-update", st === "update");
     btn.classList.toggle("is-downloading", st === "dl");
     btn.classList.toggle("is-done", st === "done");
-    if (st === "dl") btn.textContent = pct + "%";
+    btn.classList.toggle("is-error", st === "error");
+    if (st === "dl"){
+      btn.style.setProperty("--p", pct + "%");
+      btn.textContent = "下载中 " + pct + "%";
+    }
   }
 }
 
@@ -178,7 +185,11 @@ if (miniEl){
 /* ---------- 自动更新 ---------- */
 async function checkUpdate(silent){
   const btn = $("updBtn");
-  if (!silent){ btn.disabled = true; btn.textContent = "检查中…"; }
+  if (!silent){
+    btn.disabled = true;
+    btn.className = "btn is-checking";
+    btn.textContent = "检查中";
+  }
   try {
     const v = await (await fetch("/api/version")).json();
     syncUpd(v);
@@ -186,15 +197,18 @@ async function checkUpdate(silent){
       (v.has_update && v.latest ? " · 可更新 v" + v.latest : "");
     if (v.has_update){
       btn.disabled = false;
-      btn.textContent = "⬆ 更新到 v" + v.latest;
+      btn.className = "btn is-update";
+      btn.textContent = "更新到 v" + v.latest;
       btn.dataset.pending = "1";
     } else {
       btn.disabled = false;
+      btn.className = "btn";
       btn.textContent = v.latest ? "已是最新" : (v.version ? "已是最新" : "开发模式");
       btn.dataset.pending = "";
     }
   } catch(e){
     btn.disabled = false;
+    btn.className = "btn";
     btn.textContent = "检查更新";
     btn.dataset.pending = "";
   }
@@ -202,7 +216,9 @@ async function checkUpdate(silent){
 $("updBtn").onclick = async function(){
   if (this.dataset.pending !== "1"){ checkUpdate(false); return; }
   this.disabled = true;
-  this.textContent = "0%";
+  this.className = "btn is-downloading";
+  this.style.setProperty("--p", "0%");
+  this.textContent = "下载中 0%";
   UPD.state = "dl";
   UPD.percent = 0;
   UPD.source = null;
@@ -215,7 +231,8 @@ $("updBtn").onclick = async function(){
     UPD.percent = 100;
     UPD.state = "done";
     UPD.message = "";
-    this.textContent = "更新完成，应用即将重启…";
+    this.className = "btn is-done";
+    this.textContent = "更新完成 · 正在重启";
     setUpdUI();
     stopProgressPolling();
     let tries = 0;
@@ -226,6 +243,7 @@ $("updBtn").onclick = async function(){
         clearInterval(t);
         $("verLine").textContent = "版本 v" + v.version;
         this.disabled = false;
+        this.className = "btn";
         this.textContent = "已是最新";
         this.dataset.pending = "";
         location.reload();
@@ -238,6 +256,7 @@ $("updBtn").onclick = async function(){
     UPD.state = "error";
     UPD.source = null;
     UPD.message = String(e && e.message ? e.message : e);
-    this.textContent = "更新失败：重试";
+    this.className = "btn is-error";
+    this.textContent = "更新失败 · 重试";
   }
 };
