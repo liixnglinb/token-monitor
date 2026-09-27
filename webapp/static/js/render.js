@@ -299,7 +299,7 @@ function renderMain(){
         backgroundColor: context => lineGradient(context, color),
         fill: true, tension: .34, borderWidth: 2.2,
         pointRadius: labels.length <= 12 ? 2.6 : 0,
-        pointHoverRadius: 5, pointBackgroundColor: "#FFFFFF",
+        pointHoverRadius: 5, pointBackgroundColor: "#0A0C0F",
         pointBorderColor: color, pointBorderWidth: 2,
       };
       return {
@@ -423,7 +423,7 @@ function renderModelDist(){
         datasets: [{
           data: items.map(i=>i.val),
           backgroundColor: items.map((_, i)=>PAL[i % PAL.length]),
-          borderColor: "#11171E", borderWidth: 3, hoverOffset: 7,
+          borderColor: "#111419", borderWidth: 3, hoverOffset: 7,
         }],
       },
       options: {
@@ -592,6 +592,6 @@ function renderModelTable(){
     <td class="num">${fmtInt(o.tokens)}</td><td class="num">${fmtInt(o.requests)}</td>
     <td class="num">${fmtCNY(o.cost*DATA.cny_rate)}</td>
     <td class="num">${avg ? "¥"+avg.toFixed(2) : '<span class="muted">价格未知</span>'}</td>
-    ${barCell(o.cost,max,i<3?"#4D6BFE":"#56565F")}</tr>`;
+    ${barCell(o.cost,max,i<3?"#6C9BFF":"#3E4550")}</tr>`;
   }).join("") || `<tr><td colspan="6" class="empty">当前筛选下无数据</td></tr>`;
 }

@@ -2,7 +2,7 @@
 let DATA = null, MAIN = null;
 const MINIS = [];
 const F = { rangeKey: "last7", agent: "all", metric: "tokens", grain: "day", dim: "total", open: new Set() };
-const PAL = ["#4F6BED","#4FB6A6","#E7A93D","#E26D72","#8577E8","#4FA4C8","#8C9AA8","#D28056","#A9B1BC"];
+const PAL = ["#6C9BFF","#4FC3A1","#E8B45B","#F0737A","#9B92F0","#5CC8DE","#8A93A8","#E08B5C","#B9C0CA"];
 const METRIC_NAME = { cost: "消耗金额（CNY）", tokens: "Tokens", requests: "API 请求次数" };
 const DIM_NAME = { total: "总量", agent: "数据源", model: "模型" };
 const hexA = (hex, alpha) => {

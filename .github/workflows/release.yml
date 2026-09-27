@@ -1,6 +1,6 @@
 name: release
 
-# 推送 v* 标签 → 自动构建 Windows 安装包 + 便携包 → 发布到 GitHub Releases
+# 推送 v* 标签 → 自动构建 Windows 安装包 + 单文件 exe → 发布到 GitHub Releases
 on:
   push:
     tags: ["v*"]
@@ -56,13 +56,6 @@ jobs:
           $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
           & $iscc /DAppVersion="${{ github.ref_name }}" installer.iss
 
-      - name: 打便携包
-        shell: pwsh
-        run: |
-          Copy-Item dist\TokenMonitor.exe TokenMonitor.exe
-          Compress-Archive -Path TokenMonitor.exe -DestinationPath dist\TokenMonitor-portable-${{ github.ref_name }}.zip
-          Remove-Item TokenMonitor.exe
-
       - name: 校验产物
         shell: pwsh
         run: |
@@ -88,6 +81,5 @@ jobs:
           files: |
             dist/TokenMonitor.exe
             dist/TokenMonitor-setup-*.exe
-            dist/TokenMonitor-portable-*.zip
             dist/*.sha256
           generate_release_notes: true

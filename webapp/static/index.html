@@ -15,6 +15,7 @@
 <link rel="stylesheet" href="/static/styles/responsive.css">
 <link rel="stylesheet" href="/static/styles/canvas.css?v=20260923-2326">
 <link rel="stylesheet" href="/static/styles/modern.css?v=20260924-1846">
+<link rel="stylesheet" href="/static/styles/theme.css?v=20260927-1101">
 
 
 </head>
@@ -105,7 +106,6 @@
   <header class="topbar">
     <div class="page-heading">
       <h1 id="pageTitle">用量总览</h1>
-      <p id="pageSubtitle">本机 AI 编程工具 Token 与成本</p>
     </div>
     <div class="top-status" title="数据由本机日志只读扫描生成">
       <span class="sync-dot" id="syncDot"></span>
@@ -195,7 +195,6 @@
           <div class="daily-panel-head">
             <div>
               <h4 id="dailyTitle">每日明细</h4>
-              <p id="dailyHint">按日期查看用量、成本和请求次数</p>
             </div>
             <span id="dailyCount"></span>
           </div>
@@ -224,7 +223,7 @@
     <!-- ── 视图 2：模型成本 ── -->
     <section id="view-models" hidden>
       <div class="section-heading">
-        <div><h2>成本明细</h2><p>按模型查看 Token、请求次数和估算金额</p></div>
+        <div><h2>成本明细</h2></div>
       </div>
       <div class="model-summary">
         <div class="model-stat">
@@ -262,14 +261,12 @@
             <div class="set-row">
               <div class="set-info">
                 <div class="t">自动刷新数据</div>
-                <div class="d">启动时扫描一次，之后按间隔自动更新。</div>
               </div>
               <label class="switch"><input type="checkbox" id="autoChk"><i></i></label>
             </div>
             <div class="set-row">
               <div class="set-info">
                 <div class="t">刷新间隔</div>
-                <div class="d">后台自动重扫频率。</div>
               </div>
               <select id="autoMin" class="set-sel" aria-label="刷新间隔">
                 <option value="0">关闭</option>
@@ -285,7 +282,7 @@
           <div class="set-card">
             <div class="set-info">
               <div class="t">软件更新</div>
-              <div class="d">启动时检查一次，之后每 30 分钟检查。</div>
+              <div class="d">启动时与每 30 分钟自动检查</div>
             </div>
           </div>
         </div>
@@ -296,7 +293,6 @@
             <div class="set-row">
               <div class="set-info">
                 <div class="t">重新扫描数据源</div>
-                <div class="d">立即全量重扫并重建聚合。</div>
               </div>
               <button id="reload" class="btn">重新扫描</button>
             </div>

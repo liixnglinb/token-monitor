@@ -1,8 +1,8 @@
 # Token Monitor
 
-本地 Agent Token 用量统计 —— 一条命令扫描本机所有 AI 编程工具的 token 消耗与成本，DeepSeek 风格的深色看板。
+本地 Agent Token 用量统计 —— 一条命令扫描本机所有 AI 编程工具的 token 消耗与成本，全暗仪表舱风格看板。
 
-![panel](https://img.shields.io/badge/panel-DeepSeek%20style-4D6BFE) ![platform](https://img.shields.io/badge/platform-Windows-blue) ![python](https://img.shields.io/badge/python-3.12%2B-green)
+![panel](https://img.shields.io/badge/panel-dark%20instrument-6C9BFF) ![platform](https://img.shields.io/badge/platform-Windows-blue) ![python](https://img.shields.io/badge/python-3.12%2B-green)
 
 ## 功能
 
@@ -10,17 +10,13 @@
 - **成本估算**：LiteLLM 价格库（1.2 万+ 模型）+ CC Switch 价格表补漏，未命中价格单独标注
 - **看板**：时间粒度（今天/昨天/近7/30/90天/本月/上月/全部）× 数据源 × 模型自由筛选；按维度堆叠柱状图；按模型分解（请求 / Tokens 双迷你图）；数据源与模型成本两张明细表
 - **导出**：当前筛选一键导出 CSV
-- **自动更新**：内置更新器，比对 GitHub Releases，一键下载替换重启（安装版 / 便携版通用）
+- **自动更新**：内置更新器，比对 GitHub Releases，一键下载替换重启
 
 ## 使用
 
 ### 安装版（推荐）
 
 从 [Releases](https://github.com/liixnglinb/token-monitor/releases) 下载 `TokenMonitor-setup-vX.Y.Z.exe`，安装后自动启动，**直接打开应用窗口**（内嵌 WebView2，不跳系统浏览器）。
-
-### 便携版
-
-下载 `TokenMonitor-portable-vX.Y.Z.zip` 解压，双击 `TokenMonitor.exe` 即可；更新器与安装版共用，软件内可直接升级。
 
 ### 从源码运行
 
@@ -41,7 +37,7 @@ python main.py            # 起内嵌窗口；服务在 http://127.0.0.1:8420
 
 ## 构建（开发者）
 
-推送 `v*` 标签即可，GitHub Actions 自动完成 PyInstaller 打包、Inno Setup 安装包、便携 zip，并发布 Release：
+推送 `v*` 标签即可，GitHub Actions 自动完成 PyInstaller 打包、Inno Setup 安装包，并发布 Release：
 
 ```bash
 git tag v1.0.1

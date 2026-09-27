@@ -1,0 +1,163 @@
+/* ============================================================
+   Token Monitor · 全暗「仪表舱」主题（theme.css）
+   加载顺序最后，覆盖 canvas/modern 的浅色画布层。
+   整窗一色系：标题栏(DWM 深色) / 侧栏 / 内容 / 滚动条 全部同源，
+   不再出现"深标题栏 + 浅内容"的黑边拼贴。
+   ============================================================ */
+:root{
+  color-scheme:dark;
+  --bg:#0A0C0F;
+  --side:#0C0F13;
+  --card:#111419;
+  --card-soft:#141820;
+  --card-hover:#181D25;
+  --card2:#0E1216;
+  --line:rgba(255,255,255,.075);
+  --line-soft:rgba(255,255,255,.055);
+  --line-strong:rgba(255,255,255,.14);
+  --txt:#E9EBEF;
+  --sub:#99A1AC;
+  --dim:#69717D;
+  --blue:#6C9BFF;
+  --blue-bright:#8FB2FF;
+  --cyan:#5CC8DE;
+  --green:#4AC08A;
+  --amber:#E8B45B;
+  --red:#F0737A;
+  --purple:#9B92F0;
+  --shadow:0 1px 0 rgba(255,255,255,.03) inset,0 18px 40px rgba(0,0,0,.35);
+  --shadow-sm:0 1px 0 rgba(255,255,255,.03) inset,0 8px 22px rgba(0,0,0,.22);
+}
+
+html,body{background:var(--bg);color:var(--txt)}
+main,.content{background:var(--bg);color:var(--txt)}
+
+/* ── 顶栏 ── */
+.topbar{background:rgba(10,12,15,.86);border-bottom-color:var(--line);box-shadow:none;backdrop-filter:blur(14px)}
+.page-heading h1{color:var(--txt)}
+.page-heading p{color:var(--dim)}
+.top-status{color:var(--dim)}
+.top-status b{color:var(--sub)}
+.top-actions .btn{background:transparent;border-color:var(--line-strong);color:var(--sub)}
+.top-actions .btn:hover{background:rgba(255,255,255,.06);border-color:var(--line-strong);color:var(--txt)}
+.top-actions .export-btn{background:#3F73F5;border-color:#3F73F5;box-shadow:0 8px 20px rgba(63,115,245,.30)}
+.top-actions .export-btn:hover{background:#4F80FF;border-color:#4F80FF}
+
+/* ── 筛选与下拉 ── */
+.filters .dd-btn{border-color:var(--line);background:var(--card);color:var(--sub);box-shadow:none}
+.filters .dd-btn:hover,.filters .dd.open .dd-btn{border-color:var(--line-strong);background:var(--card-hover)}
+.filters .dd-btn .dd-icon{color:var(--dim)}
+.filters .dd-btn b{color:var(--txt)}
+.dd-menu{border-color:var(--line-strong);background:#151A21;box-shadow:0 24px 54px rgba(0,0,0,.55)}
+.dd-menu button{color:var(--sub)}
+.dd-menu button:hover{background:rgba(255,255,255,.06);color:var(--txt)}
+.dd-menu button.on{background:rgba(108,155,255,.16);color:var(--blue-bright)}
+
+/* ── KPI 条 ── */
+.kpis{border-color:var(--line);background:var(--card);box-shadow:none}
+.kpi + .kpi{border-left-color:var(--line-soft)}
+.kpi .l{color:var(--sub);font-size:11.5px;font-weight:600}
+.kpi .v{color:var(--txt);font-size:28px;font-weight:700;letter-spacing:-.3px}
+.kpi .s,.k-corner{color:var(--dim)}
+.kpi-icon{border-color:color-mix(in srgb,var(--kpi-accent) 30%,rgba(255,255,255,.10));
+  background:color-mix(in srgb,var(--kpi-accent) 15%,#14181F)}
+
+/* ── 卡片 ── */
+.card,.agent-panel,.mini-card,.model-stat,.set-card{
+  border-color:var(--line);background:var(--card);box-shadow:none}
+.card-head h3,.agent-panel-head h3,.section-heading h2,.model-stat b,.set-info .t{color:var(--txt)}
+.card-head .val,.agent-panel-head p,.agent-panel-count,.section-heading p,.model-stat small,.set-info .d{color:var(--dim)}
+.daily-panel-head h4{color:var(--txt)}
+.daily-panel-head p{color:var(--dim)}
+.agent-panel-head{border-bottom-color:var(--line-soft);background:transparent}
+
+/* ── 分段控件 ── */
+.seg{border-color:var(--line);background:rgba(255,255,255,.04);box-shadow:none}
+.seg button{color:var(--dim)}
+.seg button:hover{background:rgba(255,255,255,.07);color:var(--txt)}
+.seg button.on{border-color:transparent;background:rgba(255,255,255,.10);color:var(--txt);box-shadow:none}
+.seg button.on svg{color:var(--blue-bright)}
+
+/* ── 区间摘要 / 每日明细 ── */
+.trend-summary{border-color:var(--line-soft);background:var(--card-soft)}
+.trend-stat span{color:var(--dim)}
+.trend-stat b{color:var(--txt)}
+.trend-stat small{color:var(--dim)}
+#dailyCount{color:var(--dim)}
+.daily-list{scrollbar-color:rgba(255,255,255,.16) transparent}
+.daily-row{color:var(--sub)}
+.daily-row:hover{background:rgba(255,255,255,.04)}
+.daily-date b{color:var(--sub)}
+.daily-date small{color:var(--dim)}
+.daily-primary b{color:var(--txt)}
+.daily-primary span{color:var(--dim)}
+.daily-track{background:rgba(255,255,255,.07)}
+.daily-meta{color:var(--dim)}
+.daily-empty,.chart-empty .t1,.chart-empty .t2{color:var(--dim)}
+
+/* ── Agent 面板 / 表格 / Top10 / 环形图 ── */
+.ar-head:hover,.t10-row:hover,tbody tr:hover{background:rgba(255,255,255,.035)}
+.ar-head .nm{color:var(--txt)}
+.ar-metrics small{color:var(--dim)}
+.ar-metrics b{color:var(--txt)}
+.mrow{border-color:var(--line-soft);background:var(--card-soft)}
+.donut-center b{color:var(--txt)}
+.t10-row .nm{color:var(--sub)}
+.t10-row .val{color:var(--txt)}
+.t10-bar{background:rgba(255,255,255,.07)}
+.table-card table th{color:var(--dim);border-bottom-color:var(--line-soft)}
+.table-card table td{color:var(--sub);border-bottom-color:var(--line-soft)}
+.table-card table tr:last-child td{border-bottom:0}
+thead th{border-bottom-color:var(--line-soft);background:#0F1318;color:var(--dim)}
+tbody td{border-bottom-color:var(--line-soft);color:var(--sub)}
+tbody tr:hover{background:rgba(255,255,255,.035)}
+td.mono{color:var(--txt)}
+td.num{color:var(--txt)}
+.bar{background:rgba(255,255,255,.08)}
+.bar i{box-shadow:none}
+.muted,.empty{color:var(--dim)}
+
+/* ── 侧栏精修（侧栏本身已是深色，这里统一到新色系） ── */
+aside{background:var(--side);border-right:1px solid var(--line)}
+#nav a:hover{background:rgba(255,255,255,.05);color:var(--txt)}
+#nav a.active{background:rgba(108,155,255,.13);border-color:transparent;color:var(--txt);box-shadow:inset 2px 0 0 var(--blue)}
+.side-project:hover,.side-recent:hover,.side-section-head:hover{background:rgba(255,255,255,.05)}
+.side-project.active{background:rgba(255,255,255,.07);color:var(--txt)}
+.side-settings:hover{border-color:var(--line-strong);background:rgba(255,255,255,.05);color:var(--txt)}
+.side-settings.active{border-color:rgba(108,155,255,.35);background:rgba(108,155,255,.12);color:var(--txt)}
+.set-back:hover{background:rgba(255,255,255,.05);color:var(--txt)}
+.side-project-icon .agent-brand-img{border-color:var(--line-strong);background:#E9EDF2}
+.agent-brand-img{border-color:var(--line-strong);background:#E9EDF2}
+
+/* ── 设置页 ── */
+.set-cat-h{color:var(--dim)}
+.set-card{background:var(--card)}
+.set-sel,select.set-sel{background:#141820;border-color:var(--line-strong);color:var(--txt)}
+.set-sel:hover{border-color:var(--blue)}
+.switch i{background:#2A3038;border-color:transparent}
+.switch input:checked + i{background:var(--blue)}
+.switch input:checked + i::after{background:#0B0D11}
+.settings-nav,.set-group{color:var(--dim)}
+.set-item{color:var(--sub)}
+.set-item:hover{background:rgba(255,255,255,.05);color:var(--txt)}
+.set-item.active{background:rgba(108,155,255,.13);color:var(--txt)}
+.set-notes,.set-scan{color:var(--dim)}
+.btn{background:rgba(255,255,255,.05);border-color:var(--line-strong);color:var(--sub)}
+.btn:hover{background:rgba(255,255,255,.09);border-color:var(--line-strong);color:var(--txt)}
+.btn.primary,.btn.primary:hover{background:#3F73F5;border-color:#3F73F5;color:#fff}
+
+/* ── 滚动条 / 焦点 / 水印 ── */
+*{scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.16) transparent}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border:2px solid transparent;background-clip:padding-box;border-radius:8px}
+::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.26);background-clip:padding-box}
+#view-overview .wm i{border-color:#FFFFFF;opacity:.012}
+#nav a:focus-visible,.side-project:focus-visible,.side-recent:focus-visible,.side-section-head:focus-visible,
+.side-settings:focus-visible,.set-item:focus-visible,.t10-row:focus-visible,.ar-head:focus-visible,
+button:focus-visible,a:focus-visible{outline:2px solid rgba(108,155,255,.55);outline-offset:2px}
+
+/* ── 移动端底栏 ── */
+#tabbar{background:rgba(12,15,19,.94);border-top-color:var(--line)}
+#tabbar button{color:var(--dim)}
+#tabbar button.active{color:var(--txt)}
