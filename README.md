@@ -6,7 +6,8 @@
 
 ## 功能
 
-- **全源扫描**：Claude Code、Codex、ZCode、OpenCode、Hermes、MHAgent、Agnes、OpenClaw、DSH 等 9 个数据源，内置去重与缓存语义修正（详见 `probe_v3_allsources.py`）
+- **全源扫描**：Claude Code、Codex、ZCode、OpenCode、Hermes、MHAgent、Agnes、OpenClaw、DSH、Box Agent、Cline、WorkBuddy AI 等 12 个已计入数据源，内置去重与缓存语义修正（详见 `probe_v3_allsources.py`）
+- **覆盖可见**：面板列出本机检出的全部来源 —— 已计入的按用量排序，未计入的（本地不记录用量/加密/需官方 API）单独成组并注明原因
 - **成本估算**：LiteLLM 价格库（1.2 万+ 模型）+ CC Switch 价格表补漏，未命中价格单独标注
 - **看板**：时间粒度（今天/昨天/近7/30/90天/本月/上月/全部）× 数据源 × 模型自由筛选；按维度堆叠柱状图；按模型分解（请求 / Tokens 双迷你图）；数据源与模型成本两张明细表
 - **导出**：当前筛选一键导出 CSV

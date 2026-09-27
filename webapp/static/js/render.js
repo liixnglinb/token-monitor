@@ -50,14 +50,36 @@ function renderSideAgents(){
   const allBtn = document.querySelector('[data-agent-filter="all"]');
   if (allBtn) allBtn.classList.toggle("active", F.agent === "all");
   $("sideAgentTotal").textContent = String(DATA.agents.length);
-  wrap.innerHTML = DATA.agents.slice(0, 6).map(a => {
-    const name = String(a.name);
-    const active = F.agent === name;
-    return '<button class="side-project' + (active ? ' active' : '') + '" type="button" data-agent-filter="' + esc(name) + '" title="' + esc(agentLabel(name)) + '">'
-      + '<span class="side-project-icon">' + agentIcon(name) + '</span>'
-      + '<span class="side-project-name">' + esc(agentLabel(name)) + '</span>'
-      + '<em>' + esc(fmtTok(a.tokens)) + '</em></button>';
-  }).join("");
+  if (!DATA.agents.length){
+    wrap.innerHTML = '<div class="side-empty">未发现用量数据 · 点顶部「重新扫描」</div>';
+  } else {
+    wrap.innerHTML = DATA.agents.map(a => {
+      const name = String(a.name);
+      const active = F.agent === name;
+      return '<button class="side-project' + (active ? ' active' : '') + '" type="button" data-agent-filter="' + esc(name) + '" title="' + esc(agentLabel(name)) + '">'
+        + '<span class="side-project-icon">' + agentIcon(name) + '</span>'
+        + '<span class="side-project-name">' + esc(agentLabel(name)) + '</span>'
+        + '<em>' + esc(fmtTok(a.tokens)) + '</em></button>';
+    }).join("");
+  }
+  /* 未计入分组：本机检出、但拿不到可用用量（或体量超预算）的来源 —— 让覆盖情况可见 */
+  const unc = $("sideUncounted");
+  if (unc){
+    const counted = new Set(DATA.agents.map(a => String(a.name)));
+    const norm = s => String(s).toLowerCase().replace(/[\s\-_]+/g, "");
+    const labels = DATA.agents.map(a => norm(agentLabel(a.name)));
+    const rows = (DATA.coverage || []).filter(c => {
+      const id = String(c.id), nm = norm(c.name || id);
+      if (counted.has(id)) return false;
+      /* 同一应用的旧目录别重复出现（如已计入 WorkBuddy AI，就别再列 WorkBuddy 旧库） */
+      return !labels.some(l => l === nm || l.startsWith(nm) || nm.startsWith(l));
+    });
+    unc.innerHTML = rows.length
+      ? '<div class="side-unc-head">未计入 · ' + rows.length + '</div>'
+        + rows.map(c => '<div class="side-unc" title="' + esc(c.name + '：' + (c.note || '')) + '">'
+            + '<i></i><span>' + esc(c.name) + '</span></div>').join('')
+      : "";
+  }
 }
 function bindDropdown(ddId, menuId, onPick){
   const dd = $(ddId), menu = $(menuId);

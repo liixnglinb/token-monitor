@@ -536,6 +536,64 @@ def scan_workbuddy():
     return out, meta
 
 
+def _wbai_file(path):
+    """WorkBuddy AI（新版）单文件解析 -> 记录元组列表。
+
+    与 Claude Code 同构，但两处差异（2026-09-27 实测 28 文件 / 2800 条带缓存条目）：
+    1. 用量同时挂在 `function_call` 与 `message` 两类条目上（不是 assistant），
+       两类都取；按 message.id 去重，避免同一响应重复计。
+    2. `input_tokens` **已包含缓存读**（total == input + output 恒成立、
+       cache_read < input 恒成立）→ 统计前先剥离，与 Codex/ZCode 同口径。
+    模型取 providerData.model，同文件内向后传递（部分条目缺该字段）。
+    """
+    seen, model = {}, "unknown"
+    for obj in iter_jsonl(path):
+        pd = obj.get("providerData")
+        if isinstance(pd, dict) and pd.get("model"):
+            model = str(pd["model"])
+        m = obj.get("message") if isinstance(obj.get("message"), dict) else None
+        u = None
+        if m and isinstance(m.get("usage"), dict):
+            u = m["usage"]
+        elif isinstance(obj.get("usage"), dict):
+            u = obj["usage"]
+        if not u:
+            continue
+        k = (m or {}).get("id") or obj.get("id")
+        if not k:
+            continue
+        ti = u.get("input_tokens") or 0
+        cr = u.get("cache_read_input_tokens") or 0
+        if cr > ti:                       # 防御：缓存读不可能超过总输入
+            cr = ti
+        seen[str(k)] = (
+            "workbuddy-ai", to_date(obj.get("timestamp")),
+            obj.get("sessionId") or os.path.basename(path), model.lower(),
+            ti - cr,
+            u.get("cache_creation_input_tokens") or 0,
+            cr,
+            u.get("output_tokens") or 0,
+            0,
+            "wbai:" + str(k))
+    return list(seen.values())
+
+
+def scan_workbuddy_ai():
+    """WorkBuddy AI —— 新版数据目录（~/.workbuddy-ai/projects）。
+    旧目录 ~/.workbuddy 由 scan_workbuddy 负责；两者目录不同、key 前缀不同，不会重复。"""
+    root = os.path.join(HOME, ".workbuddy-ai", "projects")
+    if not os.path.isdir(root):
+        return [], {"说明": "目录不存在"}
+    files = []
+    for dp, _d, names in os.walk(root):
+        for fn in names:
+            if fn.endswith(".jsonl"):
+                files.append(os.path.join(dp, fn))
+    if not files:
+        return [], {"说明": "无 jsonl 会话文件"}
+    return dedupe_by_key(file_cached(files, _wbai_file)), {"库": root, "文件": len(files)}
+
+
 def scan_dsh():
     """DSH —— 会话为 zstd 压缩的 jsonl。
 
@@ -609,6 +667,7 @@ NEW_SOURCES = [
     ("MHAgent", scan_mha_agent),
     ("DSH", scan_dsh),
     ("WorkBuddy", scan_workbuddy),
+    ("WorkBuddy AI", scan_workbuddy_ai),
 ]
 
 # 存疑源：与本地日志可能重叠，单列不并入总量
@@ -756,8 +815,9 @@ def cached_scan(key, files_fn, real_fn):
     truncated = key in SKIP_NOTES
     if not recs:
         if fp:
-            scan_cache.remember_verdict(
-                key, SKIP_NOTES.get(key) or "本机无可用用量", fp)
+            note = SKIP_NOTES.get(key) or "本机无可用用量"
+            SKIP_NOTES[key] = note      # 当次即写入备注（覆盖清单据此展示），别等下次命中判定缓存
+            scan_cache.remember_verdict(key, note, fp)
     elif fp and not truncated:
         scan_cache.put_records(key, fp, [_rec_tuple(r) for r in recs])
     return res
@@ -778,7 +838,7 @@ HANDLED_IDS = {
     "claude-code", "codex", "zcode", "opencode", "hermes",
     "agnes", "agnes-ledger", "mha-agent", "dsh",
     "openclaw", "openclaw-autoclaw",
-    "workbuddy", "workbuddy-legacy",
+    "workbuddy", "workbuddy-legacy", "workbuddy-ai",
     "minimax", "modex", "cc-switch", "cc-switch-data",
 }
 # 聚合器 / 归档器 / 价格库 / 非应用目录：重叠或无用量，永不并入总量
@@ -1463,6 +1523,9 @@ def build_extra_sources():
         # 拿它当闸门会把"我这台没装"推广成"谁都别扫"，造成静默少算。
         # 只按 fmt 过滤（设计上就没有本地用量的），是否存在交给下面的路径检查。
         if s.get("fmt") in REG_SKIP_FMT:
+            # 本地不记录用量（加密 / 需官方 API）：本机确实装了的话，在覆盖清单里如实标注
+            if any(os.path.exists(reg_path(t)) for t in s.get("paths", [])):
+                SKIP_NOTES[sid] = "本地不记录用量（已加密或需官方 API）"
             continue
         if not any(os.path.exists(reg_path(t)) for t in s.get("paths", [])):
             continue                          # 本机没装，不空转

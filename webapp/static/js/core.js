@@ -16,16 +16,16 @@ function barGradient(context, index){
   if (!area) return color;
   const gradient = chart.ctx.createLinearGradient(0, area.top, 0, area.bottom);
   gradient.addColorStop(0, color);
-  gradient.addColorStop(1, hexA(color, .48));
+  gradient.addColorStop(1, hexA(color, .68));
   return gradient;
 }
 function lineGradient(context, color){
   const { chart } = context;
   const area = chart.chartArea;
-  if (!area) return hexA(color, .18);
+  if (!area) return hexA(color, .2);
   const gradient = chart.ctx.createLinearGradient(0, area.top, 0, area.bottom);
-  gradient.addColorStop(0, hexA(color, .30));
-  gradient.addColorStop(.62, hexA(color, .09));
+  gradient.addColorStop(0, hexA(color, .42));
+  gradient.addColorStop(.62, hexA(color, .13));
   gradient.addColorStop(1, hexA(color, 0));
   return gradient;
 }
@@ -52,12 +52,14 @@ const AGENT_ICONS = {
   "openclaw-autoclaw": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21.2c-3.1 0-5.2-1.4-5.2-3.4 0-1.5 1.3-2.4 2.7-2.7M12 21.2c3.1 0 5.2-1.4 5.2-3.4 0-1.5-1.3-2.4-2.7-2.7"/><path d="M7.4 6.4c0-2.1 2-3.6 4.6-3.6s4.6 1.5 4.6 3.6"/><path d="M7.9 11.6V9M12 11.2V8.4M16.1 11.6V9"/></svg>',
   "agnes": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><circle cx="12" cy="12" r="8.6"/><path d="M8.3 16.3l3.7-9.2 3.7 9.2M9.7 13.4h4.6"/></svg>',
   "dsh": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.6 6.2h7.2M3.6 12h11.4M3.6 17.8h5.6"/><path d="M17.4 5.2l3.4 13.6"/></svg>',
+  "workbuddy-ai": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.4" y="6.6" width="17.2" height="12.4" rx="3.4"/><path d="M12 3.2v3.4M8.6 12.2h6.8M8.6 15.6h4.2"/></svg>',
 };
 const AGENT_NAME = {
   "claude-code":"Claude Code", "codex":"Codex", "zcode":"ZCode",
   "opencode":"OpenCode", "hermes":"Hermes", "mhagent":"MHAgent",
   "openclaw-autoclaw":"OpenClaw", "agnes":"Agnes", "dsh":"DSH",
   "cline":"Cline", "box-agent":"Box Agent", "mavis":"Mavis",
+  "workbuddy":"WorkBuddy", "workbuddy-ai":"WorkBuddy AI",
   "unknown":"未知来源",
 };
 const AGENT_LOGOS = {

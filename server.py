@@ -224,12 +224,37 @@ def _build() -> dict:
             "plan_models": sorted(plan_models),
         },
         "source_notes": dict(getattr(V3, "SKIP_NOTES", {})),
+        "coverage": _coverage(V3),
         "cache_stats": V3.flush_cache(),
         "scan_errors": scan_errors,
     }
 
 
 _R = RF.Refresher(_build, version_fn=_version_probe)   # 必须在 _build 之后
+
+
+_SRC_NAMES = None
+
+
+def _coverage(V3):
+    """已知来源清单：{id, name, note} —— 供前端在侧栏展示「未计入」分组。
+
+    note 来自 SKIP_NOTES（扫描时对"检出但没计入"的源写下的原因），
+    name 用注册表的中文名（缺失时回退 id）。"""
+    global _SRC_NAMES
+    if _SRC_NAMES is None:
+        _SRC_NAMES = {}
+        try:
+            import sources_registry as SR
+            for s in getattr(SR, "SOURCES", []):
+                sid = s.get("id")
+                if sid:
+                    _SRC_NAMES[sid] = s.get("cn") or sid
+        except Exception:
+            pass
+    notes = getattr(V3, "SKIP_NOTES", {}) or {}
+    return [{"id": k, "name": _SRC_NAMES.get(k, k), "note": v}
+            for k, v in sorted(notes.items())]
 
 
 @app.get("/api/summary")
