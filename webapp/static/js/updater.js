@@ -121,7 +121,7 @@ function renderUpdTip(confirmed){
       + (UPD.date ? '<div class="date">' + esc(UPD.date) + '</div>' : "")
       + (UPD.body ? '<div class="body">' + fmtReleaseBody(UPD.body) + '</div>' : "")
       + (confirmed
-          ? '<button class="go" onclick="startUpdate()">立即更新</button>'
+          ? '<button class="go" onclick="confirmInstall()">立即更新</button>'
             + '<button class="later" onclick="hideUpdTip()">稍后</button>'
           : '<div class="hint">点击图标确认更新</div>');
   } else {
@@ -187,9 +187,8 @@ if (miniEl){
     setTimeout(() => { if (!tipPinned && !tipHovered) hideUpdTip(); }, 150);
   });
   miniEl.addEventListener("click", () => {
-    if (UPD.state === "update"){ tipPinned = !tipPinned; renderUpdTip(true); }
+    if (UPD.state === "update" || UPD.state === "ready"){ confirmInstall(); }
     else if (UPD.state === "dl"){ tipPinned = !tipPinned; renderUpdTip(false); }
-    else if (UPD.state === "ready"){ confirmInstall(); }
     else { checkUpdate(false); }
   });
   document.addEventListener("click", e => {
@@ -267,15 +266,29 @@ async function downloadUpdate(){
   }
 }
 
-/* 下载完成后的确认弹窗：「是否现在更新并重启」 */
+/* 确认弹窗：点更新按钮/小框就直接问「是否现在更新并重启」。
+   确认后走 runUpdate：需要时先下载（有进度），下载成功即自动替换重启。 */
 function confirmInstall(){
   hideUpdTip();
   const m = $("updModal"); if (!m) return;
   const txt = $("updModalText");
-  if (txt) txt.textContent = "v" + (UPD.latest || "") + " 已下载完成，是否现在更新并重启？";
+  if (txt){
+    txt.textContent = UPD.state === "ready"
+      ? "v" + (UPD.latest || "") + " 已下载完成，是否现在更新并重启？"
+      : "v" + (UPD.latest || "") + " 将自动下载并安装，随后重启软件。是否现在更新并重启？";
+  }
   m.hidden = false;
 }
 window.confirmInstall = confirmInstall;
+
+/* 确认后：下载（带进度）→ 成功后自动安装并重启（无需再点第二次） */
+async function runUpdate(){
+  const m = $("updModal"); if (m) m.hidden = true;
+  if (UPD.state === "ready"){ await applyUpdate(); return; }   // 已下载过 → 直接安装
+  await downloadUpdate();
+  if (UPD.state === "ready") await applyUpdate();
+}
+window.runUpdate = runUpdate;
 
 /* 第二段：确认后替换 exe 并重启 */
 async function applyUpdate(){
@@ -313,10 +326,10 @@ async function applyUpdate(){
 }
 
 $("updBtn").onclick = function(){
-  if (UPD.state === "ready"){ confirmInstall(); return; }      // 已下载 → 弹确认
+  /* 有更新（或已下载待安装）→ 直接弹「是否现在更新并重启」；确认后才下载/安装 */
+  if (UPD.state === "ready" || this.dataset.pending === "1"){ confirmInstall(); return; }
   if (UPD.state === "error"){ UPD.state = "idle"; checkUpdate(false); return; }
-  if (this.dataset.pending !== "1"){ checkUpdate(false); return; }
-  downloadUpdate();
+  checkUpdate(false);
 };
 
 /* 确认弹窗按钮 */
@@ -324,7 +337,7 @@ $("updBtn").onclick = function(){
   const m = $("updModal"); if (!m) return;
   const later = $("updLater"), go = $("updConfirm");
   if (later) later.onclick = () => { m.hidden = true; };
-  if (go) go.onclick = applyUpdate;
+  if (go) go.onclick = runUpdate;                              // 确认 → 下载/安装/重启一条龙
   m.addEventListener("click", e => { if (e.target === m) m.hidden = true; });
   document.addEventListener("keyup", e => { if (e.key === "Escape") m.hidden = true; });
 })();
