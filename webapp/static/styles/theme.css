@@ -246,6 +246,12 @@ aside{background:linear-gradient(180deg,#0C1015 0%,#090C10 100%);border-right:1p
   border-color:rgba(108,155,255,.42);color:#CFE0FF;cursor:progress;
 }
 #updBtn.is-done{background:rgba(74,192,138,.16);border-color:rgba(74,192,138,.42);color:#7FE0B4}
+#updBtn.is-ready{
+  background:linear-gradient(180deg,#3FBF8A,#2AA472);
+  border-color:rgba(74,192,138,.5);color:#fff;
+  box-shadow:0 10px 26px rgba(42,164,114,.32);
+}
+#updBtn.is-ready:hover{background:linear-gradient(180deg,#48CC95,#2FB07C)}
 #updBtn.is-error{background:rgba(240,115,122,.14);border-color:rgba(240,115,122,.4);color:#F79AA0}
 @keyframes updPulse{
   0%{box-shadow:0 0 0 0 rgba(255,255,255,.55)}
@@ -271,10 +277,35 @@ aside{background:linear-gradient(180deg,#0C1015 0%,#090C10 100%);border-right:1p
 .upd-mini .dot{position:absolute;top:5px;right:5px;width:7px;height:7px;border-radius:50%;
   border:1.5px solid var(--side)}
 .upd-mini .dot.update{background:var(--blue);box-shadow:0 0 8px rgba(108,155,255,.85);animation:pulse 2s infinite}
+.upd-mini .dot.ready{background:var(--green);box-shadow:0 0 8px rgba(74,192,138,.85);animation:pulse 1.6s infinite}
 .upd-mini .dot.done{background:var(--green)}
 .upd-mini .spin{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
 .upd-mini .spin i{width:14px;height:14px;border-radius:50%;border:2px solid rgba(255,255,255,.14);
   border-top-color:var(--blue-bright);animation:rot .8s linear infinite}
+/* 下载中：小框本身就是进度环 + 百分比数字（无箭头） */
+.upd-mini .pct{position:relative;z-index:1;font:600 10px/1 var(--mono);color:#CFE0FF}
+.upd-mini.is-dl{background:conic-gradient(from -90deg,var(--blue) calc(var(--p,0) * 1%),rgba(255,255,255,.09) 0);
+  border-color:transparent}
+.upd-mini.is-dl::before{content:"";position:absolute;inset:3px;border-radius:7px;background:#0C1015}
+.upd-mini.is-dl svg,.upd-mini.is-dl .spin{display:none}
+/* 安装确认弹窗 */
+.upd-modal{position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;
+  background:rgba(4,6,9,.62);backdrop-filter:blur(3px)}
+.upd-modal[hidden]{display:none}
+.upd-modal-card{width:min(400px,86vw);border-radius:16px;padding:22px 22px 18px;
+  background:linear-gradient(180deg,#151A23 0%,#10141B 100%);
+  border:1px solid rgba(255,255,255,.12);
+  box-shadow:0 30px 70px rgba(0,0,0,.65),0 1px 0 rgba(255,255,255,.05) inset}
+.upd-modal-card .um-t{font-size:15px;font-weight:650;color:var(--txt)}
+.upd-modal-card .um-d{margin:8px 0 18px;font-size:12.5px;line-height:1.75;color:var(--sub)}
+.upd-modal-card .um-actions{display:flex;justify-content:flex-end;gap:10px}
+.upd-modal-card .go{height:34px;padding:0 16px;border-radius:9px;border:1px solid rgba(108,155,255,.5);
+  background:linear-gradient(180deg,#5C8AF5,#3F73F5);color:#fff;font-size:13px;font-weight:600;cursor:pointer;
+  box-shadow:0 10px 24px rgba(63,115,245,.32)}
+.upd-modal-card .go:hover{background:linear-gradient(180deg,#6B96FF,#4A7EF8)}
+.upd-modal-card .later{height:34px;padding:0 14px;border-radius:9px;border:1px solid var(--line-strong);
+  background:transparent;color:var(--sub);font-size:13px;cursor:pointer}
+.upd-modal-card .later:hover{background:rgba(255,255,255,.06);color:var(--txt)}
 /* 更新浮层：现代卡片（面板渐变 + 发丝线 + 柔影） */
 .upd-tip{
   background:linear-gradient(180deg,#141922 0%,#0F131A 100%);

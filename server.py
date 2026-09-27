@@ -300,6 +300,10 @@ def api_version():
 
 @app.post("/api/update")
 def api_update():
+    """第一段：下载新版到暂存（不替换、不重启），等用户在界面确认安装。
+
+    注：此前这里调 download_and_apply「一步到位」——下载完立刻替换重启，
+    与需求的"下载完成后提示是否现在更新并重启"不符，故拆成两段。"""
     try:
         latest, assets, _meta = updater.fetch_latest()
         asset = updater.find_exe_asset(assets)
@@ -307,12 +311,23 @@ def api_update():
             return JSONResponse({"ok": False,
                                  "error": "Release 中没有可更新的 exe 资产"}, status_code=400)
         # 若 Release 附带 .sha256 校验资产则一并传入，下载后做 SHA256 完整性校验
-        updater.download_and_apply(asset, checksum_asset=updater.find_sum_asset(assets))
+        updater.download_staged(asset, checksum_asset=updater.find_sum_asset(assets),
+                                version=latest)
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)[:200]}, status_code=500)
+    return {"ok": True, "latest": latest, "staged": True}
+
+
+@app.post("/api/update/apply")
+def api_update_apply():
+    """第二段：用户确认「现在更新并重启」后，替换 exe 并重启（自替换脚本接管）。"""
+    try:
+        updater.apply_staged()
     except Exception as e:
         return JSONResponse({"ok": False, "error": str(e)[:200]}, status_code=500)
     # 1 秒后退出当前进程，让更新脚本接管（替换 exe 并重启）
     threading.Timer(1.0, lambda: os._exit(0)).start()
-    return {"ok": True, "latest": latest}
+    return {"ok": True}
 
 
 @app.get("/api/update/progress")

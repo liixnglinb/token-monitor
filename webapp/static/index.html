@@ -15,7 +15,7 @@
 <link rel="stylesheet" href="/static/styles/responsive.css">
 <link rel="stylesheet" href="/static/styles/canvas.css?v=20260923-2326">
 <link rel="stylesheet" href="/static/styles/modern.css?v=20260924-1846">
-<link rel="stylesheet" href="/static/styles/theme.css?v=20260927-2000">
+<link rel="stylesheet" href="/static/styles/theme.css?v=20260927-2100">
 
 
 </head>
@@ -31,6 +31,7 @@
     <div class="aside-tools">
       <button id="updMini" class="side-icon-btn upd-mini" type="button" title="检查更新" aria-label="软件更新">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.4l1.15 3.45L12.6 7l-3.45 1.15L8 11.6 6.85 8.15 3.4 7l3.45-1.15z"/><path d="M12.3 11.1l.45 1.25 1.25.45-1.25.45-.45 1.25-.45-1.25-1.25-.45 1.25-.45z"/></svg>
+        <span class="pct" id="updPct" hidden></span>
         <span class="dot" id="updBadge" hidden></span>
         <span class="spin" id="updSpin" hidden><i></i></span>
       </button>
@@ -346,13 +347,25 @@
 </nav>
 
   <div class="upd-tip" id="updTip" hidden></div>
+
+  <!-- 更新安装确认（下载完成后点更新 → 弹这张卡） -->
+  <div class="upd-modal" id="updModal" hidden>
+    <div class="upd-modal-card" role="dialog" aria-modal="true" aria-labelledby="updModalTitle">
+      <div class="um-t" id="updModalTitle">更新已就绪</div>
+      <p class="um-d" id="updModalText">新版本已下载完成，是否现在更新并重启？</p>
+      <div class="um-actions">
+        <button class="later" id="updLater" type="button">稍后</button>
+        <button class="go" id="updConfirm" type="button">更新并重启</button>
+      </div>
+    </div>
+  </div>
 <script src="/static/vendor/chart.umd.min.js"></script>
 <script src="/static/js/core.js?v=20260924-1846"></script>
 <script src="/static/js/data.js?v=20260924-1846"></script>
 <script src="/static/js/charts.js?v=20260924-1846"></script>
 <script src="/static/js/render.js?v=20260924-1846"></script>
 <script src="/static/js/interactions.js?v=20260924-1846"></script>
-<script src="/static/js/updater.js?v=20260927-2000"></script>
+<script src="/static/js/updater.js?v=20260927-2100"></script>
 <script src="/static/js/app.js?v=20260924-1846"></script>
 </body>
 </html>
