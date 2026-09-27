@@ -49,20 +49,28 @@ function fmtReleaseBody(t){
 }
 
 function setUpdUI(){
-  const dot = $("updBadge"), spin = $("updSpin"), mini = $("updMini");
+  const dot = $("updBadge"), mini = $("updMini"), pctEl = $("updPct");
   const st = UPD.state;
+  const pctNow = Math.max(0, Math.min(100, Math.round(UPD.percent || 0)));
   if (dot){
-    dot.hidden = !(st === "update" || st === "done");
-    dot.className = "dot " + (st === "update" ? "update" : st === "done" ? "done" : "");
+    dot.hidden = !(st === "update" || st === "ready" || st === "done");
+    dot.className = "dot " + (st === "update" ? "update" : st === "ready" ? "ready" : "done");
   }
-  if (spin) spin.hidden = st !== "dl";
+  /* 下载中：小框本身是进度环 + 百分比数字（无箭头）；就绪：绿点亮起 */
   if (mini){
-    mini.title = st === "update" ? "发现新版本 v" + (UPD.latest || "") + "，点击查看"
-      : st === "dl" ? (UPD.source ? "正在从 " + UPD.source + " 下载更新…" : "正在测速并选择最快下载源…")
+    mini.classList.toggle("is-dl", st === "dl");
+    mini.style.setProperty("--p", String(pctNow));
+    mini.title = st === "update" ? "发现新版本 v" + (UPD.latest || "") + "，悬停查看更新内容"
+      : st === "dl" ? ((UPD.source ? "正在从 " + UPD.source + " 下载 " : "正在测速并选择最快下载源 ") + pctNow + "%")
+      : st === "ready" ? "v" + (UPD.latest || "") + " 已下载完成，点击安装"
       : st === "done" ? "更新完成，正在重启" : "检查更新";
   }
+  if (pctEl){
+    pctEl.hidden = st !== "dl";
+    if (st === "dl") pctEl.textContent = String(pctNow);
+  }
 
-  const pct = Math.max(0, Math.min(100, Math.round(UPD.percent || 0)));
+  const pct = pctNow;
   const progress = $("updateProgress");
   if (progress){
     progress.hidden = st !== "dl";
@@ -76,12 +84,15 @@ function setUpdUI(){
   if (btn){
     /* 状态化按钮：类名驱动样式（无箭头，下载时按钮本身就是进度条） */
     btn.classList.toggle("is-update", st === "update");
+    btn.classList.toggle("is-ready", st === "ready");
     btn.classList.toggle("is-downloading", st === "dl");
-    btn.classList.toggle("is-done", st === "done");
+    btn.classList.toggle("is-done", st === "done" || st === "applying");
     btn.classList.toggle("is-error", st === "error");
     if (st === "dl"){
       btn.style.setProperty("--p", pct + "%");
       btn.textContent = "下载中 " + pct + "%";
+    } else if (st === "ready" && !btn.dataset.confirming){
+      btn.textContent = "更新已就绪 · 点击安装";
     }
   }
 }
@@ -89,7 +100,13 @@ function setUpdUI(){
 function renderUpdTip(confirmed){
   const tip = $("updTip"); if (!tip) return;
   let html;
-  if (UPD.state === "dl"){
+  if (UPD.state === "ready" && UPD.latest){
+    /* 下载完成、待确认安装 */
+    html = '<div class="t1">更新已就绪 · v' + esc(UPD.latest) + '</div>'
+      + '<div style="color:#9BA3AE;margin:4px 0 10px">安装包已下载完成，点下面按钮立即更新并重启。</div>'
+      + '<button class="go" onclick="confirmInstall()">更新并重启</button>'
+      + '<button class="later" onclick="hideUpdTip()">稍后</button>';
+  } else if (UPD.state === "dl"){
     const pct = Math.max(0, Math.min(100, Math.round(UPD.percent || 0)));
     const source = UPD.source
       ? '<div class="dl-source">下载源：' + esc(UPD.source) + '</div>'
@@ -164,7 +181,7 @@ const miniEl = $("updMini");
 if (miniEl){
   miniEl.addEventListener("mouseenter", () => {
     if (UPD.state === "update" && !tipPinned) renderUpdTip(false);
-    else if (UPD.state === "dl") renderUpdTip(false);
+    else if (UPD.state === "dl" || UPD.state === "ready") renderUpdTip(false);
   });
   miniEl.addEventListener("mouseleave", () => {
     setTimeout(() => { if (!tipPinned && !tipHovered) hideUpdTip(); }, 150);
@@ -172,6 +189,7 @@ if (miniEl){
   miniEl.addEventListener("click", () => {
     if (UPD.state === "update"){ tipPinned = !tipPinned; renderUpdTip(true); }
     else if (UPD.state === "dl"){ tipPinned = !tipPinned; renderUpdTip(false); }
+    else if (UPD.state === "ready"){ confirmInstall(); }
     else { checkUpdate(false); }
   });
   document.addEventListener("click", e => {
@@ -182,7 +200,7 @@ if (miniEl){
   document.addEventListener("keyup", e => { if (e.key === "Escape") hideUpdTip(); });
 }
 
-/* ---------- 自动更新 ---------- */
+/* ---------- 自动更新（两段式：下载 → 确认 → 安装重启） ---------- */
 async function checkUpdate(silent){
   const btn = $("updBtn");
   if (!silent){
@@ -213,12 +231,14 @@ async function checkUpdate(silent){
     btn.dataset.pending = "";
   }
 }
-$("updBtn").onclick = async function(){
-  if (this.dataset.pending !== "1"){ checkUpdate(false); return; }
-  this.disabled = true;
-  this.className = "btn is-downloading";
-  this.style.setProperty("--p", "0%");
-  this.textContent = "下载中 0%";
+
+/* 第一段：下载到暂存（不替换、不重启），完成即进入「就绪」态 */
+async function downloadUpdate(){
+  const btn = $("updBtn");
+  btn.disabled = true;
+  btn.className = "btn is-downloading";
+  btn.style.setProperty("--p", "0%");
+  btn.textContent = "下载中 0%";
   UPD.state = "dl";
   UPD.percent = 0;
   UPD.source = null;
@@ -227,14 +247,51 @@ $("updBtn").onclick = async function(){
   startProgressPolling();
   try {
     const r = await (await fetch("/api/update", { method: "POST" })).json();
-    if (!r.ok) throw new Error(r.error || "更新失败");
-    UPD.percent = 100;
-    UPD.state = "done";
-    UPD.message = "";
-    this.className = "btn is-done";
-    this.textContent = "更新完成 · 正在重启";
-    setUpdUI();
+    if (!r.ok) throw new Error(r.error || "下载失败");
     stopProgressPolling();
+    UPD.percent = 100;
+    UPD.state = "ready";
+    if (r.latest) UPD.latest = r.latest;
+    btn.disabled = false;
+    btn.className = "btn is-ready";
+    btn.textContent = "更新已就绪 · 点击安装";
+    setUpdUI();
+  } catch(e){
+    stopProgressPolling();
+    btn.disabled = false;
+    UPD.state = "error";
+    UPD.source = null;
+    UPD.message = String(e && e.message ? e.message : e);
+    btn.className = "btn is-error";
+    btn.textContent = "下载失败 · 重试";
+  }
+}
+
+/* 下载完成后的确认弹窗：「是否现在更新并重启」 */
+function confirmInstall(){
+  hideUpdTip();
+  const m = $("updModal"); if (!m) return;
+  const txt = $("updModalText");
+  if (txt) txt.textContent = "v" + (UPD.latest || "") + " 已下载完成，是否现在更新并重启？";
+  m.hidden = false;
+}
+window.confirmInstall = confirmInstall;
+
+/* 第二段：确认后替换 exe 并重启 */
+async function applyUpdate(){
+  const m = $("updModal"); if (m) m.hidden = true;
+  const btn = $("updBtn");
+  UPD.state = "applying";
+  if (btn){
+    btn.disabled = true;
+    btn.className = "btn is-done";
+    btn.textContent = "正在更新并重启…";
+  }
+  setUpdUI();
+  try {
+    const r = await (await fetch("/api/update/apply", { method: "POST" })).json();
+    if (!r.ok) throw new Error(r.error || "安装失败");
+    /* 当前进程约 1 秒后退出、新进程接管：轮询版本，新版本回来自动刷新 */
     let tries = 0;
     const t = setInterval(async () => {
       tries++;
@@ -242,21 +299,53 @@ $("updBtn").onclick = async function(){
         const v = await (await fetch("/api/version")).json();
         clearInterval(t);
         $("verLine").textContent = "版本 v" + v.version;
-        this.disabled = false;
-        this.className = "btn";
-        this.textContent = "已是最新";
-        this.dataset.pending = "";
+        UPD.state = "idle";
+        if (btn){ btn.disabled = false; btn.className = "btn"; btn.textContent = "已是最新"; btn.dataset.pending = ""; }
         location.reload();
       } catch(_){ /* 新进程未就绪，继续等 */ }
-      if (tries > 45){ clearInterval(t); this.textContent = "更新超时，请重启应用"; }
+      if (tries > 45){ clearInterval(t); if (btn) btn.textContent = "更新超时，请重启应用"; }
     }, 2000);
   } catch(e){
-    stopProgressPolling();
-    this.disabled = false;
     UPD.state = "error";
-    UPD.source = null;
     UPD.message = String(e && e.message ? e.message : e);
-    this.className = "btn is-error";
-    this.textContent = "更新失败 · 重试";
+    if (btn){ btn.disabled = false; btn.className = "btn is-error"; btn.textContent = "安装失败 · 重试"; }
   }
+}
+
+$("updBtn").onclick = function(){
+  if (UPD.state === "ready"){ confirmInstall(); return; }      // 已下载 → 弹确认
+  if (UPD.state === "error"){ UPD.state = "idle"; checkUpdate(false); return; }
+  if (this.dataset.pending !== "1"){ checkUpdate(false); return; }
+  downloadUpdate();
 };
+
+/* 确认弹窗按钮 */
+(function(){
+  const m = $("updModal"); if (!m) return;
+  const later = $("updLater"), go = $("updConfirm");
+  if (later) later.onclick = () => { m.hidden = true; };
+  if (go) go.onclick = applyUpdate;
+  m.addEventListener("click", e => { if (e.target === m) m.hidden = true; });
+  document.addEventListener("keyup", e => { if (e.key === "Escape") m.hidden = true; });
+})();
+
+/* 页面刷新后若服务端仍有「已下载待安装」，恢复就绪态（别让用户白等一次下载） */
+(async function(){
+  try {
+    const p = await (await fetch("/api/update/progress", { cache: "no-store" })).json();
+    if (p && p.state === "ready"){
+      UPD.state = "ready";
+      UPD.percent = 100;
+      if (p.version) UPD.latest = p.version;
+      const btn = $("updBtn");
+      if (btn){
+        btn.disabled = false;
+        btn.className = "btn is-ready";
+        btn.textContent = "更新已就绪 · 点击安装";
+        btn.dataset.pending = "";
+      }
+      setUpdUI();
+      if (UPD.latest) $("verLine").textContent = "版本 " + (UPD.ver ? "v" + UPD.ver : "dev") + " · 已下载 v" + UPD.latest;
+    }
+  } catch(_){}
+})();
