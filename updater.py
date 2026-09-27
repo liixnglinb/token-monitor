@@ -166,15 +166,20 @@ def _fetch_sha256(asset, timeout: int = 30, preferred_source=None):
 
 
 # 候选源。正式下载前会并发采样，按本机到各源的实际吞吐率排序。
+# 顺序即"探测全失败时的兜底优先级" —— 2026-09-27 起镜像在前：
+# 国内网络下直连 GitHub 常常不可用，探测失败时先试镜像才不会"更新点不动"。
+# 2026-09-27：ghproxy.net 实测仅 ~90KB/s 且频繁卡死，换成 ghfast.top（下载页同款备用镜像）。
 _SOURCES = (
-    ("GitHub 直连", ""),
     ("GH Proxy", "https://gh-proxy.com/"),
-    ("ghproxy.net", "https://ghproxy.net/"),
+    ("ghfast.top", "https://ghfast.top/"),
+    ("GitHub 直连", ""),
 )
 _PROBE_BYTES = 384 * 1024
 _PROBE_MIN_BYTES = 32 * 1024
-_PROBE_TIMEOUT = 1.6
-_PROBE_BUDGET = 2.4
+# 2026-09-27 实测本机 TTFB ≈1.0-1.1s：原 1.6s 超时太紧，网络一抖三个源会全部采样失败、
+# 退回"直连优先"的静态顺序。放宽到 3s/4s，代价只是更新检查多等几秒（后台执行）。
+_PROBE_TIMEOUT = 3.0
+_PROBE_BUDGET = 4.0
 _SOURCE_CACHE_TTL = 5 * 60
 _SOURCE_CACHE_LOCK = threading.Lock()
 _SOURCE_CACHE = {}
