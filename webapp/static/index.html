@@ -15,7 +15,7 @@
 <link rel="stylesheet" href="/static/styles/responsive.css">
 <link rel="stylesheet" href="/static/styles/canvas.css?v=20260923-2326">
 <link rel="stylesheet" href="/static/styles/modern.css?v=20260924-1846">
-<link rel="stylesheet" href="/static/styles/theme.css?v=20260927-1905">
+<link rel="stylesheet" href="/static/styles/theme.css?v=20260927-2000">
 
 
 </head>
@@ -29,6 +29,11 @@
       <span class="logo-t">Token Monitor</span>
     </div>
     <div class="aside-tools">
+      <button id="updMini" class="side-icon-btn upd-mini" type="button" title="检查更新" aria-label="软件更新">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.4l1.15 3.45L12.6 7l-3.45 1.15L8 11.6 6.85 8.15 3.4 7l3.45-1.15z"/><path d="M12.3 11.1l.45 1.25 1.25.45-1.25.45-.45 1.25-.45-1.25-1.25-.45 1.25-.45z"/></svg>
+        <span class="dot" id="updBadge" hidden></span>
+        <span class="spin" id="updSpin" hidden><i></i></span>
+      </button>
       <button id="sideReload" class="side-icon-btn" title="重新扫描数据源" aria-label="重新扫描数据源">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13.4 7A5.5 5.5 0 1 0 12 11.7"/><path d="M13.4 3.8V7H10"/></svg>
       </button>
@@ -347,7 +352,7 @@
 <script src="/static/js/charts.js?v=20260924-1846"></script>
 <script src="/static/js/render.js?v=20260924-1846"></script>
 <script src="/static/js/interactions.js?v=20260924-1846"></script>
-<script src="/static/js/updater.js?v=20260924-1846"></script>
+<script src="/static/js/updater.js?v=20260927-2000"></script>
 <script src="/static/js/app.js?v=20260924-1846"></script>
 </body>
 </html>
