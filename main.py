@@ -238,12 +238,11 @@ def _quit_all(icon=None, item=None) -> None:
 
 
 def _on_closing(window) -> bool:
-    """点窗口 X：隐藏到托盘继续监控（真退出走托盘菜单），返回 False 取消关闭。"""
+    """点窗口 X：隐藏到托盘继续监控（真退出走托盘菜单），返回 False 取消关闭。
+
+    注：这里不弹托盘冒泡通知 —— 用户明确要求"最小化不留小窗"，静默收进托盘即可。"""
     try:
         window.hide()
-        icon = _TRAY.get("icon")
-        if icon:
-            icon.notify("已最小化到托盘，右键图标可退出程序", "Token Monitor")
         LOG.info("窗口隐藏到托盘")
     except Exception:
         LOG.warning("隐藏到托盘失败:\n%s", traceback.format_exc())
