@@ -281,18 +281,62 @@ def _setup_tray(window, port: int) -> None:
         LOG.warning("托盘初始化失败（不影响主功能）:\n%s", traceback.format_exc())
 
 
+def _force_foreground(hwnd) -> None:
+    """把窗口拉到前台。SetForegroundWindow 受前台权限限制，
+    先 AttachThreadInput 到当前前台线程再调用（标准绕法）。"""
+    user32 = ctypes.windll.user32
+    kernel32 = ctypes.windll.kernel32
+    fg = user32.GetForegroundWindow()
+    tid_fg = user32.GetWindowThreadProcessId(fg, None) if fg else 0
+    tid_self = kernel32.GetCurrentThreadId()
+    attached = False
+    try:
+        if tid_fg and tid_fg != tid_self:
+            attached = bool(user32.AttachThreadInput(tid_fg, tid_self, True))
+        user32.BringWindowToTop(hwnd)
+        user32.SetForegroundWindow(hwnd)
+    finally:
+        if attached:
+            user32.AttachThreadInput(tid_fg, tid_self, False)
+
+
+def _activate_existing() -> None:
+    """二次启动：还原并前置"已在运行"的实例窗口，而不是弹提示让用户自己找。
+
+    场景：窗口被 X 收进托盘后，用户又从快捷方式/托盘双击启动 ——
+    期望是上次那个窗口直接回到眼前（窗口对象一直在，只是被 ShowWindow(SW_HIDE) 藏了）。
+    """
+    try:
+        user32 = ctypes.windll.user32
+        hwnd = 0
+        for _ in range(15):                    # 已有实例可能刚隐藏到托盘，句柄需要等一小会儿
+            hwnd = user32.FindWindowW(None, WINDOW_TITLE)
+            if hwnd:
+                break
+            time.sleep(0.2)
+        if not hwnd:
+            LOG.warning("二次启动：未找到已有实例的窗口句柄")
+            return
+        SW_SHOW, SW_RESTORE = 5, 9
+        if user32.IsIconic(hwnd) or not user32.IsWindowVisible(hwnd):
+            user32.ShowWindow(hwnd, SW_RESTORE if user32.IsIconic(hwnd) else SW_SHOW)
+        _force_foreground(hwnd)
+        LOG.info("二次启动：已唤起已有窗口 hwnd=%s", hwnd)
+    except Exception:
+        LOG.warning("二次启动唤起窗口失败（不影响已在运行的实例）:\n%s", traceback.format_exc())
+
+
 def main() -> None:
     global _INSTANCE_MUTEX
     LOG.info("=== 启动 exe=%s frozen=%s ===", sys.executable, getattr(sys, "frozen", False))
 
     # 单实例锁：Windows 命名互斥体，防止重复启动多个实例。
-    # 注意 windowed exe 没有控制台，重复启动时 MessageBox 是唯一可见提示。
+    # 二次启动 = 唤起已有窗口（用户直觉），而不是弹"已在运行"再让人自己翻托盘。
     _INSTANCE_MUTEX = ctypes.windll.kernel32.CreateMutexW(
         0, 0, "Local\\TokenMonitor.SingleInstance")
     if ctypes.windll.kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS = 183
-        LOG.warning("检测到已有实例在运行，本进程退出")
-        ctypes.windll.user32.MessageBoxW(
-            0, "Token Monitor 已在运行。", "Token Monitor", 0x40)
+        LOG.info("检测到已有实例在运行 → 唤起其窗口后本进程退出")
+        _activate_existing()
         sys.exit(0)
 
     port = find_port()

@@ -77,7 +77,8 @@ function renderSideAgents(){
     unc.innerHTML = rows.length
       ? '<div class="side-unc-head">未计入 · ' + rows.length + '</div>'
         + rows.map(c => '<div class="side-unc" title="' + esc(c.name + '：' + (c.note || '')) + '">'
-            + '<i></i><span>' + esc(c.name) + '</span></div>').join('')
+            + '<span class="side-unc-ico">' + agentIcon(String(c.id)) + '</span>'
+            + '<span>' + esc(c.name) + '</span></div>').join('')
       : "";
   }
 }

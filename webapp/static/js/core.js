@@ -65,6 +65,21 @@ const AGENT_NAME = {
 const AGENT_LOGOS = {
   "codex":"openai.svg", "claude-code":"claude.svg",
   "opencode":"opencode.svg", "cline":"cline.svg",
+  /* 2026-09-27：以下均为从本机各应用安装目录提取的真实品牌图（256px 归一） */
+  "zcode":"zcode.png", "hermes":"hermes.png", "workbuddy":"workbuddy.png",
+  "workbuddy-ai":"workbuddy.png", "dsh":"dsh.png", "catpaw":"catpaw.png",
+  "kimi":"kimi.png",
+};
+/* 本机确实拿不到品牌图的应用 → 字母徽标（比通用图形更像"它们自己"） */
+const AGENT_MONO = {
+  "box-agent": ["B", "#7C8CF8"], "mhagent": ["MH", "#4AC08A"],
+  "mavis": ["M", "#E8B45B"], "agnes": ["A", "#A78BFA"],
+  "qoder": ["Q", "#5CC8DE"], "trae-solo": ["T", "#F0737A"], "trae": ["T", "#F0737A"],
+  "cursor": ["C", "#9AA1AC"], "doubao": ["D", "#5C8AF5"], "qwen-cli": ["Q", "#7C8CF8"],
+  "cherrystudio": ["CH", "#E8834B"], "yumbo": ["YB", "#4FC3A1"],
+  "copilot-chat": ["GH", "#9AA1AC"], "copilot-cli": ["GH", "#9AA1AC"],
+  "goofish-cli": ["闲", "#E8B45B"], "mimosa": ["M", "#E0607A"],
+  "openviking": ["OV", "#5CC8DE"], "raccoonwork": ["R", "#4AC08A"],
 };
 function agentIcon(name){
   const logo = AGENT_LOGOS[name];
@@ -72,8 +87,13 @@ function agentIcon(name){
     return '<img class="agent-brand-img" src="/static/logos/' + logo
       + '" alt="" loading="lazy" decoding="async">';
   }
+  const mono = AGENT_MONO[name];
+  if (mono){
+    return '<span class="agent-mono" style="--mc:' + mono[1] + '">' + mono[0] + '</span>';
+  }
   return AGENT_ICONS[name] ||
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="4.2" y="4.2" width="15.6" height="15.6" rx="4"/><circle cx="12" cy="12" r="2.4"/></svg>';
 }
 const agentLabel = name => AGENT_NAME[name] || name;
+const agentHasIcon = name => !!(AGENT_LOGOS[name] || AGENT_MONO[name] || AGENT_ICONS[name]);
 const $ = id => document.getElementById(id);
