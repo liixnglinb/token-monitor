@@ -196,7 +196,7 @@ nav a.active svg{color:var(--blue)}
   overflow:hidden;
   text-overflow:ellipsis;
   white-space:nowrap;
-  font-size:15px;
+  font-size:13.5px;
   font-weight:650;
 }
 
@@ -424,7 +424,7 @@ aside{
 }
 
 .brand-menu .logo-t{
-  font-size:14.5px;
+  font-size:13.5px;
   font-weight:650;
 }
 

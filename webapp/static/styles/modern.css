@@ -22,7 +22,7 @@
   --radius:8px;
   --radius-sm:6px;
   --radius-lg:8px;
-  --sidebar-width:240px;
+  --sidebar-width:260px;
   --topbar-height:62px;
   --shadow:0 1px 2px rgba(16,24,40,.035),0 14px 30px rgba(16,24,40,.045);
   --shadow-sm:0 1px 2px rgba(16,24,40,.035);
@@ -446,7 +446,7 @@ a:focus-visible{
 
 .daily-row{
   display:grid;
-  grid-template-columns:86px minmax(116px,.58fr) minmax(140px,1.4fr) minmax(185px,.85fr);
+  grid-template-columns:86px minmax(116px,.5fr) minmax(220px,2.4fr) minmax(140px,.7fr);
   align-items:center;
   gap:14px;
   min-height:43px;

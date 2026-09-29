@@ -69,6 +69,8 @@ const AGENT_LOGOS = {
   "zcode":"zcode.png", "hermes":"hermes.png", "workbuddy":"workbuddy.png",
   "workbuddy-ai":"workbuddy.png", "dsh":"dsh.png", "catpaw":"catpaw.png",
   "kimi":"kimi.png",
+  /* 2026-09-29：MHAgent 官方应用图标（从 %APPDATA%/MHAgent 的 ico 提取 256px） */
+  "mhagent":"mhagent.png",
 };
 /* 本机确实拿不到品牌图的应用 → 字母徽标（比通用图形更像"它们自己"） */
 const AGENT_MONO = {
@@ -96,4 +98,40 @@ function agentIcon(name){
 }
 const agentLabel = name => AGENT_NAME[name] || name;
 const agentHasIcon = name => !!(AGENT_LOGOS[name] || AGENT_MONO[name] || AGENT_ICONS[name]);
+
+/* 模型厂商识别：模型名 → 官方品牌图 / 品牌色徽标。
+   有本机已验证的官方素材就走 img，其余用厂商品牌色字母徽标，
+   与侧栏数据源的 mono 徽标同一套视觉语言。 */
+const MODEL_VENDOR = [
+  [/^(gpt|o[134](-| |$)|codex|davinci|chatgpt|omni)/, ["openai", "openai.svg"]],
+  [/^claude/, ["claude", "claude.svg"]],
+  [/^(kimi|moonshot)/, ["kimi", "kimi.png"]],
+  [/^deepseek/, ["deepseek", ["DS", "#4D6BFE"]]],
+  [/^(glm|zhipu|chatglm)/, ["zhipu", ["GL", "#3859FF"]]],
+  [/^(qwen|qwq|qvq)/, ["qwen", ["QW", "#6236FF"]]],
+  [/^(doubao|ark-)/, ["doubao", ["DB", "#3C74F6"]]],
+  [/^ernie/, ["baidu", ["EB", "#2932E1"]]],
+  [/^hunyuan/, ["tencent", ["HY", "#0052D9"]]],
+  [/^(minimax|abab)/, ["minimax", ["MM", "#F23F5D"]]],
+  [/^(sn-|sensenova)/, ["sensenova", ["SN", "#E8531F"]]],
+  [/^gemini/, ["gemini", ["GE", "#4285F4"]]],
+  [/^grok/, ["xai", ["GK", "#8A8F98"]]],
+  [/^(llama|meta-)/, ["meta", ["LL", "#0668E1"]]],
+  [/^(mistral|mixtral)/, ["mistral", ["MI", "#FA520F"]]],
+  [/^raccoon/, ["raccoon", ["R", "#4AC08A"]]],
+];
+function modelIcon(name){
+  const n = String(name || "").toLowerCase();
+  for (const [re, v] of MODEL_VENDOR){
+    if (re.test(n)){
+      if (typeof v[1] === "string"){
+        return '<img class="agent-brand-img" src="/static/logos/' + v[1]
+          + '" alt="" loading="lazy" decoding="async">';
+      }
+      return '<span class="agent-mono" style="--mc:' + v[1][1] + '">' + v[1][0] + '</span>';
+    }
+  }
+  const tag = n.replace(/[^a-z0-9]/g, "").slice(0, 2).toUpperCase() || "?";
+  return '<span class="agent-mono" style="--mc:#666C75">' + tag + '</span>';
+}
 const $ = id => document.getElementById(id);

@@ -12,6 +12,10 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 
 .mono{font-family:ui-monospace,Consolas,monospace;font-size:12px}
 
+.m-ico{display:inline-flex;vertical-align:-5px;margin-right:7px}
+.m-ico img{width:18px;height:18px;object-fit:contain;display:block}
+.m-ico .agent-mono{width:18px;height:18px;border-radius:5px;font-size:8.5px}
+
 .muted{color:var(--dim);font-size:12px}
 
 .section-heading{

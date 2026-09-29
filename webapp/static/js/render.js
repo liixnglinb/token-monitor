@@ -238,8 +238,11 @@ function renderDailyDetail(rows, list, metric){
       + '<div class="daily-date"><b>' + esc(dayLabel) + '</b><small>' + esc(daySub) + '</small></div>'
       + '<div class="daily-primary"><b>' + metricText(item.value, metric) + '</b><span>占 ' + share.toFixed(1) + '%</span></div>'
       + '<div class="daily-track"><i style="width:' + Math.max(item.value ? 2 : 0, pct).toFixed(1) + '%"></i></div>'
-      + '<div class="daily-meta"><span>' + fmtTok(extra.tokens) + ' tok</span><span>'
-      + fmtCNY(extra.cost * DATA.cny_rate) + '</span><span>' + fmtInt(extra.requests) + ' 次</span></div>'
+      + '<div class="daily-meta">'
+      + (F.metric !== "tokens" ? '<span>' + fmtTok(extra.tokens) + ' tok</span>' : '')
+      + (F.metric !== "cost" ? '<span>' + fmtCNY(extra.cost * DATA.cny_rate) + '</span>' : '')
+      + (F.metric !== "requests" ? '<span>' + fmtInt(extra.requests) + ' 次</span>' : '')
+      + '</div>'
       + '</div>';
   }).join("");
 }
@@ -611,7 +614,7 @@ function renderModelTable(){
     : "当前模型属于套餐/订阅制，或单价不在价格库中";
   $("tbModel").innerHTML = list.map(([name,o],i)=>{
     const avg = o.tokens ? o.cost*DATA.cny_rate/o.tokens*1e6 : 0;
-    return `<tr><td class="mono">${esc(name)}</td>
+    return `<tr><td class="mono"><span class="m-ico">${modelIcon(name)}</span>${esc(name)}</td>
     <td class="num">${fmtInt(o.tokens)}</td><td class="num">${fmtInt(o.requests)}</td>
     <td class="num">${fmtCNY(o.cost*DATA.cny_rate)}</td>
     <td class="num">${avg ? "¥"+avg.toFixed(2) : '<span class="muted">价格未知</span>'}</td>
