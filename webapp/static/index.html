@@ -16,7 +16,7 @@
 <link rel="stylesheet" href="/static/styles/canvas.css?v=20260923-2326">
 <link rel="stylesheet" href="/static/styles/modern.css?v=20260924-1846">
 <link rel="stylesheet" href="/static/styles/theme.css?v=20260927-2100">
-<link rel="stylesheet" href="/static/styles/ui-polish.css?v=20261001-1900">
+<link rel="stylesheet" href="/static/styles/ui-polish.css?v=20261002-1000">
 
 
 </head>
@@ -107,6 +107,9 @@
       <span>数据截至 <b id="builtAt">—</b></span>
     </div>
     <div class="top-actions">
+      <!-- 自动下载进度胶囊：下载中显示百分比，完成后消失（询问弹窗接管） -->
+      <button class="update-progress" id="updateProgress" type="button" hidden
+              aria-live="polite" title="正在下载更新">0%</button>
       <button class="btn icon-btn export-btn" id="fExport" title="导出当前筛选为 CSV" aria-label="导出当前筛选为 CSV">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v7M5.5 7 8 9.5 10.5 7M3 11.5v2h10v-2"/></svg>
         <span class="sr-only">导出 CSV</span>
@@ -351,7 +354,7 @@
 <script src="/static/js/charts.js?v=20260924-1846"></script>
 <script src="/static/js/render.js?v=20261001-1300"></script>
 <script src="/static/js/interactions.js?v=20261001-1300"></script>
-<script src="/static/js/updater.js?v=20261001-1300"></script>
+<script src="/static/js/updater.js?v=20261002-1000"></script>
 <script src="/static/js/app.js?v=20260924-1846"></script>
 </body>
 </html>

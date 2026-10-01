@@ -340,6 +340,29 @@ def _activate_existing() -> None:
         LOG.warning("二次启动唤起窗口失败（不影响已在运行的实例）:\n%s", traceback.format_exc())
 
 
+def _touch_boot_stamp():
+    """真实启动第一时间写引导标记：更新脚本启动新版本后轮询该文件，
+    确认「引导器加载 python3xx.dll → Python 代码执行」整条链路成功。
+    --selfcheck 预检运行不写（热身不能伪装成真实启动）。"""
+    try:
+        base = os.environ.get("LOCALAPPDATA") or tempfile.gettempdir()
+        d = os.path.join(base, "TokenMonitor")
+        os.makedirs(d, exist_ok=True)
+        fd, part = tempfile.mkstemp(prefix="boot-", suffix=".tmp", dir=d)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(str(time.time()))
+            os.replace(part, os.path.join(d, "boot.stamp"))
+        finally:
+            if os.path.exists(part):
+                try:
+                    os.remove(part)
+                except OSError:
+                    pass
+    except OSError:
+        pass
+
+
 def main() -> None:
     global _INSTANCE_MUTEX
 
@@ -352,6 +375,10 @@ def main() -> None:
     if "--selfcheck" in sys.argv[1:]:
         LOG.info("selfcheck OK：bootloader 与 Python 运行时加载正常")
         return
+
+    # 引导标记先行：更新脚本启动新版本后靠轮询它判定「起没起来」，
+    # 失败自动重试、连续失败回滚旧版本（见 updater.py 的更新脚本）
+    _touch_boot_stamp()
 
     LOG.info("=== 启动 exe=%s frozen=%s ===", sys.executable, getattr(sys, "frozen", False))
 

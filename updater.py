@@ -7,7 +7,8 @@
      → 无校验资产时退回「体积 ≥ 1MB」兜底 → apply_staged()：
      先用 --selfcheck 预检新版 exe 能在本机完成 PyInstaller 引导
      （防安全软件拦截 python3xx.dll 导致替换后起不来，连续失败即中止、
-     保留当前版本）→ 写 update.bat（等待当前进程退出 → move 替换 → 重启）
+     保留当前版本）→ 写 update.bat（等进程退出 → move 替换 → 启动新版 →
+     轮询 boot.stamp 确认引导成功，失败自动重试 3 次，仍失败回滚旧版本）
      → server 1 秒后 os._exit(0) → bat 接管完成替换。
 """
 import hashlib
@@ -639,11 +640,37 @@ def apply_staged(tmp: str = None) -> None:
                 "  goto place\r\n"
                 ")\r\n"
                 'echo placed new exe >> "%LOG%"\r\n'
-                'echo waiting for resources release >> "%LOG%"\r\n'
-                'timeout /t 4 /nobreak >nul\r\n'
+                # ── 启动确认 + 自动重试 + 回滚（根治「找不到指定的模块」）──
+                # 新版本 main() 第一时间写 %LOCALAPPDATA%\TokenMonitor\boot.stamp；
+                # 轮询不到 = 引导失败（杀软拦 DLL 等）→ 杀掉弹窗进程自动重试，
+                # 连续 3 次失败 → 还原 .old 旧版本并启动，软件绝不消失。
+                "set STAMP=%LOCALAPPDATA%\\TokenMonitor\\boot.stamp\r\n"
+                "set ATT=0\r\n"
+                ":boot\r\n"
+                "set /a ATT+=1\r\n"
+                'echo [%date% %time%] boot attempt !ATT! >> "%LOG%"\r\n'
+                'if exist "%STAMP%" del "%STAMP%" >nul 2>&1\r\n'
                 f'start "" "{exe}"\r\n'
-                'echo started >> "%LOG%"\r\n'
+                "set B=0\r\n"
+                ":bootwait\r\n"
+                'timeout /t 5 /nobreak >nul\r\n'
+                'if exist "%STAMP%" goto booted\r\n'
+                "set /a B+=1\r\n"
+                "if !B! LSS 12 goto bootwait\r\n"
+                'echo boot not confirmed (attempt !ATT!) >> "%LOG%"\r\n'
+                'taskkill /F /IM TokenMonitor.exe >nul 2>&1\r\n'
+                "if !ATT! LSS 3 goto boot\r\n"
+                "goto rollback\r\n"
+                ":booted\r\n"
+                'echo boot confirmed >> "%LOG%"\r\n'
                 f'del "{exe_old}" >> "%LOG%" 2>&1\r\n'
+                'del "%~f0"\r\n'
+                "exit /b\r\n"
+                ":rollback\r\n"
+                # 防砖：连续 3 次启动都没确认 → 还原旧版本并启动
+                'echo ROLLBACK to old version >> "%LOG%"\r\n'
+                f'if exist "{exe_old}" move /y "{exe_old}" "{exe}" >> "%LOG%" 2>&1\r\n'
+                f'start "" "{exe}"\r\n'
                 'del "%~f0"\r\n'
                 "exit /b\r\n"
                 ":giveup\r\n"

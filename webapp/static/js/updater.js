@@ -106,6 +106,15 @@ function setUpdUI(){
       btn.textContent = "更新已就绪 · 点击安装";
     }
   }
+
+  /* 顶栏下载进度胶囊：任何视图都能看到自动下载的进度 */
+  const pill = $("updateProgress");
+  if (pill){
+    pill.hidden = st !== "dl";
+    pill.textContent = pct + "%";
+    pill.title = (UPD.source ? "正在从 " + UPD.source + " 下载 " : "正在测速并选择最快下载源 ")
+      + pct + "%（下载完成后会询问是否安装）";
+  }
 }
 
 window.startUpdate = function(){
@@ -145,7 +154,8 @@ function stopProgressPolling(){
   progressTimer = null;
 }
 
-/* ---------- 自动更新（两段式：下载 → 确认 → 安装重启） ---------- */
+/* ---------- 自动更新（全自动：检测到新版本 → 测速下载（进度可见）→
+   下载完成后弹窗询问是否安装） ---------- */
 async function checkUpdate(silent){
   const btn = $("updBtn");
   if (!silent){
@@ -161,8 +171,11 @@ async function checkUpdate(silent){
     if (v.has_update){
       btn.disabled = false;
       btn.className = "btn is-update";
-      btn.textContent = "更新到 v" + v.latest;
+      btn.textContent = UPD.state === "dl" ? "下载中…" : "更新到 v" + v.latest;
       btn.dataset.pending = "1";
+      /* 全自动：检测到新版本立即测速下载（最快源），完成后弹窗询问安装。
+         仅 idle 态触发，避免与进行中的下载/安装流程重入。 */
+      if (UPD.state === "idle") downloadUpdate();
     } else {
       btn.disabled = false;
       btn.className = "btn";
@@ -177,7 +190,7 @@ async function checkUpdate(silent){
   }
 }
 
-/* 第一段：下载到暂存（不替换、不重启），完成即进入「就绪」态 */
+/* 下载完成 → 弹窗询问「是否现在安装」（全自动流程的最后一步由用户决定） */
 async function downloadUpdate(){
   const btn = $("updBtn");
   btn.disabled = true;
@@ -200,7 +213,9 @@ async function downloadUpdate(){
     btn.disabled = false;
     btn.className = "btn is-ready";
     btn.textContent = "更新已就绪 · 点击安装";
+    btn.dataset.pending = "";
     setUpdUI();
+    confirmInstall();          /* 就绪即询问：现在安装还是稍后 */
   } catch(e){
     stopProgressPolling();
     btn.disabled = false;
@@ -212,8 +227,7 @@ async function downloadUpdate(){
   }
 }
 
-/* 确认弹窗：点更新按钮/小框就直接问「是否现在更新并重启」。
-   确认后走 runUpdate：需要时先下载（有进度），下载成功即自动替换重启。 */
+/* 确认弹窗：只在「下载已完成」时弹出，由用户决定现在装还是稍后 */
 function confirmInstall(){
   const m = $("updModal"); if (!m) return;
   const txt = $("updModalText");
@@ -226,7 +240,7 @@ function confirmInstall(){
 }
 window.confirmInstall = confirmInstall;
 
-/* 确认后：下载（带进度）→ 成功后自动安装并重启（无需再点第二次） */
+/* 弹窗确认后：已就绪直接安装；万一仍在下载则等下载完成再装 */
 async function runUpdate(){
   const m = $("updModal"); if (m) m.hidden = true;
   if (UPD.state === "ready"){ await applyUpdate(); return; }   // 已下载过 → 直接安装
@@ -271,10 +285,11 @@ async function applyUpdate(){
 }
 
 $("updBtn").onclick = function(){
-  /* 有更新（或已下载待安装）→ 直接弹「是否现在更新并重启」；确认后才下载/安装 */
-  if (UPD.state === "ready" || this.dataset.pending === "1"){ confirmInstall(); return; }
+  /* 就绪 → 弹「是否现在更新并重启」；下载/安装中不重复触发 */
+  if (UPD.state === "ready"){ confirmInstall(); return; }
+  if (UPD.state === "dl" || UPD.state === "applying") return;
   if (UPD.state === "error"){ UPD.state = "idle"; checkUpdate(false); return; }
-  checkUpdate(false);
+  checkUpdate(false);          /* 检测到新版本会自动开始下载 */
 };
 
 /* 确认弹窗按钮 */
@@ -307,3 +322,6 @@ $("updBtn").onclick = function(){
     }
   } catch(_){}
 })();
+
+/* 启动检查之外：每 30 分钟自动复查一次（仅 idle 态触发，不与进行中的流程重入） */
+setInterval(() => { if (UPD.state === "idle") checkUpdate(true); }, 30 * 60 * 1000);
