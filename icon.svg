@@ -1,29 +1,37 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
   <defs>
-    <linearGradient id="background" x1="38" y1="18" x2="218" y2="238" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#18202A"/>
-      <stop offset=".52" stop-color="#0C1117"/>
-      <stop offset="1" stop-color="#05070A"/>
+    <radialGradient id="background" cx="0.3" cy="0.15" r="1.15">
+      <stop offset="0" stop-color="#27313F"/>
+      <stop offset=".45" stop-color="#131A24"/>
+      <stop offset="1" stop-color="#070A0F"/>
+    </radialGradient>
+    <linearGradient id="value" x1="72" y1="180" x2="150" y2="52" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4D6BFE"/>
+      <stop offset=".55" stop-color="#6FA0FF"/>
+      <stop offset="1" stop-color="#9BE8FF"/>
     </linearGradient>
-    <linearGradient id="value" x1="76" y1="176" x2="120" y2="52" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#8FB2FF"/>
-      <stop offset="1" stop-color="#D6E4FF"/>
+    <linearGradient id="gloss" x1="40" y1="20" x2="180" y2="150" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity=".10"/>
+      <stop offset=".4" stop-color="#FFFFFF" stop-opacity=".02"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
     </linearGradient>
-    <linearGradient id="spark" x1="98" y1="33" x2="134" y2="69" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#FFB27A"/>
-      <stop offset="1" stop-color="#FF8A4C"/>
-    </linearGradient>
+    <filter id="tip" x="-120%" y="-120%" width="340%" height="340%">
+      <feDropShadow dx="0" dy="0" stdDeviation="6" flood-color="#7CB8FF" flood-opacity=".55"/>
+    </filter>
   </defs>
 
-  <!-- 底板：近黑圆角方（与软件界面同色系） -->
+  <!-- 底板：曜石渐变 + 玻璃高光（与软件界面同色系） -->
   <rect x="4" y="4" width="248" height="248" rx="58" fill="url(#background)"/>
   <rect x="4.75" y="4.75" width="246.5" height="246.5" rx="57.25" fill="none"
-        stroke="#ffffff" stroke-opacity=".07" stroke-width="1.5"/>
+        stroke="#ffffff" stroke-opacity=".09" stroke-width="1.5"/>
+  <rect x="4" y="4" width="248" height="248" rx="58" fill="url(#gloss)"/>
 
-  <!-- 量表：底弧（270°）+ 值弧 + 橙色值点 -->
-  <path d="M74 178 A70 70 0 1 1 182 178" fill="none" stroke="#26303E"
-        stroke-width="26" stroke-linecap="round"/>
-  <path d="M74 178 A70 70 0 0 1 116 51" fill="none" stroke="url(#value)"
-        stroke-width="26" stroke-linecap="round"/>
-  <circle cx="116" cy="51" r="21" fill="url(#spark)" stroke="#0B0E12" stroke-width="7"/>
+  <!-- 量表：底弧 + 蓝→青值弧 + 白芯光点 -->
+  <path d="M78 174 A62 62 0 1 1 178 174" fill="none" stroke="#1A2331"
+        stroke-width="21" stroke-linecap="round"/>
+  <path d="M78 174 A62 62 0 0 1 109 60.5" fill="none" stroke="url(#value)"
+        stroke-width="21" stroke-linecap="round"/>
+  <circle cx="109" cy="60.5" r="17" fill="#0E1420" opacity=".9"/>
+  <circle cx="109" cy="60.5" r="13" fill="#BFEBFF" filter="url(#tip)"/>
+  <circle cx="106" cy="57.5" r="5" fill="#FFFFFF"/>
 </svg>
