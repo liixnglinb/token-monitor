@@ -165,8 +165,8 @@ class Api:
 # 左侧 logo 列与标题栏在视觉上连成一根贯通到窗口顶的侧栏；
 # 右上角的原生最小化/关闭按钮保留（不牺牲缩放、贴靠、任务栏行为）。
 # Win10 不支持上色（调用返回错误码，被忽略），退化为深色标题栏。
-_DWM_SIDEBAR = 0x00130F0C      # COLORREF(0x00BBGGRR) ← 侧栏 #0C0F13
-_DWM_TEXT = 0x007D7169         # 标题文字 ← --dim #69717D（弱化到近隐形）
+_DWM_SIDEBAR = 0x00121111      # COLORREF(0x00BBGGRR) ← 侧栏 #111112
+_DWM_TEXT = 0x00777778         # 标题文字 ← #787877（弱化到近隐形）
 _DWM_COLOR_NONE = 0xFFFFFFFE   # 去掉 1px 窗口边框线
 
 

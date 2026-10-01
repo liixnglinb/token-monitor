@@ -1,29 +1,388 @@
 /* ============================================================
-   ui-polish.css —— v1.9.9 界面修正层（最后加载，可整体回滚）
-   对应三件事：
-   1) 图标观感统一：数据源/排行/未计入统一"品牌瓷砖"尺寸
-   2) 布局位置修正：侧栏合并入口、间距离边过近、模型表占比条顶边
-   3) 内容重心：Token 消耗升为英雄卡，金额降为末位估算参考
+   ui-polish.css —— v1.9.10 视觉重构层（最后加载，可整体回滚）
+   对齐 ZCode 桌面端的质感基准：
+   · 暖中性灰阶（去蓝调黑底），卡片用「浅一层的面」而不是描边堆叠
+   · 大圆角（卡片 14px / 控件 9px），克制的 1px 边框 + 极浅内高光
+   · 设置页 = 分组卡片（行间细分隔线），标题/描述/控件三段式
+   · KPI 独立卡片 + 留白；图表控件成组胶囊化
    ============================================================ */
 
-/* ── 2a. 侧栏顶部：原生标题栏下方留白（品牌名/图标已删） ── */
-.aside-top{border-bottom:0}
+/* ── 1. 设计令牌（暖中性灰阶） ── */
+:root{
+  color-scheme:dark;
+  --bg:#0C0C0D;
+  --side:#111112;
+  --card:#171719;
+  --card-soft:#141416;
+  --card-hover:#1C1C1F;
+  --card2:#202024;
+  --inset:#101012;
+  --line:#29292D;
+  --line-soft:#1F1F23;
+  --line-strong:#333338;
+  --txt:#F1F1F2;
+  --sub:#A6A6AD;
+  --dim:#70707A;
+  --blue:#5B8DEF;
+  --blue-bright:#7AA4FF;
+  --cyan:#4EC3D9;
+  --green:#3ECF8E;
+  --amber:#E5A83C;
+  --purple:#8B7CF6;
+  --red:#E5697A;
+  --radius:9px;
+  --radius-sm:7px;
+  --radius-lg:14px;
+  --shadow:0 1px 0 rgba(255,255,255,.025) inset,0 10px 28px rgba(0,0,0,.28);
+  --shadow-sm:0 1px 0 rgba(255,255,255,.02) inset;
+  --sidebar-width:252px;
+  --topbar-height:60px;
+  --ease:.16s ease;
+}
 
-/* ── 2c. 「设置 · 本机」合并入口 ── */
-.side-settings.side-combined{min-height:46px;gap:9px;margin-bottom:0;padding:7px 9px}
+/* ── 2. 基础面 ── */
+body{background:var(--bg)}
+main{background:var(--bg)}
+
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:#2C2C30;border-radius:6px;border:3px solid var(--bg)}
+::-webkit-scrollbar-thumb:hover{background:#3A3A40}
+::-webkit-scrollbar-track{background:transparent}
+
+::selection{background:rgba(91,141,239,.32)}
+
+/* ── 3. 侧栏 ── */
+aside{background:var(--side);border-right:1px solid #1B1B1E}
+
+.aside-top{height:52px;border-bottom:0}
+
+#nav{gap:2px}
+#nav a{
+  height:36px;border-radius:9px;color:var(--sub);
+  font-size:13.5px;font-weight:500;letter-spacing:.01em;
+}
+#nav a svg{width:17px;height:17px;color:#8A8A92}
+#nav a:hover{background:#1A1A1D;color:var(--txt)}
+#nav a.active{background:#26262A;color:#F5F5F6}
+#nav a.active svg{color:#C9D8FF}
+
+.side-section-head span{font-size:11.5px;font-weight:600;letter-spacing:.04em;color:#6E6E78}
+.side-section-head svg{color:#5A5A64}
+.side-section{margin-top:14px}
+
+.side-project,.side-recent{height:34px;border-radius:8px;padding:0 8px}
+.side-project:hover,.side-recent:hover{background:#1B1B1E;color:#E9E9EB}
+.side-project.active{background:#26262A;color:#F5F5F6}
+.side-project.active .side-project-icon{color:#C9D8FF}
+
+.side-project-name{font-size:13px;color:inherit}
+.side-project em{font-size:11px;color:#63636C;font-variant-numeric:tabular-nums}
+.side-project.active em{color:#9DA6C9}
+
+.side-unc-head{font-size:11px;color:#63636C;margin:10px 8px 4px}
+
+/* 设置·本机 合并入口（ZCode 用户行质感） */
+.side-foot{padding:10px;border-top:1px solid #1C1C1F}
+.side-settings.side-combined{min-height:46px;border-radius:10px;padding:8px 10px;color:#B9B9C0}
+.side-settings.side-combined:hover{background:#1C1C1F;color:#F0F0F2}
+.side-settings.side-combined.active{background:#26262A;color:#F5F5F6;box-shadow:0 0 0 1px #333338}
 .side-combined .sf-label{font-size:13px;font-weight:550}
-.side-combined .sf-sep{width:1px;height:18px;flex:none;background:#2A3037;margin:0 3px}
-.side-combined .side-avatar{width:26px;height:26px;font-size:9.5px}
-.side-combined .side-online{margin-left:auto}
-/* 更新状态点：发现新版蓝点脉冲 / 就绪与完成绿色（原 upd-mini 的点迁移至此） */
+.side-combined .sf-sep{height:16px;background:#2C2C31;margin:0 4px}
+.side-combined .side-avatar{
+  width:26px;height:26px;border-radius:8px;font-size:9.5px;
+  background:#232327;border:1px solid #34343A;color:#D9D9DE}
+.side-combined .side-account-copy b{font-size:12.5px;color:inherit}
 .side-combined .dot{position:static;width:8px;height:8px;flex:none;border:0;border-radius:50%}
-.side-combined .dot.update{background:var(--blue,#4D6BFE);box-shadow:0 0 8px rgba(77,107,254,.8);animation:pulse 2s infinite}
-.side-combined .dot.ready{background:#2FB7A3;box-shadow:0 0 8px rgba(47,183,163,.6)}
-.side-combined .dot.done{background:#2FB7A3}
+.side-combined .dot.update{background:var(--blue-bright);box-shadow:0 0 8px rgba(122,164,255,.75);animation:pulse 2s infinite}
+.side-combined .dot.ready,.side-combined .dot.done{background:var(--green);box-shadow:0 0 8px rgba(62,207,142,.55)}
+.side-combined .side-online{width:7px;height:7px;background:#3ECF8E;box-shadow:0 0 0 3px rgba(62,207,142,.10)}
 
-/* ── 1a. 图标瓷砖统一：侧栏 / 排行 / 未计入 一套节奏 ── */
+/* 设置模式的侧栏导航 */
+#setNav{padding:10px}
+.set-back{color:var(--sub);font-size:13px;padding:6px 8px;border-radius:8px;margin-bottom:10px}
+.set-back:hover{background:#1A1A1D;color:var(--txt)}
+.set-group{font-size:11px;font-weight:600;letter-spacing:.04em;color:#6E6E78;margin:14px 8px 5px}
+.set-item{height:36px;border-radius:9px;font-size:13.5px;color:var(--sub);gap:10px;padding:0 10px}
+.set-item svg{width:16px;height:16px;color:#8A8A92}
+.set-item:hover{background:#1A1A1D;color:var(--txt)}
+.set-item.active{background:#26262A;color:#F5F5F6}
+.set-item.active svg{color:#C9D8FF}
+
+/* ── 4. 顶栏 ── */
+.topbar{
+  background:var(--bg);border-bottom:1px solid #1B1B1E;
+  padding:0 26px;gap:16px}
+.page-heading h1{font-size:16.5px;font-weight:650;color:#F4F4F5;letter-spacing:.01em}
+.top-status{font-size:12px;color:var(--dim);gap:8px;border:0;padding:0}
+.top-status b{color:#9A9AA2;font-weight:550}
+.top-sep{background:#26262A}
+.sync-dot{width:7px;height:7px}
+.top-actions{gap:8px}
+
+/* 顶栏导出按钮：安静的幽灵钮（同特异性压过 theme.css 的蓝渐变） */
+.btn.icon-btn{
+  height:32px;border-radius:9px;padding:0 11px;
+  background:transparent;border:1px solid #2A2A2E;color:#A6A6AD;
+  box-shadow:none}
+.btn.icon-btn:hover{color:#EDEDEF;background:#1B1B1E;border-color:#36363B}
+.btn.icon-btn.is-done{color:var(--green);border-color:#2C4A41}
+.top-actions .export-btn,.top-actions .export-btn:hover{
+  background:transparent;box-shadow:none}
+#fExport{background:transparent;box-shadow:none}
+
+/* ── 5. 内容列 ── */
+.content{padding:22px 30px 60px;max-width:1280px}
+
+.filters{margin-bottom:16px}
+.dd-btn{
+  min-height:34px;border-radius:9px;padding:0 12px;gap:8px;
+  background:var(--card);border:1px solid var(--line);color:#D6D6DA}
+.dd-btn:hover{border-color:#3A3A40;background:var(--card-hover)}
+.dd-btn b{font-size:12.5px;font-weight:550}
+.dd-btn i{font-size:8px;color:var(--dim)}
+.dd-menu{
+  background:#1D1D20;border:1px solid #303036;border-radius:11px;
+  box-shadow:0 16px 40px rgba(0,0,0,.5);padding:5px}
+.dd-menu button{border-radius:7px;padding:7px 10px;font-size:12.5px;color:#C9C9CF}
+.dd-menu button:hover{background:#26262A;color:#F2F2F4}
+.dd-menu button .ck{color:var(--blue-bright)}
+
+/* ── 6. KPI：独立圆角卡片 ── */
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:13px;margin-bottom:16px}
+.kpi{
+  min-height:108px;border-radius:var(--radius-lg);
+  background:linear-gradient(180deg,#17171A 0%,#141416 100%);
+  border:1px solid #232327;padding:15px 18px 14px;
+  box-shadow:0 1px 0 rgba(255,255,255,.03) inset}
+.kpi + .kpi{border-left:1px solid #232327}
+
+.kpi-head{gap:9px;margin-bottom:10px}
+.kpi-icon{
+  width:28px;height:28px;border-radius:9px;
+  background:#232327;border:1px solid #2E2E33;color:#B9B9C1}
+.kpi .l{font-size:12px;font-weight:600;color:#9A9AA2;letter-spacing:.02em}
+.k-corner{
+  font-size:10.5px;padding:2px 8px;border-radius:999px;
+  background:rgba(91,141,239,.10);border:1px solid rgba(91,141,239,.22);color:#9FB6E8}
+.kpi .v{font-size:27px;font-weight:720;color:#F2F2F4;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.kpi .s{font-size:11.5px;color:#6E6E78}
+
+/* Token 英雄卡：更亮的面 + 微光 */
+.kpi.accent-token{background:linear-gradient(180deg,#191B21 0%,#141417 100%);border-color:#2A3040}
+.kpi.accent-token .kpi-icon{background:rgba(91,141,239,.13);border-color:rgba(122,164,255,.30);color:#9FB6E8}
+.kpi.accent-token .v{font-size:40px;color:#EAF0FF;text-shadow:0 0 30px rgba(122,164,255,.22);letter-spacing:-.03em}
+.kpi.accent-token .s{color:#8CA0C4}
+
+/* 金额卡：与普通卡一致（theme.css 的金色英雄样式按同特异性压回） */
+.kpi.accent-cost{background:linear-gradient(180deg,#17171A 0%,#141416 100%);border-color:#232327;
+  box-shadow:0 1px 0 rgba(255,255,255,.03) inset}
+.kpi.accent-cost .v{font-size:27px;font-weight:720;color:#F2F2F4;letter-spacing:-.02em;text-shadow:none}
+.kpi.accent-cost .s{color:#6E6E78}
+.kpi.accent-cost .kpi-icon{color:#C9A46A}
+@media (min-width:641px){
+  .kpi.accent-cost .v{font-size:27px}
+}
+
+@media (min-width:641px){
+  .kpis{grid-template-columns:1.35fr 1fr 1fr 1fr}
+}
+@media (max-width:640px){
+  .kpi.accent-token .v{font-size:26px}
+  .kpi{min-height:96px;padding:13px 14px 12px}
+}
+
+/* ── 7. 图表主卡 ── */
+.card,.agent-panel,.model-stat,.set-card{
+  border-radius:var(--radius-lg);
+  background:linear-gradient(180deg,#17171A 0%,#141416 100%);
+  border:1px solid #232327;
+  box-shadow:0 1px 0 rgba(255,255,255,.03) inset}
+
+.card{padding:18px 20px 16px;margin-bottom:16px}
+.card-head h3{font-size:14.5px;font-weight:650;color:#F0F0F2}
+.card-head .val{font-size:12px;color:#7A7A84}
+
+.chart-card{padding:18px 20px 14px}
+
+/* 图表控制胶囊组 */
+.chart-controls{gap:8px}
+.seg{background:var(--inset);border:1px solid #232327;border-radius:10px;padding:3px;gap:2px}
+.seg button{width:30px;height:26px;border-radius:7px;color:#7A7A84}
+.seg button svg{width:15px;height:15px}
+.seg button:hover{color:#D9D9DE;background:#222226}
+.seg button.on{background:#2B2B30;color:#F2F2F4;box-shadow:0 1px 0 rgba(255,255,255,.05) inset}
+
+/* 区间摘要条 */
+.trend-summary{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:0;
+  background:var(--inset);border:1px solid #1F1F23;border-radius:11px;
+  padding:11px 6px;margin:12px 0 14px}
+.trend-stat{padding:0 14px;border-left:1px solid #232327}
+.trend-stat:first-child{border-left:0}
+.trend-stat span{font-size:11px;color:#7A7A84}
+.trend-stat b{display:block;font-size:15.5px;font-weight:680;color:#EDEDEF;margin:2px 0 1px;font-variant-numeric:tabular-nums}
+.trend-stat small{font-size:10.5px;color:#5E5E68}
+
+/* 每日明细 */
+.daily-panel{margin-top:6px;border-top:1px solid #1F1F23;padding-top:12px}
+.daily-panel-head h4{font-size:13px;font-weight:650;color:#E4E4E7}
+.daily-panel-head span,.daily-panel-head p{font-size:11px;color:#63636C}
+.daily-row{
+  grid-template-columns:86px minmax(150px,.5fr) minmax(200px,2.2fr) minmax(120px,.6fr);
+  gap:14px;padding:8px 10px;border-radius:9px;margin:0 -10px}
+.daily-row:hover{background:#19191C}
+.daily-date b{font-size:12.5px;color:#E9E9EB;font-weight:600}
+.daily-date small{font-size:10.5px;color:#63636C}
+.daily-primary b{font-size:12.5px;color:#EDEDEF;font-variant-numeric:tabular-nums}
+.daily-primary span{font-size:10.5px;color:#63636C;margin-left:6px}
+.daily-track{height:5px;border-radius:3px;background:#202024;overflow:hidden}
+.daily-track i{background:linear-gradient(90deg,#4A70E0,#7AA4FF);border-radius:3px}
+.daily-meta{justify-content:flex-end;gap:12px}
+.daily-meta span{font-size:11px;color:#63636C;font-variant-numeric:tabular-nums}
+
+/* ── 8. Agent 用量排行 ── */
+.agent-panel{padding:16px 18px 10px;margin-bottom:16px}
+.agent-panel-head{padding-bottom:12px;margin-bottom:6px;border-bottom:1px solid #1F1F23}
+.agent-panel-head h3{font-size:14.5px;font-weight:650}
+.agent-panel-head p{font-size:11.5px;color:#6E6E78;margin-top:2px}
+.agent-panel-count{font-size:11px;color:#63636C}
+
+.ar{border-radius:11px;margin:0 -8px;border-bottom:0}
+.agent-entry + .agent-entry{border-top:0}
+.ar:hover{background:#161619}
+.ar.open{background:#17171A}
+.ar-head{padding:10px 14px;gap:10px}
+.ar-fold{color:#5A5A64;font-size:9px}
+.ar-rank{font-size:11px;color:#5E5E68;font-variant-numeric:tabular-nums;min-width:18px}
+.ar-head .nm{font-size:13.5px;font-weight:600;color:#ECECEE}
+.ar-head .num small{color:#63636C;font-size:10.5px;margin-right:5px}
+.ar-head .num b{color:#E6E6E9;font-weight:600;font-size:12.5px}
+.ar-chart{height:52px;margin:2px 22px 10px 46px;opacity:.92}
+.ar-models{padding:0 18px 12px 46px}
+.mrow{padding:6px 0;border-top:1px solid #1D1D21}
+.mrow .nm{font-size:12.5px;color:#CFCFD5}
+.mrow .num{font-size:11.5px;color:#8A8A92}
+.mrow .num b{color:#E6E6E9}
+
+/* ── 9. 分布卡（环形 + Top10） ── */
+.dist{gap:30px}
+.donut-center b{font-size:22px;color:#F0F0F2}
+.donut-center span{font-size:11px;color:#6E6E78}
+.donut-legend{gap:6px 14px;margin-top:12px}
+.donut-legend span{font-size:11.5px;color:#9A9AA2;gap:6px}
+.donut-legend i{width:9px;height:9px;border-radius:3px}
+
+.t10-row{padding:5px 8px;border-radius:8px;gap:10px}
+.t10-row:hover{background:#1B1B1E}
+.t10-row .idx{font-size:10px;color:#63636C;min-width:34px}
+.t10-row .nm{font-size:12.5px;color:#CFCFD5}
+.t10-row .dot{width:9px;height:9px;border-radius:3px}
+.t10-bar{height:4px;border-radius:2px;background:#202024}
+.t10-row .val{font-size:12px;color:#E6E6E9}
+.t10-row .val em{color:#63636C;font-style:normal;font-size:10px;margin-left:2px}
+
+/* ── 10. 模型用量视图 ── */
+.section-heading h2{font-size:20px;font-weight:700;color:#F4F4F5;letter-spacing:.01em}
+.section-heading{margin:2px 2px 16px}
+
+.model-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:13px;margin-bottom:16px}
+.model-stat{
+  border-radius:var(--radius-lg);padding:14px 18px;
+  background:linear-gradient(180deg,#17171A 0%,#141416 100%);
+  border:1px solid #232327;gap:12px;align-items:center}
+.model-stat-icon{width:30px;height:30px;border-radius:9px;background:#232327;border:1px solid #2E2E33;color:#B9B9C1}
+.model-stat small{font-size:11px;color:#7A7A84}
+.model-stat b{font-size:19px;font-weight:700;color:#F0F0F2;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+
+.table-card{padding:4px 6px}
+.table-card table{border-collapse:collapse;width:100%}
+.table-card th{
+  font-size:11px;font-weight:600;color:#7A7A84;letter-spacing:.03em;
+  padding:12px 14px;border-bottom:1px solid #232327;text-align:right}
+.table-card th:first-child{text-align:left;padding-left:16px}
+.table-card td{padding:12px 14px;border-bottom:1px solid #1B1B1E;text-align:right;font-size:12.5px;color:#D9D9DE}
+.table-card td:first-child{text-align:left;padding-left:16px}
+.table-card tr:last-child td{border-bottom:0}
+.table-card tbody tr:hover td{background:#19191C}
+.table-card .num{font-variant-numeric:tabular-nums}
+.table-card .bar{margin-right:14px}
+.table-card .muted{color:#63636C}
+
+/* ── 11. 设置页（ZCode 式分组卡片） ── */
+.set-main{max-width:860px;padding:6px 2px 40px}
+.set-main h2{font-size:24px;font-weight:700;color:#F4F4F5;margin:4px 0 20px;letter-spacing:.01em}
+
+.set-cards{display:flex;flex-direction:column;gap:14px;margin-bottom:20px}
+.set-cat-h{font-size:11px;font-weight:600;letter-spacing:.05em;color:#6E6E78;margin:0 2px 8px}
+
+.set-card{padding:2px 0}
+.set-row{
+  display:flex;align-items:center;justify-content:space-between;gap:20px;
+  padding:14px 20px;min-height:58px}
+.set-row + .set-row{border-top:1px solid #1F1F23}
+.set-info{max-width:560px}
+.set-info .t{font-size:13.5px;font-weight:600;color:#ECECEE}
+.set-info .d{font-size:12px;color:#8A8A92;margin-top:3px;line-height:1.55}
+.set-scan{font-size:11.5px;line-height:1.7}
+
+.set-sel,select.set-sel{
+  min-width:150px;height:32px;border-radius:8px;padding:0 10px;
+  background:#202024;border:1px solid #303036;color:#E4E4E7;font-size:12.5px}
+.set-sel:hover{border-color:#3C3C43}
+.set-sel:focus{outline:0;border-color:var(--blue)}
+
+/* 开关 */
+.switch{width:40px;height:23px}
+.switch i{background:#2B2B2F;border:1px solid #3A3A40;border-radius:999px;transition:background .16s}
+.switch i::after{width:17px;height:17px;border-radius:50%;background:#8F8F97;top:2px;left:2px;transition:all .16s}
+.switch input:checked + i{background:var(--blue);border-color:var(--blue)}
+.switch input:checked + i::after{left:19px;background:#FFFFFF}
+
+/* 按钮体系 */
+.btn{
+  height:32px;border-radius:9px;padding:0 14px;font-size:12.5px;font-weight:550;
+  background:#212125;border:1px solid #303036;color:#E4E4E7}
+.btn:hover{background:#26262B;border-color:#3C3C43;color:#F2F2F4}
+.btn:disabled{opacity:.5}
+
+#updBtn{min-width:104px}
+#updBtn.is-update{background:#2C4A9E;border-color:#3D5FC0;color:#F2F5FF}
+#updBtn.is-ready{background:#1F4A3C;border-color:#2E6B58;color:#C8F2E2}
+#updBtn.is-downloading{background:#1E2A44;border-color:#31456F;color:#B9CBF2}
+#updBtn.is-error{background:#42272D;border-color:#5C343D;color:#F2C4CC}
+#updBtn.is-done{background:#1F3A33;border-color:#2E5B4F;color:#BDEBD9}
+
+/* 更新进度条 + 内联日志 */
+.set-progress{height:5px;max-width:400px;border-radius:3px;background:#232327;overflow:hidden;margin:2px 0 7px}
+.set-progress i{display:block;height:100%;width:0;border-radius:3px;
+  background:linear-gradient(90deg,#4A70E0,#7AA4FF);transition:width .25s ease}
+.upd-notes{margin:10px 4px 6px;padding:12px 14px;border-radius:10px;
+  background:var(--inset);border:1px solid #232327}
+.upd-notes .un-t{color:#F0F0F2;font-size:12.5px;font-weight:650}
+.upd-notes .un-date{color:#7A7A84;font-size:11px;margin:2px 0 8px}
+.upd-notes .sec{color:#9FB6E8;font-weight:650;font-size:12px;margin:10px 0 3px}
+.upd-notes .li{position:relative;padding-left:14px;color:#B9B9C0;font-size:12px;line-height:1.75}
+.upd-notes .li::before{content:"·";position:absolute;left:3px;color:var(--blue-bright);font-weight:700}
+.upd-notes .p{color:#B9B9C0;font-size:12px;line-height:1.75}
+.upd-notes code{font-family:ui-monospace,Consolas,monospace;font-size:11px;color:#A9BEF0;
+  background:rgba(91,141,239,.10);border-radius:4px;padding:1px 5px}
+
+/* 口径说明便签（设置·扫描与缓存） */
+.set-notes .note{background:var(--inset);border:1px solid #232327;border-left:2px solid #3A3A42}
+.set-notes .note.plan{border-left-color:var(--green)}
+.set-notes .note.unpriced{border-left-color:var(--amber)}
+.set-notes .note.time{border-left-color:#3A3A42}
+
+/* 主区错误条 */
+.note.err{background:#241A1C;border:1px solid #423036;border-left:2px solid var(--red);color:#EFC3CA}
+
+/* 作者 display 规则会压过 [hidden] 的 UA 样式：显式兜底 */
+.set-row[hidden]{display:none}
+.upd-notes[hidden]{display:none}
+
+/* ── 12. 图标瓷砖 ── */
 .side-project-icon{width:22px;height:22px}
-.side-project-icon svg{width:16px;height:16px;color:#A9B1BA}
+.side-project-icon svg{width:16px;height:16px;color:#A0A0A8}
 .side-project-icon .agent-brand-img{width:18px;height:18px;object-fit:contain;border-radius:4px}
 .side-project-icon .agent-mono{width:21px;height:21px;font-size:9px}
 
@@ -31,70 +390,39 @@
 .side-unc-ico .agent-brand-img{width:16px;height:16px}
 .side-unc-ico .agent-mono{width:18px;height:18px;font-size:8px}
 
-.ar-icon{width:24px;height:24px}
+.ar-icon{width:26px;height:26px}
 .ar-icon svg{width:20px;height:20px}
-.ar-icon .agent-brand-img{width:22px;height:22px;object-fit:contain;border-radius:5px}
+.ar-icon .agent-brand-img{width:22px;height:22px;object-fit:contain;border-radius:6px}
 .ar-icon .agent-mono{width:22px;height:22px;font-size:9.5px}
 
 .m-ico{width:20px;height:20px;margin-right:8px}
 .m-ico img{width:18px;height:18px}
 .m-ico .agent-mono{width:18px;height:18px;font-size:8px}
 
-/* ── 3. 英雄卡：Token 消耗为主，金额回落为普通卡 ── */
-@media (min-width:641px){
-  .kpis{grid-template-columns:1.42fr 1fr 1fr 1fr}
-  .kpi.accent-cost{background:none}
-  .kpi.accent-cost .v{font-size:25px;letter-spacing:0;color:#E8ECF1;text-shadow:none}
-  .kpi.accent-cost .s{color:#7E858F}
-  .kpi.accent-cost .kpi-icon{color:#C9A46A}
+/* 字母徽标：品牌色浅底 */
+.agent-mono{color:var(--mc,#9AA1AC);
+  background:color-mix(in srgb, var(--mc, #9AA1AC) 15%, transparent);
+  border:1px solid color-mix(in srgb, var(--mc, #9AA1AC) 30%, transparent)}
 
-  .kpi.accent-token{background:linear-gradient(180deg,rgba(108,155,255,.09),rgba(108,155,255,0) 62%)}
-  .kpi.accent-token .v{font-size:44px;letter-spacing:-1.2px;color:#C4D6FF;
-    text-shadow:0 0 34px rgba(108,155,255,.26)}
-  .kpi.accent-token .kpi-icon{color:#6C9BFF}
-  .kpi.accent-token .s{color:#8FA6CE}
-}
+/* ── 13. 空态与水印 ── */
+.empty,.chart-empty .t2,.daily-empty,.side-empty{color:#63636C}
+.chart-empty .t1{color:#B9B9C0;font-size:14px;font-weight:600}
+.chart-empty .t2{font-size:12px}
 
-/* ── 2d. 位置偏移修正：留白节奏统一，元素不再贴边 ── */
-.topbar{padding:0 26px}
-.top-actions{gap:10px}
-.content{padding:20px 28px 56px}
+.wm{opacity:.035}
 
-/* 模型表：占比条不再顶到卡片右缘 */
-.table-card th:last-child,.table-card td:last-child{padding-right:20px}
-.table-card .bar{margin-right:12px}
+/* ── 14. 更新确认弹窗 ── */
+.upd-modal{background:rgba(0,0,0,.55);backdrop-filter:blur(3px)}
+.upd-modal-card{background:#1B1B1E;border:1px solid #313136;border-radius:16px;box-shadow:0 24px 60px rgba(0,0,0,.6)}
+.upd-modal-card .um-t{font-size:15px;font-weight:650;color:#F2F2F4}
+.upd-modal-card .um-d{font-size:12.5px;color:#9A9AA2;margin:8px 0 16px}
+.um-actions .later{background:transparent;border:1px solid #34343A;color:#B9B9C0;border-radius:9px}
+.um-actions .later:hover{background:#232327}
+.um-actions .go{background:#3D5FC0;border:0;color:#F2F5FF;border-radius:9px}
+.um-actions .go:hover{background:#4A6ED4}
 
-/* Agent 排行行头与迷你图：右侧留出与卡片一致的呼吸位 */
-.ar-head{padding-right:6px}
-.ar-chart{margin-right:22px}
-
-/* 每日明细：右侧金额/次数列与卡片边保持间距 */
-.daily-row{padding-right:4px}
-
-/* ── 2b. 设置页：软件更新卡片（进度条 + 内联更新日志） ── */
-.set-progress{height:6px;max-width:420px;border-radius:4px;background:#1A2027;
-  overflow:hidden;margin:2px 0 7px}
-.set-progress i{display:block;height:100%;width:0;border-radius:4px;
-  background:linear-gradient(90deg,#5C8AF5,#6C9BFF);transition:width .25s ease}
-
-.upd-notes{margin:12px 2px 4px;padding:11px 13px;border:1px solid #232933;
-  border-radius:9px;background:rgba(108,155,255,.05)}
-.upd-notes .un-t{color:#E8ECF1;font-size:12.5px;font-weight:650}
-.upd-notes .un-date{color:#7E858F;font-size:11px;margin:2px 0 7px}
-.upd-notes .sec{color:#8FB0FF;font-weight:650;font-size:12px;margin:9px 0 3px}
-.upd-notes .li{position:relative;padding-left:13px;color:#C2C9D2;font-size:12px;line-height:1.7}
-.upd-notes .li::before{content:"·";position:absolute;left:3px;color:#6C9BFF;font-weight:700}
-.upd-notes .p{color:#C2C9D2;font-size:12px;line-height:1.7}
-.upd-notes code{font-family:var(--mono,monospace);font-size:11px;color:#9FB6E8;
-  background:rgba(108,155,255,.10);border-radius:4px;padding:1px 5px}
-
-/* ── 补充修正（截图验证后） ── */
-/* 作者 display 规则会压过 [hidden] 的 UA 样式：进度行/日志块必须显式兜底 */
-.set-row[hidden]{display:none}
-.upd-notes[hidden]{display:none}
-
-/* 顶栏导出按钮中性化：避免蓝底下箭头被误认成「更新」入口 */
-.top-actions .export-btn{background:transparent;border-color:var(--line,#242A32);color:#AEB7C3;
-  box-shadow:none}
-.top-actions .export-btn:hover{color:#EEF1F3;border-color:#333B45;background:#161B21}
-.top-actions .export-btn.is-done{color:#2FB7A3;border-color:#2F5B52}
+/* ── 15. 窄屏底栏 ── */
+#tabbar{background:#141416;border-top:1px solid #232327}
+#tabbar button{color:#7A7A84}
+#tabbar button.active{color:#EAF0FF}
+#tabbar button.active svg{color:#9FB6E8}
