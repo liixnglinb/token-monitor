@@ -2,9 +2,9 @@
 function switchView(view){
   const isSet = view === "settings";
   const chrome = {
-    overview:["用量总览","本机 AI 编程工具 Token 与成本"],
-    models:["模型成本","按模型查看用量与估算金额"],
-    settings:["设置","应用偏好、扫描与更新状态"],
+    overview:["用量总览","本机 AI 软件的 Token 消耗与请求统计"],
+    models:["模型用量","按模型查看 Token 消耗与参考金额"],
+    settings:["设置","应用偏好、数据扫描与软件更新"],
   }[view] || ["用量总览","本机 AI 编程工具 Token 与成本"];
   if ($("pageTitle")) $("pageTitle").textContent = chrome[0];
   if ($("pageSubtitle")) $("pageSubtitle").textContent = chrome[1];

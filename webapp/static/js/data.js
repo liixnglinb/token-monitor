@@ -33,6 +33,13 @@ function rangeDates(){
     default:          return null;
   }
 }
+const addMonths = (ym, n) => {
+  let [y, m] = ym.split("-").map(Number);
+  m += n;
+  y += Math.floor((m - 1) / 12);
+  m = ((m - 1) % 12 + 12) % 12 + 1;
+  return y + "-" + String(m).padStart(2, "0");
+};
 /* 填充连续日期轴：无数据的日期补 0，与 DeepSeek 一致 */
 function fillDays(pairs, start){
   if (!DATA.range.min || !DATA.range.max) return pairs;
@@ -43,6 +50,16 @@ function fillDays(pairs, start){
   if (s > e) return pairs;
   for (let d = new Date(s+"T00:00:00"); d <= new Date(e+"T00:00:00"); d.setDate(d.getDate()+1))
     out.push([ymd(d), map.get(ymd(d)) || 0]);
+  return out;
+}
+/* 填充连续月份轴：没用过的月份也补 0 显示，否则按月统计只剩有数据的两根柱。
+   轴 = 筛选/数据跨度 ∪ 最近 12 个月（取并集起点）；跨度更长时全跨度展开。 */
+function fillMonths(pairs, startM, endM){
+  if (!DATA.range.min || !DATA.range.max || !startM || !endM || startM > endM) return pairs;
+  const map = new Map(pairs);
+  const out = [];
+  for (let m = startM; m <= endM; m = addMonths(m, 1))
+    out.push([m, map.get(m) || 0]);
   return out;
 }
 function rowsFor(keepUnknown){

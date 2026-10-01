@@ -71,13 +71,24 @@ function setUpdUI(){
   }
 
   const pct = pctNow;
-  const progress = $("updateProgress");
-  if (progress){
-    progress.hidden = st !== "dl";
-    progress.textContent = pct + "%";
-    progress.style.setProperty("--p", pct + "%");
-    progress.title = (UPD.source ? "正在从 " + UPD.source + " 下载 " : "正在选择最快下载源 ")
-      + pct + "%";
+  /* 设置页「软件更新」卡片里的下载进度行 */
+  const row = $("updProgressRow"), bar = $("updProgressBar"), txt = $("updProgressText");
+  if (row) row.hidden = st !== "dl";
+  if (bar) bar.style.width = pct + "%";
+  if (txt) txt.textContent = (UPD.source ? "正在从 " + UPD.source + " 下载 " : "正在测速并选择最快下载源 ")
+    + pct + "%";
+  /* 有新版本时把更新日志内联展示在卡片里（原侧栏悬停浮层的替代） */
+  const notes = $("updNotes");
+  if (notes){
+    if (st === "update" && UPD.latest){
+      notes.hidden = false;
+      notes.innerHTML = '<div class="un-t">v' + esc(UPD.latest) + ' 更新日志</div>'
+        + (UPD.date ? '<div class="un-date">' + esc(UPD.date) + '</div>' : "")
+        + (UPD.body ? '<div class="un-body">' + fmtReleaseBody(UPD.body) + '</div>' : "");
+    } else {
+      notes.hidden = true;
+      notes.innerHTML = "";
+    }
   }
 
   const btn = $("updBtn");
@@ -97,49 +108,7 @@ function setUpdUI(){
   }
 }
 
-function renderUpdTip(confirmed){
-  const tip = $("updTip"); if (!tip) return;
-  let html;
-  if (UPD.state === "ready" && UPD.latest){
-    /* 下载完成、待确认安装 */
-    html = '<div class="t1">更新已就绪 · v' + esc(UPD.latest) + '</div>'
-      + '<div style="color:#9BA3AE;margin:4px 0 10px">安装包已下载完成，点下面按钮立即更新并重启。</div>'
-      + '<button class="go" onclick="confirmInstall()">更新并重启</button>'
-      + '<button class="later" onclick="hideUpdTip()">稍后</button>';
-  } else if (UPD.state === "dl"){
-    const pct = Math.max(0, Math.min(100, Math.round(UPD.percent || 0)));
-    const source = UPD.source
-      ? '<div class="dl-source">下载源：' + esc(UPD.source) + '</div>'
-      : '<div class="dl-source">正在测速并选择最快下载源…</div>';
-    html = '<div class="t1">正在下载新版本 ' + pct + '%</div>'
-      + '<div class="dl-progress"><i style="width:' + pct + '%"></i></div>'
-      + source
-      + '<div class="dl-row">下载完成后会提示你确认安装，期间可正常使用。</div>';
-  } else if (UPD.state === "update" && UPD.latest){
-    /* 悬停即展示完整更新日志（对齐 ZCode）；点击图标才钉住并出现确认按钮 */
-    html = '<div class="t1">v' + esc(UPD.latest) + ' 更新日志</div>'
-      + (UPD.date ? '<div class="date">' + esc(UPD.date) + '</div>' : "")
-      + (UPD.body ? '<div class="body">' + fmtReleaseBody(UPD.body) + '</div>' : "")
-      + (confirmed
-          ? '<button class="go" onclick="confirmInstall()">立即更新</button>'
-            + '<button class="later" onclick="hideUpdTip()">稍后</button>'
-          : '<div class="hint">点击图标确认更新</div>');
-  } else {
-    html = '<div class="t1">' + (UPD.ver ? "当前 v" + esc(UPD.ver) : "Token Monitor") + '</div>'
-      + '<div style="color:#8A8A90;margin-top:3px">'
-      + (UPD.state === "checking" ? "正在检查更新…" : "已是最新版本") + '</div>';
-  }
-  tip.innerHTML = html;
-  tip.hidden = false;
-  const r = $("updMini").getBoundingClientRect();
-  tip.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 350)) + "px";
-  tip.style.top = (r.bottom + 8) + "px";
-}
-function hideUpdTip(){ const t = $("updTip"); if (t) t.hidden = true; }
-window.hideUpdTip = hideUpdTip;
-
 window.startUpdate = function(){
-  hideUpdTip();
   const btn = $("updBtn");
   if (btn && btn.dataset.pending === "1") btn.click();
 };
@@ -174,29 +143,6 @@ function startProgressPolling(){
 function stopProgressPolling(){
   window.clearTimeout(progressTimer);
   progressTimer = null;
-}
-
-/* 左上角小按钮：悬停简提示 / 点击展开确认 */
-const miniEl = $("updMini");
-if (miniEl){
-  miniEl.addEventListener("mouseenter", () => {
-    if (UPD.state === "update" && !tipPinned) renderUpdTip(false);
-    else if (UPD.state === "dl" || UPD.state === "ready") renderUpdTip(false);
-  });
-  miniEl.addEventListener("mouseleave", () => {
-    setTimeout(() => { if (!tipPinned && !tipHovered) hideUpdTip(); }, 150);
-  });
-  miniEl.addEventListener("click", () => {
-    if (UPD.state === "update" || UPD.state === "ready"){ confirmInstall(); }
-    else if (UPD.state === "dl"){ tipPinned = !tipPinned; renderUpdTip(false); }
-    else { checkUpdate(false); }
-  });
-  document.addEventListener("click", e => {
-    if (!e.target.closest(".upd-tip") && !e.target.closest("#updMini")){
-      tipPinned = false; hideUpdTip();
-    }
-  });
-  document.addEventListener("keyup", e => { if (e.key === "Escape") hideUpdTip(); });
 }
 
 /* ---------- 自动更新（两段式：下载 → 确认 → 安装重启） ---------- */
@@ -269,7 +215,6 @@ async function downloadUpdate(){
 /* 确认弹窗：点更新按钮/小框就直接问「是否现在更新并重启」。
    确认后走 runUpdate：需要时先下载（有进度），下载成功即自动替换重启。 */
 function confirmInstall(){
-  hideUpdTip();
   const m = $("updModal"); if (!m) return;
   const txt = $("updModalText");
   if (txt){

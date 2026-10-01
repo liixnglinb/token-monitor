@@ -240,7 +240,8 @@ function renderDailyDetail(rows, list, metric){
       + '<div class="daily-track"><i style="width:' + Math.max(item.value ? 2 : 0, pct).toFixed(1) + '%"></i></div>'
       + '<div class="daily-meta">'
       + (F.metric !== "tokens" ? '<span>' + fmtTok(extra.tokens) + ' tok</span>' : '')
-      + (F.metric !== "cost" ? '<span>' + fmtCNY(extra.cost * DATA.cny_rate) + '</span>' : '')
+      + (F.metric !== "cost" && extra.cost > 0
+          ? '<span>' + fmtCNY(extra.cost * DATA.cny_rate) + '</span>' : '')
       + (F.metric !== "requests" ? '<span>' + fmtInt(extra.requests) + ' 次</span>' : '')
       + '</div>'
       + '</div>';
@@ -257,13 +258,32 @@ function renderMain(){
   $("mainTitle").textContent = title;
 
   const raw = groupSeries(rows, F.metric, F.grain);
-  const data = F.grain === "day" ? fillDays(raw, range && range[0]) : raw;
+  /* 月份轴至少铺满最近 12 个月：没用过的月份也显示，按月统计才有环比意义 */
+  let data;
+  if (F.grain === "day"){
+    data = fillDays(raw, range && range[0]);
+  } else {
+    const endSrc = (range && range[1]) || DATA.range.max;
+    const startSrc = (range && range[0]) || DATA.range.min;
+    const endM = endSrc ? endSrc.slice(0, 7) : null;
+    const startM = startSrc ? startSrc.slice(0, 7) : null;
+    const floorM = endM ? addMonths(endM, -11) : null;   // 最近 12 个月的起点
+    const axisStart = (startM && floorM && startM < floorM) ? startM : (floorM || startM);
+    data = fillMonths(raw, axisStart, endM);
+  }
   const labels = data.map(d=>d[0]);
   const list = data.map(([label, value]) => ({ label, value }));
   const total = list.reduce((sum, item) => sum + item.value, 0);
   $("mainSum").textContent = DIM_NAME[F.dim] + " · " + metricText(total, F.metric);
-  renderTrendSummary(list, F.metric);
-  renderDailyDetail(rows, list, F.metric);
+  /* 摘要与明细只统计筛选区间内的月份，零填充月份不稀释"日均/覆盖率" */
+  let sumList = list;
+  if (F.grain === "month"){
+    const sM = ((range && range[0]) || DATA.range.min || "").slice(0, 7);
+    const eM = ((range && range[1]) || DATA.range.max || "").slice(0, 7);
+    if (sM && eM) sumList = list.filter(item => item.label >= sM && item.label <= eM);
+  }
+  renderTrendSummary(sumList, F.metric);
+  renderDailyDetail(rows, sumList.length ? sumList : list, F.metric);
 
   const emp = $("mainEmpty");
   if (total === 0){
@@ -537,7 +557,7 @@ function renderAgentList(){
           '<span class="ar-metrics">' +
             '<span><small>Tokens</small><b>' + fmtInt(o.tokens) + '</b></span>' +
             '<span><small>请求</small><b>' + fmtInt(o.requests) + '</b></span>' +
-            '<span><small>成本</small><b>' + costText(o.cost, o.tokens, null, o.planTokens > 0 && o.planTokens >= o.tokens * 0.995) + '</b></span>' +
+            '<span><small>金额</small><b>' + costText(o.cost, o.tokens, null, o.planTokens > 0 && o.planTokens >= o.tokens * 0.995) + '</b></span>' +
           '</span>' +
         '</div>' +
         '<div class="ar-chart"><canvas id="ac-' + i + '" role="img" aria-label="' + esc(name) + ' 每日 Token 走势"></canvas></div>' +
@@ -601,23 +621,25 @@ function renderModelTable(){
     o.tokens += r.tokens; o.cost += r.cost; o.requests += r.requests;
     agg.set(r.model, o);
   }
-  const list = [...agg.entries()].sort((a,b)=>b[1].cost-a[1].cost);
-  const max = list.length ? Math.max(list[0][1].cost, 1e-9) : 1;
+  /* Token 消耗才是主口径：按 Token 排序、占比条按 Token，金额仅作估算参考 */
+  const list = [...agg.entries()].sort((a,b)=>b[1].tokens-a[1].tokens);
+  const max = list.length ? Math.max(list[0][1].tokens, 1) : 1;
   const totalTokens = list.reduce((s,x)=>s+x[1].tokens,0);
   const totalCost = list.reduce((s,x)=>s+x[1].cost,0);
-  $("msModels").textContent = fmtInt(list.length);
   $("msTokens").textContent = fmtInt(totalTokens);
+  $("msModels").textContent = fmtInt(list.length);
   const costEl = $("msCost");
   costEl.textContent = totalCost > 0 ? fmtCNY(totalCost * DATA.cny_rate)
-    : (totalTokens > 0 ? "未计价" : fmtCNY(0));
-  costEl.title = totalCost > 0 ? "按当前价表估算"
-    : "当前模型属于套餐/订阅制，或单价不在价格库中";
+    : (totalTokens > 0 ? "套餐/未计价" : fmtCNY(0));
+  costEl.title = totalCost > 0 ? "按当前价表估算，仅供参考"
+    : "当前模型属于套餐/订阅制（只记用量不计金额），或单价不在价格库中";
   $("tbModel").innerHTML = list.map(([name,o],i)=>{
     const avg = o.tokens ? o.cost*DATA.cny_rate/o.tokens*1e6 : 0;
     return `<tr><td class="mono"><span class="m-ico">${modelIcon(name)}</span>${esc(name)}</td>
     <td class="num">${fmtInt(o.tokens)}</td><td class="num">${fmtInt(o.requests)}</td>
-    <td class="num">${fmtCNY(o.cost*DATA.cny_rate)}</td>
+    ${barCell(o.tokens,max,i<3?"#6C9BFF":"#3E4550")}
+    <td class="num">${costText(o.cost, o.tokens, name)}</td>
     <td class="num">${avg ? "¥"+avg.toFixed(2) : '<span class="muted">价格未知</span>'}</td>
-    ${barCell(o.cost,max,i<3?"#6C9BFF":"#3E4550")}</tr>`;
+    </tr>`;
   }).join("") || `<tr><td colspan="6" class="empty">当前筛选下无数据</td></tr>`;
 }

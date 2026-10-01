@@ -57,9 +57,32 @@ const AGENT_ICONS = {
 const AGENT_NAME = {
   "claude-code":"Claude Code", "codex":"Codex", "zcode":"ZCode",
   "opencode":"OpenCode", "hermes":"Hermes", "mhagent":"MHAgent",
-  "openclaw-autoclaw":"OpenClaw", "agnes":"Agnes", "dsh":"DSH",
+  "openclaw":"OpenClaw", "openclaw-autoclaw":"OpenClaw AutoClaw",
+  "agnes":"Agnes", "agnes-ledger":"Agnes Ledger", "dsh":"DSH",
   "cline":"Cline", "box-agent":"Box Agent", "mavis":"Mavis",
   "workbuddy":"WorkBuddy", "workbuddy-ai":"WorkBuddy AI",
+  "workbuddy-legacy":"WorkBuddy 旧版",
+  "codebuddy":"腾讯 CodeBuddy", "yumbo":"腾讯元宝", "ima":"腾讯 IMA",
+  "tongyi-lingma":"通义灵码", "qoder":"Qoder", "qwen-cli":"通义千问 CLI",
+  "trae":"TRAE", "trae-solo":"TRAE Solo", "doubao":"豆包",
+  "ark":"火山方舟", "comate":"Baidu Comate", "iflycode":"讯飞 iFlyCode",
+  "codearts":"华为 CodeArts", "codefuse":"CodeFuse", "zhipu-codegeex":"CodeGeeX",
+  "cherrystudio":"Cherry Studio", "kimi":"Kimi", "minimax":"MiniMax",
+  "sensenova":"商汤 Sensenova", "meituan-catpaw-models":"美团 CatPaw",
+  "gemini-cli":"Gemini CLI", "windsurf":"Windsurf", "cursor":"Cursor",
+  "copilot-chat":"GitHub Copilot", "copilot-cli":"GitHub Copilot CLI",
+  "amazon-q":"Amazon Q", "junie":"Junie", "kiro":"Kiro", "zed":"Zed",
+  "warp":"Warp", "goose":"Goose", "crush":"Crush", "opencode-atlantis":"OpenCode Atlantis",
+  "opencode-review":"OpenCode Review", "roo-code":"Roo Code", "kilo-code":"Kilo Code",
+  "aider":"Aider", "amp":"Amp", "augment":"Augment", "continue":"Continue",
+  "crush-codebuff":"CodeBuff", "codebuff":"CodeBuff", "devin":"Devin",
+  "droid":"Factory Droid", "command-code":"Command Code", "grok-build":"Grok Build",
+  "lmstudio":"LM Studio", "lark-cli":"飞书 Lark", "cc-switch":"CC Switch",
+  "cc-switch-data":"CC Switch 数据", "tokscale":"TokScale", "mha-agent":"MHA Agent",
+  "mimo":"Xiaomi MiMo", "modex":"Modex", "mux":"Mux", "pi":"Pi", "prime":"Prime",
+  "reasonix":"Reasonix", "unsloth":"Unsloth", "jcode":"JCode",
+  "goofish-cli":"闲鱼 CLI", "mimosa":"Mimosa", "openviking":"OpenViking",
+  "raccoonwork":"RaccoonWork", "codex-session-delete":"Codex 会话清理",
   "unknown":"未知来源",
 };
 const AGENT_LOGOS = {
@@ -76,25 +99,61 @@ const AGENT_LOGOS = {
 const AGENT_MONO = {
   "box-agent": ["B", "#7C8CF8"], "mhagent": ["MH", "#4AC08A"],
   "mavis": ["M", "#E8B45B"], "agnes": ["A", "#A78BFA"],
-  "qoder": ["Q", "#5CC8DE"], "trae-solo": ["T", "#F0737A"], "trae": ["T", "#F0737A"],
+  "agnes-ledger": ["AL", "#A78BFA"],
+  "qoder": ["Q", "#5CC8DE"], "trae-solo": ["TS", "#F0737A"], "trae": ["T", "#F0737A"],
   "cursor": ["C", "#9AA1AC"], "doubao": ["D", "#5C8AF5"], "qwen-cli": ["Q", "#7C8CF8"],
-  "cherrystudio": ["CH", "#E8834B"], "yumbo": ["YB", "#4FC3A1"],
+  "cherrystudio": ["CH", "#E8834B"], "yumbo": ["元", "#4FC3A1"],
   "copilot-chat": ["GH", "#9AA1AC"], "copilot-cli": ["GH", "#9AA1AC"],
   "goofish-cli": ["闲", "#E8B45B"], "mimosa": ["M", "#E0607A"],
   "openviking": ["OV", "#5CC8DE"], "raccoonwork": ["R", "#4AC08A"],
+  "codebuddy": ["CB", "#3E7BFA"], "ima": ["IM", "#3E7BFA"],
+  "tongyi-lingma": ["通", "#6C5CE7"], "ark": ["方", "#3C74F6"],
+  "comate": ["Co", "#E0607A"], "iflycode": ["iF", "#3B82F6"],
+  "codearts": ["CA", "#5C8AF5"], "codefuse": ["CF", "#4AC08A"],
+  "zhipu-codegeex": ["CG", "#3859FF"], "minimax": ["MM", "#F23F5D"],
+  "sensenova": ["SN", "#E8531F"], "meituan-catpaw-models": ["猫", "#FFC300"],
+  "gemini-cli": ["GE", "#4285F4"], "windsurf": ["W", "#26B787"],
+  "amazon-q": ["Q", "#FF9900"], "junie": ["J", "#E08B5C"],
+  "kiro": ["K", "#FF9900"], "zed": ["Z", "#E0607A"], "warp": ["W", "#B49BF8"],
+  "goose": ["G", "#4FC3A1"], "crush": ["C", "#F0737A"], "codebuff": ["CB", "#F0737A"],
+  "roo-code": ["R", "#E8724C"], "kilo-code": ["KL", "#5CC8DE"],
+  "aider": ["A", "#E8B45B"], "amp": ["A", "#A78BFA"], "augment": ["Au", "#4AC08A"],
+  "continue": ["C", "#26B787"], "devin": ["D", "#5C8AF5"],
+  "droid": ["Dr", "#9B92F0"], "command-code": ["CC", "#E8B45B"],
+  "grok-build": ["GK", "#8A8F98"], "lmstudio": ["LM", "#7C8CF8"],
+  "lark-cli": ["飞", "#26B787"], "cc-switch": ["CS", "#8A93A8"],
+  "cc-switch-data": ["CS", "#8A93A8"], "tokscale": ["TS", "#5CC8DE"],
+  "mha-agent": ["MHA", "#4AC08A"], "mimo": ["Mi", "#E08B5C"],
+  "modex": ["MX", "#9AA1AC"], "mux": ["MX", "#A78BFA"], "pi": ["Pi", "#5CC8DE"],
+  "prime": ["P", "#E8B45B"], "reasonix": ["Rx", "#9B92F0"],
+  "unsloth": ["U", "#E0C05A"], "jcode": ["JC", "#5CC8DE"],
+  "openclaw": ["OC", "#F0737A"], "openclaw-autoclaw": ["OC", "#F0737A"],
+  "workbuddy-legacy": ["WB", "#3E7BFA"],
+  "codex-session-delete": ["CD", "#9AA1AC"],
+  "opencode-atlantis": ["OA", "#5CC8DE"], "opencode-review": ["OR", "#5CC8DE"],
 };
+/* 未登记软件的兜底：从名称派生字母徽标 + 稳定配色（同一软件永远同色）。
+   中文名取首字，拉丁名取前两个字母；颜色由名称哈希落在扩展调色板上。 */
+const _MONO_PAL = ["#6C9BFF","#4FC3A1","#E8B45B","#F0737A","#9B92F0",
+  "#5CC8DE","#E08B5C","#A78BFA","#26B787","#E0607A","#B49BF8","#8A93A8"];
+function monoFor(name){
+  const label = agentLabel(name) || String(name || "?");
+  const latin = label.replace(/[^A-Za-z0-9]/g, "");
+  let h = 0;
+  for (let i = 0; i < label.length; i++) h = (h * 31 + label.charCodeAt(i)) >>> 0;
+  const color = _MONO_PAL[h % _MONO_PAL.length];
+  const tag = /^[一-鿿]/.test(label) ? label[0]
+    : (latin.slice(0, 2).toUpperCase() || label.slice(0, 2) || "?");
+  return [tag, color];
+}
 function agentIcon(name){
   const logo = AGENT_LOGOS[name];
   if (logo){
     return '<img class="agent-brand-img" src="/static/logos/' + logo
       + '" alt="" loading="lazy" decoding="async">';
   }
-  const mono = AGENT_MONO[name];
-  if (mono){
-    return '<span class="agent-mono" style="--mc:' + mono[1] + '">' + mono[0] + '</span>';
-  }
-  return AGENT_ICONS[name] ||
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="4.2" y="4.2" width="15.6" height="15.6" rx="4"/><circle cx="12" cy="12" r="2.4"/></svg>';
+  const mono = AGENT_MONO[name] || monoFor(name);
+  return '<span class="agent-mono" style="--mc:' + mono[1] + '">' + esc(mono[0]) + '</span>';
 }
 const agentLabel = name => AGENT_NAME[name] || name;
 const agentHasIcon = name => !!(AGENT_LOGOS[name] || AGENT_MONO[name] || AGENT_ICONS[name]);
