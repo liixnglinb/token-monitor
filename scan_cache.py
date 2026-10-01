@@ -157,13 +157,25 @@ def save():
                 os.remove(tmp)
             except OSError:
                 pass
-            try:                    # 放弃原子性兜底直写，至少别让缓存完全不落盘
-                with open(_PATH, "w", encoding="utf-8") as f:
-                    f.write(payload)
-                LAST_ERROR[0] = None
-                return True
+            try:
+                # replace 失败多为瞬时占用（如杀软正在扫描缓存文件）：
+                # 换一个临时文件再试一次原子替换。不做「直接 open 覆盖」的
+                # 兜底 —— replace 失败后直写几乎不可能成功，且会绕过路径校验。
+                fd2, tmp2 = tempfile.mkstemp(prefix="sc-", dir=cache_dir())
+                try:
+                    with os.fdopen(fd2, "w", encoding="utf-8") as f:
+                        f.write(payload)
+                    os.replace(tmp2, _PATH)
+                    LAST_ERROR[0] = None
+                    return True
+                finally:
+                    if os.path.exists(tmp2):
+                        try:
+                            os.remove(tmp2)
+                        except OSError:
+                            pass
             except OSError as e2:
-                LAST_ERROR[0] = "直写也失败: %s" % e2
+                LAST_ERROR[0] = "重试替换也失败: %s" % e2
                 return False
     return True
 

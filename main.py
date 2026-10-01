@@ -7,6 +7,7 @@
 打包：pyinstaller TokenMonitor.spec
 """
 import ctypes
+import ipaddress
 import logging
 import os
 import socket
@@ -15,6 +16,7 @@ import tempfile
 import threading
 import time
 import traceback
+import urllib.parse
 import urllib.request
 
 import webview
@@ -76,6 +78,19 @@ def serve(port: int) -> None:
         SERVE_ERROR.append(exc[-1500:])
 
 
+def _guard_loopback_url(url: str) -> str:
+    """就绪探测只允许打向本机回环地址：协议与主机名白名单之外，
+    还要校验解析后的 IP 全部落在回环段（防 DNS rebinding 到内网）。"""
+    u = urllib.parse.urlparse(url)
+    host = (u.hostname or "").lower()
+    if u.scheme != "http" or host != "127.0.0.1":
+        raise RuntimeError("拒绝访问非回环地址: %s" % url)
+    for info in socket.getaddrinfo(host, None, type=socket.SOCK_STREAM):
+        if not ipaddress.ip_address(info[4][0]).is_loopback:
+            raise RuntimeError("拒绝解析到非回环地址的主机: %s" % info[4][0])
+    return url
+
+
 def wait_ready(port: int, timeout: float = 20.0, serve_thread: "threading.Thread | None" = None) -> bool:
     """等端口真正可访问再开窗口，否则会先看到白屏/连接失败页
 
@@ -83,7 +98,7 @@ def wait_ready(port: int, timeout: float = 20.0, serve_thread: "threading.Thread
     服务线程若在等待期间崩溃（已死或已记录错误），立即返回 False，
     不要傻等满 timeout 才让 main() 去开白屏窗口。
     """
-    url = "http://127.0.0.1:%d/" % port
+    url = _guard_loopback_url("http://127.0.0.1:%d/" % port)
     deadline = time.time() + timeout
     while time.time() < deadline:
         # 服务线程已死或已记录错误：没必要再等，直接判定失败
@@ -327,6 +342,17 @@ def _activate_existing() -> None:
 
 def main() -> None:
     global _INSTANCE_MUTEX
+
+    # 更新预检模式：updater 在替换 exe 之前以 --selfcheck 启动新版一次，
+    # 只要能执行到这里，就说明 PyInstaller 引导器加载 python3xx.dll 及整个
+    # Python 运行时成功（即「Failed to load Python DLL」一类故障不存在），
+    # 立即正常退出 0 表示预检通过。
+    # ⚠️ 必须放在单实例锁之前：预检发生时旧实例仍在运行，先建锁会被判成
+    # 二次启动，把旧窗口拉到前台且退出码语义混乱。
+    if "--selfcheck" in sys.argv[1:]:
+        LOG.info("selfcheck OK：bootloader 与 Python 运行时加载正常")
+        return
+
     LOG.info("=== 启动 exe=%s frozen=%s ===", sys.executable, getattr(sys, "frozen", False))
 
     # 单实例锁：Windows 命名互斥体，防止重复启动多个实例。

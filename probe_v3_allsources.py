@@ -21,6 +21,7 @@ Token Monitor v3 — 全源统一解析（含重叠检测）
 import json
 import hashlib
 import os
+import re
 import shutil
 import time
 import sqlite3
@@ -308,16 +309,19 @@ def scan_hermes():
     con, tmp = open_ro(p)
     out = []
     try:
-        cols = [r[1] for r in con.execute('PRAGMA table_info("sessions")')]
-        idcol = "session_id" if "session_id" in cols else ("id" if "id" in cols else None)
+        # 列名随版本变化：用固定 SQL 的 SELECT * + description 按名取列，
+        # 不再把自省到的列名拼进查询文本
+        cur = con.execute('SELECT * FROM sessions')
+        names = [d[0] for d in cur.description]
+        idx = {n: i for i, n in enumerate(names)}
+        idcol = next((n for n in ("session_id", "id") if n in idx), None)
         need = [c for c in ("input_tokens", "output_tokens",
-                            "cache_read_tokens", "cache_write_tokens") if c in cols]
-        if not need or not idcol:
+                            "cache_read_tokens", "cache_write_tokens") if c in idx]
+        if not need or idcol is None:
             print(f"    ⚠ Hermes sessions 缺列: id={idcol} tokens={need}")
             return []
-        sel = ", ".join([idcol] + need)
-        for row in con.execute(f'SELECT {sel} FROM sessions'):
-            d = dict(zip([idcol] + need, row))
+        for row in cur:
+            d = {n: row[i] for n, i in idx.items()}
             out.append(R("hermes", "unknown", str(d.get(idcol) or ""), "unknown",
                          d.get("input_tokens") or 0,
                          d.get("cache_write_tokens") or 0,
@@ -930,6 +934,18 @@ def _has_tok(col):
     return False
 
 
+# SQL 标识符白名单：库文件可能来自不可信的应用目录，表/列名在拼进
+# 任何查询文本前必须先过这道校验，杜绝引号逃逸（防恶意构造的 DB 文件）。
+_IDENT_RE = re.compile(r"\A[A-Za-z_][A-Za-z0-9_]*\Z")
+
+
+def _qident(name):
+    s = str(name or "")
+    if not _IDENT_RE.match(s):
+        raise ValueError("非法 SQL 标识符: %r" % s)
+    return '"%s"' % s
+
+
 def _snake(k):
     """camelCase -> snake_case，兼容 JS/TS 系 agent 的键名风格"""
     out = []
@@ -1406,11 +1422,14 @@ def scan_reg_sqlite_one(src, agent, seen_real, pre=None):
                     if tn.startswith("sqlite_"):
                         continue
                     try:
-                        cols = [r[1] for r in con.execute('PRAGMA table_info("%s")' % tn)]
+                        # 表名来自 sqlite_master 自省：列清单走参数绑定，
+                        # 表名在拼进查询前过 _qident 白名单（防恶意库文件逃逸）
+                        cols = [r[1] for r in con.execute(
+                            "SELECT name FROM pragma_table_info(?)", (tn,))]
                         if not any(_has_tok(c) for c in cols):
                             continue
                         rows = con.execute(
-                            'SELECT * FROM "%s"' % tn)
+                            'SELECT * FROM %s' % _qident(tn))
                     except sqlite3.Error:
                         continue
                     rn = 0

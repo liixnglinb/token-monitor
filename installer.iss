@@ -42,3 +42,4 @@ Filename: "{app}\TokenMonitor.exe"; Description: "启动 Token Monitor"; \
 [UninstallDelete]
 ; 清理更新残留
 Type: files; Name: "{app}\TokenMonitor.exe.new"
+Type: files; Name: "{app}\TokenMonitor.preflight.exe"

@@ -1,22 +1,29 @@
 # -*- coding: utf-8 -*-
 """自动更新 —— 对比 GitHub Releases，下载新版 exe 并自替换重启。
 
-流程：/api/update → fetch_latest() 找到更新 → download_and_apply()
+流程：/api/update → fetch_latest() 找到更新 → download_staged()
      下载新版到临时目录 → 优先用 .sha256 资产做 SHA256 完整性校验
      （校验失败立即中止，防止镜像返回截断/被篡改的包变砖）
-     → 无校验资产时退回「体积 ≥ 1MB」兜底 → 写 update.bat
-     （等待当前进程退出 → move 替换 → 重启）
+     → 无校验资产时退回「体积 ≥ 1MB」兜底 → apply_staged()：
+     先用 --selfcheck 预检新版 exe 能在本机完成 PyInstaller 引导
+     （防安全软件拦截 python3xx.dll 导致替换后起不来，连续失败即中止、
+     保留当前版本）→ 写 update.bat（等待当前进程退出 → move 替换 → 重启）
      → server 1 秒后 os._exit(0) → bat 接管完成替换。
 """
 import hashlib
+import ipaddress
 import json
 import os
 import re
+import shutil
+import socket
 import subprocess
 import sys
 import tempfile
 import threading
 import time
+import urllib.error
+import urllib.parse
 import urllib.request
 from concurrent.futures import (
     ThreadPoolExecutor,
@@ -40,6 +47,50 @@ _PROGRESS = {
     "message": "",
     "source": None,
 }
+
+
+# ── 出网与路径加固（纵深防御）────────────────────────────────────────
+# 更新链路的 URL 由「固定镜像前缀 + GitHub 下载地址」拼接而成，全部收敛进
+# 白名单；更新临时文件必须落在系统临时目录内。拼接源均为本模块常量，
+# 这里是第二道防线：即便常量被改坏，越界访问也会在真正请求前被拦下。
+_ALLOWED_HOSTS = frozenset({
+    "api.github.com", "github.com", "objects.githubusercontent.com",
+    "gh-proxy.com", "ghfast.top",
+})
+
+
+def _guard_url(url: str) -> str:
+    """出网白名单校验：仅放行 https + 已知官方/镜像域名，且域名解析出的
+    所有 IP 必须是公网地址（阻断内网/环回/链路本地，防 DNS rebinding）。"""
+    u = urllib.parse.urlparse(url)
+    host = (u.hostname or "").lower()
+    if u.scheme != "https" or host not in _ALLOWED_HOSTS:
+        raise RuntimeError("拒绝访问非白名单地址: %s" % url)
+    for info in socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM):
+        if not ipaddress.ip_address(info[4][0]).is_global:
+            raise RuntimeError("拒绝解析到非公网地址的主机 %s → %s"
+                               % (host, info[4][0]))
+    return url
+
+
+class _AllowlistRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """重定向目标必须同样通过白名单 + 解析边界校验（防跳转进内网）。"""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        _guard_url(newurl)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+_OPENER = urllib.request.build_opener(_AllowlistRedirectHandler)
+
+
+def _guard_temp_path(path: str) -> str:
+    """路径越界校验：更新相关文件必须落在系统临时目录内。"""
+    base = os.path.realpath(tempfile.gettempdir())
+    p = os.path.realpath(path)
+    if os.path.commonpath([base, p]) != base:
+        raise RuntimeError("路径越出临时目录: %s" % path)
+    return p
 
 
 def set_progress(**patch):
@@ -87,11 +138,11 @@ def is_newer(latest: str, local: str) -> bool:
 def fetch_latest(timeout: int = 8):
     """返回 (latest_version_without_v, assets, info)。info 含 body/date 供浮层展示；
     404 时 ("", [], {})。"""
-    url = f"https://api.github.com/repos/{REPO}/releases/latest"
+    url = _guard_url(f"https://api.github.com/repos/{REPO}/releases/latest")
     req = urllib.request.Request(url, headers={
         "Accept": "application/vnd.github+json", "User-Agent": _UA})
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
+        with _OPENER.open(req, timeout=timeout) as r:
             rel = json.load(r)
     except urllib.error.HTTPError as e:
         if e.code == 404:
@@ -192,7 +243,7 @@ def _source_url(url: str, prefix: str) -> str:
 def _probe_source(source, url: str):
     """在 3 秒预算内采样，返回该源在本机网络下的实际吞吐率。"""
     label, prefix = source
-    target = _source_url(url, prefix)
+    target = _guard_url(_source_url(url, prefix))
     req = urllib.request.Request(target, headers={
         "User-Agent": _UA,
         "Accept-Encoding": "identity",
@@ -200,7 +251,7 @@ def _probe_source(source, url: str):
     })
     started = time.perf_counter()
     received = 0
-    with urllib.request.urlopen(req, timeout=_PROBE_TIMEOUT) as r:
+    with _OPENER.open(req, timeout=_PROBE_TIMEOUT) as r:
         while received < _PROBE_BYTES:
             if time.perf_counter() - started >= _PROBE_BUDGET:
                 break
@@ -276,14 +327,19 @@ def _download(
     preferred_source=None,
 ):
     last_err = None
+    dest = _guard_temp_path(dest)
     for label, prefix in _ordered_sources(url, speed_test, preferred_source):
-        target = _source_url(url, prefix)
+        target = _guard_url(_source_url(url, prefix))
+        # 落盘走 mkstemp + 原子替换：先写进临时目录里的随机命名文件，
+        # 完整且过体积校验后才 replace 成 dest —— 断流/坏包不会在
+        # dest 留下半个文件
+        fd, part = tempfile.mkstemp(prefix="tm-dl-")
         try:
             req = urllib.request.Request(target, headers={
                 "User-Agent": _UA,
                 "Accept-Encoding": "identity",
             })
-            with urllib.request.urlopen(req, timeout=timeout) as r, open(dest, "wb") as f:
+            with os.fdopen(fd, "wb") as f, _OPENER.open(req, timeout=timeout) as r:
                 total = int(r.headers.get("Content-Length") or 0)
                 done = 0
                 if progress_cb:
@@ -296,13 +352,20 @@ def _download(
                     done += len(chunk)
                     if progress_cb:
                         progress_cb(done, total, label)
-            size = os.path.getsize(dest)
+            size = os.path.getsize(part)
             if size >= min_size:
+                os.replace(part, dest)
                 return label, prefix         # 成功
             last_err = RuntimeError("下载内容异常（%d 字节）" % size)
         except Exception as e:              # 超时 / 连接失败 / HTTP 错误 → 换下一个源
             last_err = e
             continue
+        finally:
+            if os.path.exists(part):
+                try:
+                    os.remove(part)
+                except OSError:
+                    pass
     raise last_err or RuntimeError("所有下载源均失败")
 
 
@@ -431,6 +494,76 @@ def download_staged(asset: dict, checksum_asset=None, version: str = None) -> st
     return tmp
 
 
+# ── 更新预检 ─────────────────────────────────────────────────────────
+# 预检命令行参数由 main.py 在单实例锁之前消费：进程只要能执行到 Python 代码
+# 就立即退出 0。⚠️ 未来的新版 main.py 必须保留该参数处理，否则预检会因
+# 单实例互斥体冲突而永远"假成功"（或唤起旧窗口），防线失效。
+_SELFCHECK_FLAG = "--selfcheck"
+_PREFLIGHT_ATTEMPTS = 3      # 连续失败次数上限（杀软深扫通常 1-2 次内放行）
+_PREFLIGHT_WAIT = 90.0       # 单次预检最长等待秒数（正常 <10s，留杀软深扫余量）
+_PREFLIGHT_RETRY_GAP = 8.0   # 两次预检之间的间隔秒数
+
+
+def _preflight_new_exe(staged: str) -> None:
+    """验证暂存的新版 exe 能在本机完成 PyInstaller 引导（能执行到 Python 代码）。
+
+    通过则正常返回；失败抛 RuntimeError（含用户可读的处置提示），调用方
+    （apply_staged）据此在替换当前 exe 之前中止更新——旧版本原样保留。
+    """
+    _, exe = _base()
+    # 复制到安装目录再试运行，而不是直接从 %TEMP% 执行：
+    # 从 TEMP 运行无签名 exe 本身就是常见杀软启发式拦截点。
+    # realpath 规范化后再拼装，杜绝符号链接/相对路径把探针文件带出安装目录。
+    probe = os.path.join(os.path.dirname(os.path.realpath(exe)),
+                         "TokenMonitor.preflight.exe")
+    probe_dir = os.path.dirname(probe)
+    try:
+        if os.path.commonpath([os.path.realpath(exe), probe]) != probe_dir:
+            raise RuntimeError("更新预检失败：探针路径越出安装目录")
+        shutil.copyfile(staged, probe)
+    except OSError as exc:
+        raise RuntimeError("更新预检失败：无法写入安装目录（%s）" % exc)
+
+    last_code = None
+    try:
+        for attempt in range(1, _PREFLIGHT_ATTEMPTS + 1):
+            set_progress(
+                state="applying",
+                percent=100,
+                message="正在预检新版本能否在本机启动（第 %d/%d 次）"
+                        % (attempt, _PREFLIGHT_ATTEMPTS),
+                source=STAGED.get("source"),
+            )
+            try:
+                proc = subprocess.Popen(
+                    [probe, _SELFCHECK_FLAG],
+                    close_fds=True,
+                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            except OSError as exc:
+                raise RuntimeError("更新预检失败：无法启动新版 exe（%s）" % exc)
+            try:
+                last_code = proc.wait(timeout=_PREFLIGHT_WAIT)
+            except subprocess.TimeoutExpired:
+                # 引导失败会弹模态错误框等用户点确认；一直没人点就超时杀掉重试
+                proc.kill()
+                proc.wait()
+                last_code = None
+            if last_code == 0:
+                return
+            time.sleep(_PREFLIGHT_RETRY_GAP)
+    finally:
+        try:
+            os.remove(probe)
+        except OSError:
+            pass
+
+    raise RuntimeError(
+        "新版本连续 %d 次预检失败（退出码 %s），已中止更新，当前版本未受影响。"
+        "多为安全软件拦截新版 exe 所致：可将安装目录加入杀软信任区后重试，"
+        "或稍后再试" % (_PREFLIGHT_ATTEMPTS,
+                        "超时" if last_code is None else last_code))
+
+
 def apply_staged(tmp: str = None) -> None:
     """第二段：为暂存的更新包写自替换脚本并启动；当前进程由 server 侧退出。"""
     _, exe = _base()
@@ -446,10 +579,20 @@ def apply_staged(tmp: str = None) -> None:
         source=STAGED.get("source"),
     )
 
+    # 防砖预检：先确认新版 exe 在本机跑得起来（能执行到 Python 代码），
+    # 再动当前安装。2026-10-01 实测：安全软件（联想电脑管家/火绒引擎）对
+    # 「刚被自更新替换的无签名 exe」首次启动会深度实时扫描，可能拦掉
+    # _MEI 解压目录里的 python3xx.dll / vcruntime，LoadLibrary 报
+    # 「找不到指定的模块」，用户以为软件变砖。预检把这类拦截挡在替换之前：
+    # 重试仍失败就中止更新，当前版本原样保留。
+    _preflight_new_exe(tmp)
+
     pid = os.getpid()
     exe_old = exe + ".old"
-    bat = os.path.join(tempfile.gettempdir(), "tokenmonitor-update.bat")
-    log = os.path.join(tempfile.gettempdir(), "tokenmonitor-update.log")
+    bat = _guard_temp_path(os.path.join(tempfile.gettempdir(),
+                                        "tokenmonitor-update.bat"))
+    log = _guard_temp_path(os.path.join(tempfile.gettempdir(),
+                                        "tokenmonitor-update.log"))
     # cmd 脚本用系统默认编码（GBK）写，避免中文路径乱码。
     #
     # ⚠️ Windows 锁定「运行中的 exe 映像」：move /y 直接覆盖自身会永久
@@ -457,56 +600,66 @@ def apply_staged(tmp: str = None) -> None:
     #   1) 把运行中的 exe **改名**为 .old（改名不受映像锁限制）
     #   2) 新 exe move 到原路径
     #   3) start 新 exe，尽力删除 .old
-    with open(bat, "w", encoding="gbk", errors="replace") as f:
-        f.write(
-            "@echo off\r\n"
-            "setlocal enabledelayedexpansion\r\n"
-            f'set LOG={log}\r\n'
-            'echo [%date% %time%] update begin > "%LOG%"\r\n'
-            ":wait\r\n"
-            f'tasklist /FI "PID eq {pid}" | find "{pid}" >nul\r\n'
-            "if not errorlevel 1 (\r\n"
-            "  timeout /t 1 /nobreak >nul\r\n"
-            "  goto wait\r\n"
-            ")\r\n"
-            'echo old process gone >> "%LOG%"\r\n'
-            "set N=0\r\n"
-            ":retry\r\n"
-            f'move /y "{exe}" "{exe_old}" >> "%LOG%" 2>&1\r\n'
-            "if errorlevel 1 (\r\n"
-            "  set /a N+=1\r\n"
-            '  echo rename failed !N! >> "%LOG%"\r\n'
-            "  if !N! GEQ 15 goto giveup\r\n"
-            "  timeout /t 2 /nobreak >nul\r\n"
-            "  goto retry\r\n"
-            ")\r\n"
-            'echo renamed old exe >> "%LOG%"\r\n'
-            # 放新 exe 也做重试：AV/索引器常短暂锁住目标目录，一次失败就放弃太激进
-            "set M=0\r\n"
-            ":place\r\n"
-            f'move /y "{tmp}" "{exe}" >> "%LOG%" 2>&1\r\n'
-            "if errorlevel 1 (\r\n"
-            "  set /a M+=1\r\n"
-            '  echo place failed !M! >> "%LOG%"\r\n'
-            "  if !M! GEQ 5 goto giveup\r\n"
-            "  timeout /t 2 /nobreak >nul\r\n"
-            "  goto place\r\n"
-            ")\r\n"
-            'echo placed new exe >> "%LOG%"\r\n'
-            'echo waiting for resources release >> "%LOG%"\r\n'
-            'timeout /t 4 /nobreak >nul\r\n'
-            f'start "" "{exe}"\r\n'
-            'echo started >> "%LOG%"\r\n'
-            f'del "{exe_old}" >> "%LOG%" 2>&1\r\n'
-            'del "%~f0"\r\n'
-            "exit /b\r\n"
-            ":giveup\r\n"
-            # 防砖：走到这里时旧 exe 多半已被改名成 .old，必须还原，
-            # 否则目录里没有 exe，软件直接消失（P0）
-            'echo GIVE UP >> "%LOG%"\r\n'
-            f'if exist "{exe_old}" move /y "{exe_old}" "{exe}" >> "%LOG%" 2>&1\r\n'
-            'echo restore attempted >> "%LOG%"\r\n'
-            'del "%~f0"\r\n')
+    # 脚本内容先写进 mkstemp 临时文件再原子替换成 bat：cmd 只会读到完整脚本
+    fd_bat, bat_part = tempfile.mkstemp(prefix="tokenmonitor-update-bat.")
+    try:
+        with os.fdopen(fd_bat, "w", encoding="gbk", errors="replace") as f:
+            f.write(
+                "@echo off\r\n"
+                "setlocal enabledelayedexpansion\r\n"
+                f'set LOG={log}\r\n'
+                'echo [%date% %time%] update begin > "%LOG%"\r\n'
+                ":wait\r\n"
+                f'tasklist /FI "PID eq {pid}" | find "{pid}" >nul\r\n'
+                "if not errorlevel 1 (\r\n"
+                "  timeout /t 1 /nobreak >nul\r\n"
+                "  goto wait\r\n"
+                ")\r\n"
+                'echo old process gone >> "%LOG%"\r\n'
+                "set N=0\r\n"
+                ":retry\r\n"
+                f'move /y "{exe}" "{exe_old}" >> "%LOG%" 2>&1\r\n'
+                "if errorlevel 1 (\r\n"
+                "  set /a N+=1\r\n"
+                '  echo rename failed !N! >> "%LOG%"\r\n'
+                "  if !N! GEQ 15 goto giveup\r\n"
+                "  timeout /t 2 /nobreak >nul\r\n"
+                "  goto retry\r\n"
+                ")\r\n"
+                'echo renamed old exe >> "%LOG%"\r\n'
+                # 放新 exe 也做重试：AV/索引器常短暂锁住目标目录，一次失败就放弃太激进
+                "set M=0\r\n"
+                ":place\r\n"
+                f'move /y "{tmp}" "{exe}" >> "%LOG%" 2>&1\r\n'
+                "if errorlevel 1 (\r\n"
+                "  set /a M+=1\r\n"
+                '  echo place failed !M! >> "%LOG%"\r\n'
+                "  if !M! GEQ 5 goto giveup\r\n"
+                "  timeout /t 2 /nobreak >nul\r\n"
+                "  goto place\r\n"
+                ")\r\n"
+                'echo placed new exe >> "%LOG%"\r\n'
+                'echo waiting for resources release >> "%LOG%"\r\n'
+                'timeout /t 4 /nobreak >nul\r\n'
+                f'start "" "{exe}"\r\n'
+                'echo started >> "%LOG%"\r\n'
+                f'del "{exe_old}" >> "%LOG%" 2>&1\r\n'
+                'del "%~f0"\r\n'
+                "exit /b\r\n"
+                ":giveup\r\n"
+                # 防砖：走到这里时旧 exe 多半已被改名成 .old，必须还原，
+                # 否则目录里没有 exe，软件直接消失（P0）
+                'echo GIVE UP >> "%LOG%"\r\n'
+                f'if exist "{exe_old}" move /y "{exe_old}" "{exe}" >> "%LOG%" 2>&1\r\n'
+                'echo restore attempted >> "%LOG%"\r\n'
+                'del "%~f0"\r\n')
+        os.replace(bat_part, bat)
+    except BaseException:
+        try:
+            os.remove(bat_part)
+        except OSError:
+            pass
+        raise
     subprocess.Popen(["cmd", "/c", bat], close_fds=True,
                      creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
 

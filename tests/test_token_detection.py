@@ -35,8 +35,16 @@ class TokenDetectionTests(unittest.TestCase):
         scan_cache._MEM = self.old_cache_mem
         self.tmp.cleanup()
 
+    def _sandbox_open(self, path, *args, **kwargs):
+        """测试沙箱校验：所有文件读写必须落在 self.tmp 内（禁 ../ 越界）。"""
+        root = os.path.realpath(self.tmp.name)
+        p = os.path.realpath(path)
+        if os.path.commonpath([root, p]) != root:
+            raise AssertionError("路径越出沙箱: %s" % p)
+        return open(p, *args, **kwargs)
+
     def _write_jsonl(self, path, rows):
-        with open(path, "w", encoding="utf-8") as f:
+        with self._sandbox_open(path, "w", encoding="utf-8") as f:
             for row in rows:
                 f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
@@ -100,19 +108,19 @@ class TokenDetectionTests(unittest.TestCase):
             raw = json.dumps(row, ensure_ascii=False).encode("utf-8")
             return raw + b" " * (size - len(raw) - 1) + b"\n"
 
-        with open(path, "wb") as f:
+        with self._sandbox_open(path, "wb") as f:
             f.write(line_for({"input_tokens": 10, "output_tokens": 5}, 512))
         first = probe.scan_reg_jsonl_one(src, "test-source", set(), pre=[path])
         self.assertEqual(sum(r.total() for r in first), 15)
 
-        with open(path, "wb") as f:
+        with self._sandbox_open(path, "wb") as f:
             f.write(line_for({"input_tokens": 99, "output_tokens": 77}, 512))
         second = probe.scan_reg_jsonl_one(src, "test-source", set(), pre=[path])
         self.assertEqual(sum(r.total() for r in second), 176)
 
     def test_json_arrays_are_not_limited_to_200_items(self):
         path = os.path.join(self.tmp.name, "many.json")
-        with open(path, "w", encoding="utf-8") as f:
+        with self._sandbox_open(path, "w", encoding="utf-8") as f:
             json.dump([{"n": i} for i in range(250)], f)
         self.assertEqual(len(list(probe.iter_records(path))), 250)
 
