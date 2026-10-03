@@ -63,6 +63,7 @@ python tools/ui_audit.py                   # 硬编码 / 字号阶梯 / 规范�
 python tools/contrast_check.py             # 设计 token 对比度（WCAG AA）→ output/contrast.md
 python tools/ui_verify.py                  # 浏览器体检：控制台错误 / DOM / 焦点 / 对比度 → output/ui-verify-*/
 python tools/ui_smoke.py                   # 交互回归：路由 / 主题 / 弹窗 / 键盘 / 窄屏（26 项）
+python tools/final_check.py                # 收尾综合验证：主题生效 / 组件与三态 / 无障碍 / 焦点（29 项）
 python tools/style_snapshot.py --out x.json [--diff before.json]   # 计算样式快照对比
 ```
 
