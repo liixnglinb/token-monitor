@@ -26,8 +26,6 @@ EXPECT_PRESENT = [
     "webapp/static/styles/base.css",
     "webapp/static/styles/components.css",
     "webapp/static/styles/layout.css",
-    "webapp/static/styles/legacy.css",
-    "webapp/static/styles/legacy-src/ui-polish.css",
     "webapp/static/js/theme.js",
     "webapp/static/js/ui.js",
     "webapp/static/index.html",
@@ -38,6 +36,10 @@ EXPECT_GONE = [
     "webapp/static/styles/sidebar.css",
     "webapp/static/styles/canvas.css",
     "webapp/static/js/voyra-ui.js",
+    "webapp/static/styles/legacy.css",
+    "webapp/static/styles/legacy-src/ui-polish.css",
+    "webapp/static/styles/legacy-src/theme.css",
+    "tools/consolidate_legacy_css.py",
 ]
 
 
