@@ -27,7 +27,9 @@ jobs:
         shell: pwsh
         run: |
           $tag = "${{ github.ref_name }}"
-          Set-Content -Path version.txt -Value $tag -Encoding utf8
+          # 明确写"无 BOM"的 UTF-8：PowerShell 5.1 的 Set-Content -Encoding utf8 会写 BOM，
+          # 而 BOM 会让 updater._parse 抛错，导致"已是最新还提示更新"
+          [System.IO.File]::WriteAllText("$PWD/version.txt", $tag, (New-Object System.Text.UTF8Encoding($false)))
           echo "VERSION=$tag" >> $env:GITHUB_ENV
 
       - name: PyInstaller 打包

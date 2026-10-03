@@ -117,13 +117,16 @@ def local_version() -> str:
     base, _ = _base()
     try:
         with open(os.path.join(base, "version.txt"), encoding="utf-8") as f:
-            return f.read().strip().lstrip("v") or "0.0.0"
+            # version.txt 可能带 UTF-8 BOM（PowerShell 5.1 的 Set-Content 就会写 BOM）。
+            # 不剥掉的话 "1.9.13" 会被当成非语义化版本，导致"已是最新却提示有更新"。
+            text = f.read().lstrip("\ufeff").strip()
+            return text.lstrip("v") or "0.0.0"
     except OSError:
         return "0.0.0"
 
 
 def _parse(v: str):
-    return tuple(int(x) for x in v.strip().lstrip("v").split("."))
+    return tuple(int(x) for x in v.strip().lstrip("\ufeff").lstrip("v").split("."))
 
 
 def is_newer(latest: str, local: str) -> bool:
