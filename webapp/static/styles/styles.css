@@ -1,0 +1,29 @@
+@charset "UTF-8";
+/* =============================================================================
+   styles.css —— 样式入口（唯一被 index.html 引用的样式表）
+   -----------------------------------------------------------------------------
+   层叠层顺序（后声明的层优先）：
+     legacy  <  base  <  components  <  layout
+   · legacy  —— 历史样式归档（tools/consolidate_legacy_css.py 生成），只做兜底
+   · base    —— 重置、排版默认值、焦点、骨架屏、可访问性基线
+   · components —— 基础组件（按钮/输入/卡片/表格/弹窗/提示/三态）
+   · layout  —— 页面骨架、栅格、侧栏与顶栏、响应式与多端
+
+   新增样式请放进对应层文件，不要再往 legacy 里加东西。
+   ============================================================================= */
+@layer legacy, base, components, layout;
+
+@import url("./tokens.css");
+@import url("./base.css") layer(base);
+@import url("./components.css") layer(components);
+@import url("./layout.css") layer(layout);
+
+/* -----------------------------------------------------------------------------
+   关于 legacy.css
+   -----------------------------------------------------------------------------
+   历史样式（base/sidebar/shell/overview/models/settings/responsive/canvas/
+   modern/theme/ui-polish 共 11 个文件、12 万字节、1103 处硬编码颜色）已由
+   tokens + base + components + layout 四层完整接管，legacy.css 只作归档保留，
+   不再加载。如需回滚：把下面这行取消注释即可（legacy 层优先级最低）。
+   -------------------------------------------------------------------------- */
+/* @import url("./legacy.css") layer(legacy); */

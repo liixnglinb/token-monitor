@@ -4,3 +4,9 @@ build/
 dist/
 *.spec
 version.txt.bak
+
+# 打包用临时虚拟环境与前端自检产物
+.build-venv/
+output/ui-verify-*/
+*.log
+.mimosa/

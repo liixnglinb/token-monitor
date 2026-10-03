@@ -12,7 +12,16 @@ try {
     if (["total","agent","model"].includes(saved.dim)) F.dim=saved.dim;
   }
 } catch { /* corrupt storage never blocks the dashboard */ }
-const PAL = ["#6C9BFF","#4FC3A1","#E8B45B","#F0737A","#9B92F0","#5CC8DE","#8A93A8","#E08B5C","#B9C0CA"];
+/* 图表调色板：PAL_FALLBACK / palette() 定义在 charts.js（先加载），
+   这里只负责在渲染前把 tokens.css 的 --c1..--c9 取出来。 */
+let PAL = (typeof palette === "function") ? palette() : [];
+function refreshPalette(){
+  try {
+    PAL = (typeof palette === "function") ? palette() : PAL;
+  } catch (e) { /* 取色失败就沿用上一份，不影响渲染 */ }
+  return PAL;
+}
+refreshPalette();
 const METRIC_NAME = { cost: "消耗金额（CNY）", tokens: "Tokens", requests: "API 请求次数" };
 const DIM_NAME = { total: "总量", agent: "数据源", model: "模型" };
 const hexA = (hex, alpha) => {

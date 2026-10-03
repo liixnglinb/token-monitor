@@ -1,4 +1,6 @@
 /* ---------- 主流程 ---------- */
+/* 模型表格的分页 / 搜索状态（纯前端，不改后端契约） */
+const PAGE = { index: 0, size: 50, query: "" };
 function renderAll(){
   /* 首扫期间 /api/summary 返回 building 占位（无 range/matrix），此时不渲染也不报错，
      等后台扫描完成后 pollMeta 会拉到真数据再走一遍这里 */
@@ -11,6 +13,12 @@ function renderAll(){
   renderKPI(); renderMain(); renderAgentList();
   renderModelDist(); renderModelTable(); renderNote(); renderScanInfo();
   syncFilterSummary();
+  if (window.TMUI){
+    TMUI.clearKpiSkeleton();
+    ["kTok", "kReq", "kAvg", "kCost"].forEach(id => { const el = $(id); if (el) el.dataset.loaded = "1"; });
+    TMUI.syncAria();
+    window.dispatchEvent(new Event("tm:render"));
+  }
 }
 
 /* 扫描开销：命中/未命中/判定跳过，让"这次为什么慢"有处可看 */
@@ -205,6 +213,17 @@ function renderTrendSummary(list, metric){
     '<div class="trend-stat"><span>' + esc(item[0]) + '</span>'
     + '<b>' + item[1] + '</b><small>' + esc(item[2]) + '</small></div>').join("");
 }
+/* 空态图标：与文案一起出现，避免"只有一行灰字"的干瘪空态 */
+const EMPTY_ICON = '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" '
+  + 'stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+  + '<rect x="3.5" y="5" width="17" height="13" rx="2.5"/><path d="M7 12.5h4M7 9h7M7 15.5h2.5"/></svg>';
+function emptyBlock(title, hint, action){
+  return '<div class="empty">' + EMPTY_ICON
+    + '<div class="t1">' + esc(title) + '</div>'
+    + (hint ? '<div class="t2">' + esc(hint) + '</div>' : '')
+    + (action ? '<button type="button" class="btn btn-sm" data-empty-action>' + esc(action) + '</button>' : '')
+    + '</div>';
+}
 function renderDailyDetail(rows, list, metric){
   const box = $("dailyList");
   const count = $("dailyCount");
@@ -218,7 +237,14 @@ function renderDailyDetail(rows, list, metric){
     : "按日期查看用量、成本和请求次数";
   if (count) count.textContent = list.length + " " + (isMonth ? "个月" : "天");
   if (!list.length){
-    box.innerHTML = '<div class="daily-empty">当前筛选下没有可展示的日期数据</div>';
+    box.innerHTML = '<div class="daily-empty">'
+      + '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.4" '
+      + 'stroke-linecap="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 9.5h17M8 3.5v3M16 3.5v3M8.5 14h7"/></svg>'
+      + '<span>当前筛选下没有可展示的' + (isMonth ? "月份" : "日期") + '数据</span>'
+      + '<button type="button" class="btn btn-sm" data-empty-action="range-all">查看全部时间</button>'
+      + '</div>';
+    const action = box.querySelector("[data-empty-action]");
+    if (action) action.onclick = () => { F.rangeKey = "all"; renderAll(); };
     return;
   }
   const byPeriod = new Map();
@@ -255,6 +281,8 @@ function renderDailyDetail(rows, list, metric){
 function renderMain(){
   const rows = rowsFor(false);
   const range = rangeDates();
+  refreshChartTokens();
+  refreshPalette();
   const fmt = fmtTick[F.metric];
   const suffix = F.grain === "month" ? "（按月）" : "";
   const title = F.grain === "month"
@@ -390,10 +418,14 @@ function miniChart(canvas, pairs, color, tip){
   /* 渲染前先销毁同画布上的旧实例（与 MAIN/DONUT 一致），防重复 new 造成泄漏 */
   const ex = Chart.getChart(canvas);
   if (ex) ex.destroy();
+  const hostWidth = (canvas.parentElement && canvas.parentElement.clientWidth) || 320;
   return new Chart(canvas, { type: "bar",
     data: { labels: pairs.map(d=>d[0]),
       datasets: [{ data: pairs.map(d=>d[1]), backgroundColor: color,
-        borderRadius: 2, maxBarThickness: barW(pairs.length) }] },
+        borderRadius: 2, maxBarThickness: barW(pairs.length, hostWidth),
+        /* 只有一两天有数据时，默认类目宽度会让单根柱占满一格而其余空着；
+           收窄类目占比让柱宽稳定在 12–22px，看起来才是"柱状趋势" */
+        barPercentage: .8, categoryPercentage: .55 }] },
     options: { responsive:true, maintainAspectRatio:false,
       interaction: { mode: "index", intersect: false },
       plugins: { legend:{display:false},
@@ -424,8 +456,13 @@ function addMini(id, pairs, color, tip){
   c.update();
   return c;
 }
-/* 单点/双点时柱太细，看起来像坏图 —— 自适应放宽 */
-const barW = n => n <= 2 ? 36 : n <= 5 ? 16 : 8;
+/* 迷你柱宽度：随点位数量自适应 —— 固定 8px 在宽卡片上会细成一根线，
+   按可用宽度反推，单根最宽 22px，太多点时才退化成细柱 */
+const barW = (n, width) => {
+  const usable = (width || 320) - 24;
+  const per = usable / Math.max(n, 1);
+  return Math.max(3, Math.min(22, Math.floor(per * 0.62)));
+};
 /* 金额为 0 但有用量时，标注"价格未知"，避免误以为算错 */
 /* 成本列文案：区分「有计价 / 套餐不计费 / 价表缺价」三态
    model       —— 模型名，用于查套餐集合（Agent 行传 null）
@@ -540,83 +577,120 @@ function renderAgentList(){
   wrap.innerHTML =
     '<section class="agent-panel">' +
       '<div class="agent-panel-head">' +
-        '<div><h3>Agent 用量排行</h3><p>按 Token 消耗排序</p></div>' +
+        '<div><h3>Agent 用量排行</h3><p>按 Token 消耗排序，点行展开模型明细</p></div>' +
         '<span class="agent-panel-count">' + fmtInt(list.length) + ' 个数据源</span>' +
       '</div>' +
       '<div id="agCards"></div>' +
     '</section>';
   const box = $("agCards");
+  const startIndex = wrap.dataset.renderStart || 0;
+  const CHUNK = 12;   /* 每批渲染的数据源数量：避免几十条 mini chart 一次性初始化 */
+  let rendered = 0;
 
-  list.forEach(([name, o], i)=>{
-    const color = PAL[i % PAL.length];
-    const open = F.open.has(name);
-    const sec = document.createElement("div");
-    sec.className = "agent-entry";
-    sec.innerHTML =
-      '<div class="ar' + (open ? " open" : "") + '">' +
-        '<div class="ar-head" role="button" tabindex="0" aria-expanded="' + (open ? "true" : "false") + '">' +
-          '<span class="ar-fold">▶</span>' +
-          '<span class="ar-rank">' + String(i + 1).padStart(2, "0") + '</span>' +
-          '<span class="ar-icon" style="color:' + color + '">' + agentIcon(name) + '</span>' +
-          '<span class="nm">' + esc(agentLabel(name)) + '</span>' +
-          '<span class="ar-metrics">' +
-            '<span><small>Tokens</small><b>' + fmtInt(o.tokens) + '</b></span>' +
-            '<span><small>请求</small><b>' + fmtInt(o.requests) + '</b></span>' +
-            '<span><small>金额</small><b>' + costText(o.cost, o.tokens, null, o.planTokens > 0 && o.planTokens >= o.tokens * 0.995) + '</b></span>' +
-          '</span>' +
-        '</div>' +
-        '<div class="ar-chart"><canvas id="ac-' + i + '" role="img" aria-label="' + esc(name) + ' 每日 Token 走势"></canvas></div>' +
-        '<div class="ar-models" id="am-' + i + '"></div>' +
-      '</div>';
-    box.appendChild(sec);
-    const arEl = sec.querySelector(".ar");
-    const arHead = arEl.querySelector(".ar-head");
-    const toggleAgent = () => {
-      F.open.has(name) ? F.open.delete(name) : F.open.add(name);
-      renderAgentList();
-    };
-    arHead.onclick = toggleAgent;
-    arHead.onkeydown = e => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        toggleAgent();
+  function renderChunk(){
+    const slice = list.slice(rendered, rendered + CHUNK);
+    slice.forEach(([name, o], offset)=>{
+      const i = rendered + offset;
+      const color = PAL[i % PAL.length];
+      const open = F.open.has(name);
+      const sec = document.createElement("div");
+      sec.className = "agent-entry";
+      sec.innerHTML =
+        '<div class="ar' + (open ? " open" : "") + '">' +
+          '<div class="ar-head" role="button" tabindex="0" aria-expanded="' + (open ? "true" : "false") + '">' +
+            '<span class="ar-fold" aria-hidden="true">▶</span>' +
+            '<span class="ar-rank" aria-hidden="true">' + String(i + 1).padStart(2, "0") + '</span>' +
+            '<span class="ar-icon" style="color:' + color + '">' + agentIcon(name) + '</span>' +
+            '<span class="nm">' + esc(agentLabel(name)) + '</span>' +
+            '<span class="ar-metrics">' +
+              '<span><small>Tokens</small><b>' + fmtInt(o.tokens) + '</b></span>' +
+              '<span><small>请求</small><b>' + fmtInt(o.requests) + '</b></span>' +
+              '<span><small>金额</small><b>' + costText(o.cost, o.tokens, null, o.planTokens > 0 && o.planTokens >= o.tokens * 0.995) + '</b></span>' +
+            '</span>' +
+          '</div>' +
+          '<div class="ar-chart"><canvas id="ac-' + i + '" role="img" aria-label="' + esc(agentLabel(name)) + ' 每日 Token 走势"></canvas></div>' +
+          '<div class="ar-models" id="am-' + i + '"></div>' +
+        '</div>';
+      box.appendChild(sec);
+      const arEl = sec.querySelector(".ar");
+      const arHead = arEl.querySelector(".ar-head");
+      const toggleAgent = () => {
+        F.open.has(name) ? F.open.delete(name) : F.open.add(name);
+        renderAgentList();
+      };
+      arHead.onclick = toggleAgent;
+      arHead.onkeydown = e => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          toggleAgent();
+        }
+      };
+
+      const arows = rows.filter(r=>r.agent===name);
+      const sA = fillDays(groupSeries(arows, "tokens", "day"), start);
+      /* 迷你图只在滚动进入视口时创建：几十个 canvas 同时初始化是首屏卡顿主因 */
+      if (window.TMUI && TMUI.lazyOnVisible){
+        TMUI.lazyOnVisible(arEl, () => {
+          MINIS.push(addMini("ac-"+i, sA, color, d => sessionLines(d, name, null, "tokens")));
+        });
+      } else {
+        MINIS.push(addMini("ac-"+i, sA, color, d => sessionLines(d, name, null, "tokens")));
       }
-    };
 
-    const arows = rows.filter(r=>r.agent===name);
-    const sA = fillDays(groupSeries(arows, "tokens", "day"), start);
-    MINIS.push(addMini("ac-"+i, sA, color,
-      d => sessionLines(d, name, null, "tokens")));
-
-    if (open){
-      const mm = new Map();
-      for (const r of arows){
-        const o2 = mm.get(r.model) || {tokens:0, cost:0, requests:0};
-        o2.tokens += r.tokens; o2.cost += r.cost; o2.requests += r.requests;
-        mm.set(r.model, o2);
+      if (open){
+        const mm = new Map();
+        for (const r of arows){
+          const o2 = mm.get(r.model) || {tokens:0, cost:0, requests:0};
+          o2.tokens += r.tokens; o2.cost += r.cost; o2.requests += r.requests;
+          mm.set(r.model, o2);
+        }
+        const mlist = [...mm.entries()].sort((a,b)=>b[1].tokens-a[1].tokens);
+        const boxM = arEl.querySelector(".ar-models");
+        if (!mlist.length) boxM.innerHTML = '<div class="empty">该数据源在当前筛选下没有模型明细</div>';
+        mlist.forEach(([mname, o2], j)=>{
+          const row = document.createElement("div");
+          row.className = "mrow";
+          row.innerHTML =
+            '<span class="nm" title="' + esc(mname) + '">' + esc(mname) + '</span>' +
+            '<span class="num">Tokens <b>' + fmtInt(o2.tokens) + '</b> · ' + fmtInt(o2.requests) + ' 次 · ' + costText(o2.cost, o2.tokens, mname) + '</span>' +
+            '<div class="ch"><canvas id="mc-' + i + '-' + j + '" role="img" aria-label="' + esc(mname) + ' 每日 Token 走势"></canvas></div>';
+          boxM.appendChild(row);
+          const mrows = arows.filter(r=>r.model===mname);
+          const sM = fillDays(groupSeries(mrows, "tokens", "day"), start);
+          if (window.TMUI && TMUI.lazyOnVisible){
+            TMUI.lazyOnVisible(row, () => {
+              MINIS.push(addMini("mc-"+i+"-"+j, sM, color, d => sessionLines(d, name, mname, "tokens")));
+            });
+          } else {
+            MINIS.push(addMini("mc-"+i+"-"+j, sM, color, d => sessionLines(d, name, mname, "tokens")));
+          }
+        });
       }
-      const mlist = [...mm.entries()].sort((a,b)=>b[1].tokens-a[1].tokens);
-      const boxM = arEl.querySelector(".ar-models");
-      mlist.forEach(([mname, o2], j)=>{
-        const row = document.createElement("div");
-        row.className = "mrow";
-        row.innerHTML =
-          '<span class="nm" title="' + esc(mname) + '">' + esc(mname) + '</span>' +
-          '<span class="num">Tokens <b>' + fmtInt(o2.tokens) + '</b> · ' + fmtInt(o2.requests) + ' 次 · ' + costText(o2.cost, o2.tokens, mname) + '</span>' +
-          '<div class="ch"><canvas id="mc-' + i + '-' + j + '" role="img" aria-label="' + esc(mname) + ' 每日 Token 走势"></canvas></div>';
-        boxM.appendChild(row);
-        const mrows = arows.filter(r=>r.model===mname);
-        const sM = fillDays(groupSeries(mrows, "tokens", "day"), start);
-        MINIS.push(addMini("mc-"+i+"-"+j, sM, color,
-          d => sessionLines(d, name, mname, "tokens")));
-      });
+    });
+    rendered += slice.length;
+    if (rendered < list.length){
+      const more = document.createElement("button");
+      more.type = "button";
+      more.className = "btn btn-sm agent-more";
+      more.textContent = "继续显示剩余 " + (list.length - rendered) + " 个数据源";
+      more.onclick = function(){ more.remove(); renderChunk(); };
+      box.appendChild(more);
     }
-  });
+  }
+  renderChunk();
 }
 
 /* ---------- 表格视图 ---------- */
 function barCell(v, max, color){
-  return `<td><div class="bar"><i style="width:${max?Math.max(v/max*100,1):0}%;background:${color}"></i></div></td>`;
+  return `<td class="bar-cell"><div class="bar"><i style="width:${max?Math.max(v/max*100,1):0}%;background:${color}"></i></div></td>`;
+}
+/* 表格排序状态：默认按 Token 降序（口径：Token 是主口径） */
+const SORT = { key: "tokens", dir: -1 };
+function sortValue(item, key){
+  const [, o] = item;
+  if (key === "model") return String(item[0]).toLowerCase();
+  if (key === "avg") return o.tokens ? o.cost * DATA.cny_rate / o.tokens * 1e6 : -1;
+  return o[key] || 0;
 }
 function renderModelTable(){
   const rows = rowsFor(true);
@@ -626,9 +700,8 @@ function renderModelTable(){
     o.tokens += r.tokens; o.cost += r.cost; o.requests += r.requests;
     agg.set(r.model, o);
   }
-  /* Token 消耗才是主口径：按 Token 排序、占比条按 Token，金额仅作估算参考 */
-  const list = [...agg.entries()].sort((a,b)=>b[1].tokens-a[1].tokens);
-  const max = list.length ? Math.max(list[0][1].tokens, 1) : 1;
+  let list = [...agg.entries()];
+  /* 顶部汇总始终反映"当前筛选的全部模型"，与分页/搜索无关 */
   const totalTokens = list.reduce((s,x)=>s+x[1].tokens,0);
   const totalCost = list.reduce((s,x)=>s+x[1].cost,0);
   $("msTokens").textContent = fmtInt(totalTokens);
@@ -638,13 +711,113 @@ function renderModelTable(){
     : (totalTokens > 0 ? "套餐/未计价" : fmtCNY(0));
   costEl.title = totalCost > 0 ? "按当前价表估算，仅供参考"
     : "当前模型属于套餐/订阅制（只记用量不计金额），或单价不在价格库中";
-  $("tbModel").innerHTML = list.map(([name,o],i)=>{
-    const avg = o.tokens ? o.cost*DATA.cny_rate/o.tokens*1e6 : 0;
-    return `<tr><td class="mono"><span class="m-ico">${modelIcon(name)}</span>${esc(name)}</td>
-    <td class="num">${fmtInt(o.tokens)}</td><td class="num">${fmtInt(o.requests)}</td>
-    ${barCell(o.tokens,max,i<3?"#6C9BFF":"#3E4550")}
-    <td class="num">${costText(o.cost, o.tokens, name)}</td>
-    <td class="num">${avg ? "¥"+avg.toFixed(2) : '<span class="muted">价格未知</span>'}</td>
-    </tr>`;
-  }).join("") || `<tr><td colspan="6" class="empty">当前筛选下无数据</td></tr>`;
+
+  /* 本地搜索：只影响表格行，不改变 KPI 与图表口径 */
+  const query = (PAGE.query || "").trim().toLowerCase();
+  const filtered = query ? list.filter(([name]) => String(name).toLowerCase().includes(query)) : list;
+  filtered.sort((a, b) => {
+    const av = sortValue(a, SORT.key), bv = sortValue(b, SORT.key);
+    if (typeof av === "string" || typeof bv === "string") return String(av).localeCompare(String(bv), "zh-CN") * SORT.dir;
+    return (av - bv) * SORT.dir;
+  });
+  list = filtered;
+
+  const size = PAGE.size > 0 ? PAGE.size : list.length || 1;
+  const pages = Math.max(1, Math.ceil(list.length / size));
+  if (PAGE.index > pages - 1) PAGE.index = pages - 1;
+  if (PAGE.index < 0) PAGE.index = 0;
+  const start = PAGE.size > 0 ? PAGE.index * size : 0;
+  const view = PAGE.size > 0 ? list.slice(start, start + size) : list;
+  const max = list.length ? Math.max(...list.map(x => x[1].tokens), 1) : 1;
+
+  const body = $("tbModel");
+  if (!list.length){
+    body.innerHTML = '<tr><td colspan="6" class="empty">'
+      + (query ? '没有名称包含「' + esc(query) + '」的模型' : '当前筛选下没有模型数据')
+      + '</td></tr>';
+  } else {
+    body.innerHTML = view.map(([name,o],i)=>{
+      const avg = o.tokens ? o.cost*DATA.cny_rate/o.tokens*1e6 : 0;
+      const rank = start + i;
+      return `<tr><td class="mono" title="${esc(name)}"><span class="m-ico">${modelIcon(name)}</span>${esc(name)}</td>
+      <td class="num">${fmtInt(o.tokens)}</td><td class="num">${fmtInt(o.requests)}</td>
+      ${barCell(o.tokens,max,rank<3?"var(--m-token)":"var(--line-strong)")}
+      <td class="num">${costText(o.cost, o.tokens, name)}</td>
+      <td class="num">${avg ? "¥"+avg.toFixed(2) : '<span class="muted">价格未知</span>'}</td>
+      </tr>`;
+    }).join("");
+  }
+
+  const countEl = $("modelTableCount");
+  if (countEl){
+    countEl.textContent = query
+      ? "匹配 " + fmtInt(list.length) + " / " + fmtInt(agg.size) + " 个模型"
+      : fmtInt(agg.size) + " 个模型" + (PAGE.size > 0 && list.length > size ? " · 第 " + (PAGE.index + 1) + "/" + pages + " 页" : "");
+  }
+  renderPager(pages, list.length);
+  renderTableHead();
+}
+
+/* 表头：可排序，点一下切换升降序 */
+function renderTableHead(){
+  const table = $("modelTable");
+  if (!table) return;
+  const labels = [["model","模型"],["tokens","Tokens"],["requests","请求次数"],["share","占比（Token）"],["cost","金额（估算）"],["avg","均价（¥/百万 tok）"]];
+  const head = table.querySelector("thead tr");
+  if (!head) return;
+  head.innerHTML = labels.map(([key, label])=>{
+    if (key === "share") return '<th scope="col" class="bar-col">' + label + "</th>";
+    const on = SORT.key === key;
+    const dir = on ? (SORT.dir === 1 ? "ascending" : "descending") : "none";
+    return '<th scope="col" class="' + (key === "model" ? "" : "num") + '">'
+      + '<button type="button" class="th-sort' + (on ? " on" : "") + '" data-sort="' + key + '" aria-sort="' + dir + '">'
+      + esc(label)
+      + '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true">'
+      + '<path d="M6 2.5v7M3.5 7 6 9.5 8.5 7"/></svg>'
+      + "</button></th>";
+  }).join("");
+  head.querySelectorAll("[data-sort]").forEach(button=>{
+    button.onclick = () => {
+      const key = button.dataset.sort;
+      if (SORT.key === key) SORT.dir = -SORT.dir;
+      else { SORT.key = key; SORT.dir = key === "model" ? 1 : -1; }
+      PAGE.index = 0;
+      renderModelTable();
+    };
+  });
+}
+
+/* 分页控件：首页/上一页/页码（省略号）/下一页/末页 */
+function renderPager(pages, total){
+  const box = $("modelPager");
+  if (!box) return;
+  if (PAGE.size <= 0 || pages <= 1){ box.innerHTML = ""; return; }
+  const current = PAGE.index;
+  const nums = [];
+  for (let i = 0; i < pages; i++){
+    if (i === 0 || i === pages - 1 || Math.abs(i - current) <= 1) nums.push(i);
+    else if (nums[nums.length - 1] !== "…") nums.push("…");
+  }
+  const button = (label, page, opts) => {
+    const attrs = [];
+    if (opts && opts.current) attrs.push('aria-current="page"');
+    if (opts && opts.disabled) attrs.push("disabled");
+    if (opts && opts.aria) attrs.push('aria-label="' + opts.aria + '"');
+    return '<button type="button" data-page="' + page + '" ' + attrs.join(" ") + ">" + label + "</button>";
+  };
+  box.innerHTML = '<span class="pager-info">共 ' + fmtInt(total) + ' 行</span>'
+    + button("上一页", current - 1, { disabled: current === 0, aria: "上一页" })
+    + nums.map(n => n === "…" ? '<button type="button" disabled aria-hidden="true">…</button>'
+      : button(String(n + 1), n, { current: n === current, aria: "第 " + (n + 1) + " 页" })).join("")
+    + button("下一页", current + 1, { disabled: current >= pages - 1, aria: "下一页" });
+  box.querySelectorAll("button[data-page]").forEach(el=>{
+    el.onclick = () => {
+      const page = parseInt(el.dataset.page, 10);
+      if (Number.isNaN(page) || page === PAGE.index) return;
+      PAGE.index = Math.min(Math.max(page, 0), pages - 1);
+      renderModelTable();
+      const card = document.querySelector("#view-models .table-card");
+      if (card) card.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    };
+  });
 }

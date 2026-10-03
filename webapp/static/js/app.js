@@ -2,12 +2,23 @@ let summaryRequest = null;
 function collectionFeedback(kind, title, message){
   const box = $("collectionState");
   if (!box) return;
+  const wasKind = box.dataset.kind;
   box.hidden = !kind;
   box.dataset.kind = kind || "";
   $("collectionStateTitle").textContent = title || "";
   $("collectionStateText").textContent = message || "";
+  /* 加载中（含排队）不提供"重试"按钮，避免与进行中的扫描打架 */
   $("collectionRetry").hidden = kind === "loading" || kind === "partial";
-  if (kind !== "loading" && $("collectionAnnouncement").textContent !== title) $("collectionAnnouncement").textContent = title || "";
+  if (kind !== "loading" && $("collectionAnnouncement").textContent !== title)
+    $("collectionAnnouncement").textContent = title || "";
+  /* 失败要"说出来"：除了读屏播报，再给一次带重试入口的可见提示（同一错误不重复弹） */
+  if (kind === "error" && wasKind !== "error" && window.TMUI){
+    TMUI.toast(title + (message ? "：" + message : ""), {
+      kind: "error",
+      actionLabel: "重试",
+      onAction: () => void loadSummary()
+    });
+  }
 }
 function setScanControls(busy){
   for (const id of ["reload","reloadTop","collectionRetry"]) {
@@ -28,13 +39,18 @@ function updateCollectionFeedback(meta){
     setScanControls(false);
     if (!(DATA.matrix || []).length) collectionFeedback("empty","未发现可统计记录","当前没有可用日志；可在设置中检查数据源路径并重新扫描。");
     else if ((DATA.scan_errors || []).length) collectionFeedback("partial","部分来源扫描失败","可用来源仍参与统计；失败来源及影响范围请查看扫描说明。");
-    else collectionFeedback(null);
+    else {
+      const wasError = $("collectionState").dataset.kind === "error" || $("collectionState").dataset.kind === "loading";
+      collectionFeedback(null);
+      if (wasError && window.TMUI) TMUI.toast("统计结果已更新", { kind: "success" });
+    }
   }
 }
 function loadSummary(){
   if (summaryRequest) return summaryRequest;
   collectionFeedback("loading",DATA ? "正在更新统计结果" : "正在读取本地统计",DATA ? "保留上次有效结果。" : "首次扫描完成后将显示真实用量与日期范围。");
   $("fExport").disabled = !DATA || DATA.building;
+  if (!DATA && window.TMUI) TMUI.skeletonKpis();
   summaryRequest = fetch("/api/summary").then((r)=>{if(!r.ok)throw new Error("读取失败（HTTP " + r.status + "）");return r.json();}).then((d)=>{
     if (d.building) { updateCollectionFeedback({busy:true}); return false; }
     if (!Array.isArray(d.matrix) || !d.range || !Array.isArray(d.agents)) throw new Error("返回的数据结构不完整");

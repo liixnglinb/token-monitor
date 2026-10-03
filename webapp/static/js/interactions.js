@@ -1,37 +1,63 @@
-/* ---------- 事件 ---------- */
-function switchView(view){
+/* ---------- 视图切换：单一入口，与 hash 深链接双向同步 ---------- */
+const VIEW_CHROME = {
+  overview: ["用量总览", "本机 AI 软件的 Token 消耗与请求统计"],
+  models:   ["模型用量", "按模型查看 Token 消耗与参考金额"],
+  settings: ["设置", "应用偏好、数据扫描与软件更新"],
+};
+const SET_TITLE = { general:"通用偏好", data:"扫描与缓存", about:"关于" };
+const SET_LEAD = {
+  general: "外观、刷新间隔与软件更新",
+  data: "重新扫描本机数据源，查看扫描开销与统计口径",
+  about: "版本、仓库、隐私与快捷键",
+};
+
+function switchView(view, cat){
   const isSet = view === "settings";
-  const chrome = {
-    overview:["用量总览","本机 AI 软件的 Token 消耗与请求统计"],
-    models:["模型用量","按模型查看 Token 消耗与参考金额"],
-    settings:["设置","应用偏好、数据扫描与软件更新"],
-  }[view] || ["用量总览","本机 AI 编程工具 Token 与成本"];
+  const chrome = VIEW_CHROME[view] || VIEW_CHROME.overview;
   if ($("pageTitle")) $("pageTitle").textContent = chrome[0];
   if ($("pageSubtitle")) $("pageSubtitle").textContent = chrome[1];
+  if ($("crumbCurrent")) $("crumbCurrent").textContent = chrome[0];
   if ($("settingsBtn")) $("settingsBtn").classList.toggle("active", isSet);
   document.body.classList.toggle("mode-set", isSet);
+  document.body.dataset.mode = isSet ? "settings" : "dashboard";
+  document.title = chrome[0] + " · Token Monitor";
   document.querySelectorAll("#nav a").forEach(x=>x.classList.toggle("active", x.dataset.view===view));
   document.querySelectorAll("#tabbar button").forEach(x=>
     x.classList.toggle("active", isSet ? !!x.dataset.settings : x.dataset.view===view));
-  $("view-overview").hidden = view !== "overview";
-  $("view-models").hidden   = view !== "models";
-  $("view-settings").hidden = !isSet;
+  const views = { overview: $("view-overview"), models: $("view-models"), settings: $("view-settings") };
+  Object.keys(views).forEach(key => { if (views[key]) views[key].hidden = key !== view; });
+  /* 从隐藏切回可见时画布尺寸会失效，这里补一次重算 */
+  if (window.TMUI && TMUI.resizeChartsIn) requestAnimationFrame(() => TMUI.resizeChartsIn(views[view]));
   try { sessionStorage.setItem("voyra-token-view", view); } catch { /* UI state */ }
-  if (isSet){
-    const cur = document.querySelector("#setNav .set-item.active");
-    setCat((cur && cur.dataset.cat) || "general");
-  }
+  if (isSet) setCat(cat || "general");
+  if (window.TMUI) TMUI.syncAria();
 }
+
 function setCat(cat){
   document.querySelectorAll("#setNav .set-item").forEach(x=>x.classList.toggle("active", x.dataset.cat===cat));
   document.querySelectorAll(".set-cards[data-cat]").forEach(c=>c.hidden = c.dataset.cat !== cat);
-  const titles = { general:"通用偏好", data:"扫描与缓存", about:"关于" };
-  const t = $("setTitle"); if (t) t.textContent = titles[cat] || "设置";
+  const t = $("setTitle"); if (t) t.textContent = SET_TITLE[cat] || "设置";
+  const lead = $("setLead"); if (lead) lead.textContent = SET_LEAD[cat] || SET_LEAD.general;
+  if (window.TMUI) TMUI.syncAria();
+}
+
+/* 路由桥：hash 是唯一"地址"，TMUI.route 写 hash，hashchange 触发渲染 */
+function applyRoute(route, replace){
+  switchView(route.view, route.cat);
+  if (!replace && route.view !== "settings") window.scrollTo({ top: 0, behavior: "auto" });
 }
 $("nav").addEventListener("click", e=>{
   const a = e.target.closest("a[data-view]"); if (!a) return;
-  switchView(a.dataset.view);
+  e.preventDefault();
+  go(a.dataset.view);
 });
+/* 统一切视图入口：优先走 hash 路由（可分享、可后退），失败则直接渲染 */
+function go(view, cat){
+  try {
+    if (window.TMUI && TMUI.route) { TMUI.route(view, cat); return; }
+  } catch (err) { /* 路由不可用时退回直接切换 */ }
+  switchView(view, cat);
+}
 $("sideAgentBox").addEventListener("click", e => {
   const b = e.target.closest("[data-agent-filter]");
   if (!b) return;
@@ -48,21 +74,22 @@ document.querySelector("aside").addEventListener("click", e => {
     return;
   }
   const recent = e.target.closest(".side-recent[data-view]");
-  if (recent) switchView(recent.dataset.view);
+  if (recent) go(recent.dataset.view);
 });
 if ($("sideReload")) $("sideReload").onclick = () => $("reloadTop").click();
 /* 窄屏底部标签栏：复用同一套视图切换逻辑；"设置"与 #settingsBtn 共用入口 */
 $("tabbar").addEventListener("click", e=>{
   const b = e.target.closest("button"); if (!b) return;
-  if (b.dataset.settings){ switchView("settings"); return; }
-  if (b.dataset.view) switchView(b.dataset.view);
+  if (b.dataset.settings){ go("settings", "general"); return; }
+  if (b.dataset.view) go(b.dataset.view);
 });
-$("settingsBtn").onclick = () => switchView("settings");
+$("settingsBtn").onclick = () => go("settings", "general");
 $("setNav").addEventListener("click", e=>{
   const a = e.target.closest(".set-item"); if (!a) return;
-  setCat(a.dataset.cat);
+  e.preventDefault();
+  go("settings", a.dataset.cat);
 });
-$("setBack").onclick = () => switchView("overview");
+$("setBack").onclick = () => go("overview");
 bindDropdown("ddRange", "ddRangeMenu", k => { F.rangeKey = k; renderAll(); });
 $("segDim").onclick = e => { const b=e.target.closest("button"); if(!b) return;
   F.dim=b.dataset.d;
@@ -77,9 +104,18 @@ $("segGrain").onclick = e => { const b=e.target.closest("button"); if(!b) return
   document.querySelectorAll("#segGrain button").forEach(x=>x.classList.toggle("on",x===b));
   renderMain(); };
 $("fExport").onclick = function(){
-  if (!DATA || DATA.building) { collectionFeedback("error","尚不能导出","请等待第一次成功读取统计结果。"); return; }
+  if (!DATA || DATA.building) {
+    collectionFeedback("error","尚不能导出","请等待第一次成功读取统计结果。");
+    if (window.TMUI) TMUI.toast("还没有可导出的数据，请等待首次扫描完成", { kind: "warn" });
+    return;
+  }
+  if (this.disabled) return;                 // 防重复提交
   const btn = this;
   const rows = rowsFor(true);
+  if (!rows.length){
+    if (window.TMUI) TMUI.toast("当前筛选下没有可导出的行", { kind: "info" });
+    return;
+  }
   const head = "date,agent,model,session,tokens,input,output,cache_read,cache_write,requests,cost_usd,cost_cny";
   const lines = rows.map(r=>[r.date,r.agent,r.model,r.session,r.tokens,r.inp,r.out,r.cr,r.cw,
     r.requests,(r.cost).toFixed(6),(r.cost*DATA.cny_rate).toFixed(4)].join(","));
@@ -87,25 +123,34 @@ $("fExport").onclick = function(){
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = `token-usage-${F.rangeKey}.csv`;
-  a.click(); URL.revokeObjectURL(a.href);
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
   btn.classList.add("is-done");
-  setTimeout(() => btn.classList.remove("is-done"), 900);
+  btn.disabled = true;
+  setTimeout(() => { btn.classList.remove("is-done"); btn.disabled = false; }, 900);
+  if (window.TMUI) TMUI.toast("已导出 " + fmtInt(rows.length) + " 行 CSV", { kind: "success" });
 };
 async function reloadData(btn, idleText, label){
   const target = label || btn;
   const old = target.textContent;
-  btn.disabled = true; target.textContent = "扫描中…";
+  btn.disabled = true;
+  btn.setAttribute("aria-busy", "true");
+  target.textContent = "扫描中…";
   setScanControls(true);
   collectionFeedback("loading","正在请求扫描","结果会在后台扫描完成后更新，已有数据保留。");
   try {
     const response = await fetch("/api/reload");
     if (!response.ok) throw new Error("扫描请求失败（HTTP " + response.status + "）");
     await pollMeta();
+    if (window.TMUI) TMUI.toast("已开始重新扫描本机数据源", { kind: "success" });
   } catch (e) {
     setScanControls(false);
     collectionFeedback("error","扫描请求未完成",String(e.message) + "；请检查本地服务后重试。");
+    if (window.TMUI) TMUI.toast("扫描请求失败：" + e.message, { kind: "error" });
   } finally {
     target.textContent = idleText || old;
+    btn.removeAttribute("aria-busy");
+    btn.disabled = false;
   }
 }
 $("reload").onclick = function(){ reloadData(this, "重新扫描"); };
@@ -213,6 +258,25 @@ $("autoChk").onchange = async function(){
     await fetch("/api/settings", { method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refresh_minutes: m }) });
-  } catch(e){}
+    if (window.TMUI) TMUI.toast(on ? "已开启自动刷新" : "已关闭自动刷新", { kind: "success" });
+  } catch(e){
+    if (window.TMUI) TMUI.toast("设置保存失败，请检查本地服务", { kind: "error" });
+  }
   pollMeta();
 };
+
+/* ---------- 模型表格：本地搜索 + 分页（大数据量不卡） ---------- */
+const debounce = (fn, wait) => { let t = 0; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), wait); }; };
+if ($("modelSearch")) $("modelSearch").oninput = debounce(function(){
+  PAGE.query = this.value || "";
+  PAGE.index = 0;
+  renderModelTable();
+}, 180);
+if ($("modelPageSize")) $("modelPageSize").onchange = function(){
+  PAGE.size = parseInt(this.value, 10) || 0;
+  PAGE.index = 0;
+  renderModelTable();
+};
+
+/* ---------- 页面路由：hash 是唯一地址（可分享、可前进后退） ---------- */
+window.TMUI && TMUI.initRouter((route /*, initial */) => applyRoute(route, false));

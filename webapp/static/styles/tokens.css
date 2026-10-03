@@ -1,30 +1,395 @@
-:root{
-  color-scheme:light;
-  --bg:#F3F5F8;
-  --side:#0D1117;
-  --card:#FFFFFF;
-  --card-soft:#F8FAFC;
-  --card-hover:#F0F3F7;
-  --card2:#E9EEF4;
-  --line:#DDE3EA;
-  --line-soft:#E8EDF2;
-  --line-strong:#C9D2DC;
-  --txt:#151A20;
-  --sub:#5F6B78;
-  --dim:#8B97A4;
-  --blue:#3F73F5;
-  --blue-bright:#5A88FF;
-  --cyan:#1EAFC4;
-  --green:#159B85;
-  --amber:#C98518;
-  --purple:#686FE0;
-  --red:#D84E55;
-  --radius:8px;
-  --radius-sm:6px;
-  --radius-lg:10px;
-  --sidebar-width:252px;
-  --topbar-height:64px;
-  --shadow:0 14px 32px rgba(27,39,55,.08);
-  --shadow-sm:0 1px 0 rgba(255,255,255,.9) inset,0 6px 18px rgba(27,39,55,.06);
-  --ease:.16s ease;
+/* =============================================================================
+   Token Monitor · 设计 token 单一源（tokens.css）
+   -----------------------------------------------------------------------------
+   本文件是全站唯一的"数值来源"：颜色、字号、间距、圆角、阴影、动效、层级。
+   任何组件样式都必须引用这里的 var(--*)；新增数值先在这里登记。
+
+   主题：<html data-theme="light|dark"> 由 js/theme.js 写入；
+        未写入时按系统偏好（prefers-color-scheme）自动选择。
+   ============================================================================= */
+
+/* ---------------------------------------------------------------------------
+   1. 基础阶梯（与主题无关的"尺子"）
+   --------------------------------------------------------------------------- */
+:root {
+  /* 字体族：中文优先 Microsoft YaHei UI，西文/数字用 Segoe UI Variable */
+  --font-ui: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI",
+             "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  --font-mono: "Cascadia Mono", "Consolas", "SFMono-Regular", ui-monospace, monospace;
+
+  /* 字号阶梯：11 / 12 / 13 / 14 / 16 / 20 / 24 / 32，另有 30 用于 KPI 数字 */
+  --fs-2xs: 11px;
+  --fs-xs: 12px;
+  --fs-sm: 13px;
+  --fs-md: 14px;
+  --fs-lg: 16px;
+  --fs-xl: 20px;
+  --fs-2xl: 24px;
+  --fs-3xl: 30px;
+  --fs-4xl: 32px;
+  --fs-hero: 40px;
+
+  /* 字重：只用三档 */
+  --fw-regular: 400;
+  --fw-medium: 550;
+  --fw-semibold: 650;
+
+  /* 行高 */
+  --lh-tight: 1.25;
+  --lh-snug: 1.45;
+  --lh-normal: 1.6;
+  --lh-relaxed: 1.75;
+
+  /* 字间距 */
+  --ls-tight: -0.01em;
+  --ls-normal: 0;
+  --ls-wide: 0.02em;
+  --ls-caps: 0.05em;
+
+  /* 间距阶梯：4 的倍数 */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-7: 32px;
+  --sp-8: 40px;
+  --sp-9: 56px;
+
+  /* 圆角：控件 8 / 面板 12 / 卡片 14 / 弹窗 16 / 胶囊 999 */
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 14px;
+  --r-2xl: 16px;
+  --r-pill: 999px;
+
+  /* 控件高度：小 28 / 中 34 / 大 40；触控目标 ≥ 44 */
+  --ctl-xs: 26px;
+  --ctl-sm: 28px;
+  --ctl-md: 34px;
+  --ctl-lg: 40px;
+  --ctl-touch: 44px;
+
+  /* 布局 */
+  --sidebar-w: 248px;
+  --topbar-h: 60px;
+  --content-max: 1240px;
+  --content-pad-x: 28px;
+  --content-pad-y: 22px;
+  --grid-gap: 14px;
+
+  /* 动效：统一时长与缓动 */
+  --dur-instant: 90ms;
+  --dur-fast: 140ms;
+  --dur-base: 200ms;
+  --dur-slow: 280ms;
+  --ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* 层级 */
+  --z-base: 0;
+  --z-sticky: 10;
+  --z-header: 20;
+  --z-popover: 40;
+  --z-dialog: 60;
+  --z-toast: 80;
+  --z-tooltip: 90;
+
+  /* 图表色板（语义化取色，深浅主题共用同一序） */
+  --c1: #6C9BFF;
+  --c2: #4FC3A1;
+  --c3: #E8B45B;
+  --c4: #F0737A;
+  --c5: #9B92F0;
+  --c6: #5CC8DE;
+  --c7: #E08B5C;
+  --c8: #8FA0C4;
+  --c9: #B9C0CA;
+}
+
+/* ---------------------------------------------------------------------------
+   2. 深色主题（默认）：暖中性灰阶 + 近黑底
+   --------------------------------------------------------------------------- */
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* 面：从最底到最高 */
+  --canvas: #0C0C0D;
+  --surface: #161617;
+  --surface-2: #1C1C1F;
+  --surface-3: #252529;
+  --side: #111112;
+  --inset: #101012;
+  --surface-hover: #202024;
+  --overlay: rgba(0, 0, 0, 0.58);
+
+  /* 线：三级 */
+  --line: #2A2A2E;
+  --line-soft: #1F1F23;
+  --line-strong: #3A3A40;
+
+  /* 文字：三级 + 极弱（仅装饰，不承载信息） */
+  --ink: #F2F3F4;
+  --text: #C9CBD0;
+  --text-2: #A9ADB4;
+  --muted: #9BA1AB;
+  --m-dim: #8A9099;
+
+  /* 品牌与语义色（均按 AA 正文标准校过） */
+  --brand: #A8BDF0;
+  --brand-strong: #7AA4FF;
+  --brand-soft: rgba(122, 164, 255, 0.14);
+  --brand-line: rgba(122, 164, 255, 0.32);
+  --brand-ink: #0B1220;
+
+  --pos: #7FD1A8;
+  --pos-soft: rgba(74, 192, 138, 0.14);
+  --warn: #E2B76B;
+  --warn-soft: rgba(226, 183, 107, 0.14);
+  --neg: #F5A2A5;
+  --neg-soft: rgba(240, 115, 122, 0.14);
+  --info: #9CC7E8;
+  --info-soft: rgba(92, 200, 222, 0.14);
+
+  /* 指标语义色：全站同义同色 */
+  --m-token: #8FB2FF;
+  --m-cost: #FFB27A;
+  --m-req: #7FD1A8;
+  --m-avg: #BCA9FC;
+  --m-cache: #8AD6E6;
+
+  /* 状态点 */
+  --dot-ok: #3ECF8E;
+  --dot-busy: #E2B76B;
+  --dot-err: #F0737A;
+
+  /* 阴影与材质 */
+  --shadow-sm: 0 1px 0 rgba(255, 255, 255, 0.03) inset;
+  --shadow-md: 0 1px 0 rgba(255, 255, 255, 0.035) inset, 0 10px 26px rgba(0, 0, 0, 0.30);
+  --shadow-lg: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 22px 48px rgba(0, 0, 0, 0.46);
+  --shadow-focus: 0 0 0 3px rgba(122, 164, 255, 0.38);
+  --card-bg: linear-gradient(180deg, #18181B 0%, #141416 100%);
+  --card-bg-raised: linear-gradient(180deg, #1B1D24 0%, #15161A 100%);
+  --aurora: radial-gradient(1000px 460px at 18% -12%, rgba(108, 155, 255, 0.10), transparent 62%),
+            radial-gradient(760px 400px at 92% -16%, rgba(255, 178, 122, 0.06), transparent 60%);
+  --topbar-bg: rgba(12, 12, 13, 0.78);
+  --scroll-thumb: #2C2C30;
+  --scroll-thumb-hover: #3A3A40;
+  --selection: rgba(91, 141, 239, 0.32);
+  --skeleton: linear-gradient(90deg, #1B1B1E 25%, #232327 37%, #1B1B1E 63%);
+}
+
+/* ---------------------------------------------------------------------------
+   3. 浅色主题
+   --------------------------------------------------------------------------- */
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --canvas: #F4F5F7;
+  --surface: #FFFFFF;
+  --surface-2: #F7F8FA;
+  --surface-3: #EDEFF3;
+  --side: #FAFAFB;
+  --inset: #F2F3F6;
+  --surface-hover: #EDEFF3;
+  --overlay: rgba(23, 26, 31, 0.42);
+
+  --line: #DFE3E9;
+  --line-soft: #EBEEF2;
+  --line-strong: #C6CCD5;
+
+  --ink: #14171C;
+  --text: #3A4149;
+  --text-2: #535A63;
+  --muted: #5E656E;
+  --m-dim: #616870;
+
+  --brand: #2F63D6;
+  --brand-strong: #2354C4;
+  --brand-soft: rgba(47, 99, 214, 0.10);
+  --brand-line: rgba(47, 99, 214, 0.28);
+  --brand-ink: #FFFFFF;
+
+  --pos: #0F6B4F;
+  --pos-soft: rgba(15, 107, 79, 0.10);
+  --warn: #8A5A08;
+  --warn-soft: rgba(138, 90, 8, 0.10);
+  --neg: #B0242F;
+  --neg-soft: rgba(176, 36, 47, 0.10);
+  --info: #16607A;
+  --info-soft: rgba(22, 96, 122, 0.10);
+
+  --m-token: #2F63D6;
+  --m-cost: #96500E;
+  --m-req: #0F6B4F;
+  --m-avg: #5B4ED1;
+  --m-cache: #16607A;
+
+  --dot-ok: #17A06B;
+  --dot-busy: #C08A1E;
+  --dot-err: #D4383F;
+
+  --shadow-sm: 0 1px 2px rgba(20, 23, 28, 0.05);
+  --shadow-md: 0 1px 2px rgba(20, 23, 28, 0.06), 0 8px 24px rgba(20, 23, 28, 0.08);
+  --shadow-lg: 0 2px 4px rgba(20, 23, 28, 0.07), 0 20px 44px rgba(20, 23, 28, 0.14);
+  --shadow-focus: 0 0 0 3px rgba(47, 99, 214, 0.28);
+  --card-bg: linear-gradient(180deg, #FFFFFF 0%, #FCFCFD 100%);
+  --card-bg-raised: linear-gradient(180deg, #FFFFFF 0%, #F6F8FC 100%);
+  --aurora: radial-gradient(900px 420px at 16% -14%, rgba(47, 99, 214, 0.07), transparent 60%),
+            radial-gradient(700px 380px at 92% -18%, rgba(168, 90, 18, 0.05), transparent 58%);
+  --topbar-bg: rgba(244, 245, 247, 0.82);
+  --scroll-thumb: #C9CED6;
+  --scroll-thumb-hover: #AEB5BF;
+  --selection: rgba(47, 99, 214, 0.18);
+  --skeleton: linear-gradient(90deg, #EDEFF3 25%, #E2E6EC 37%, #EDEFF3 63%);
+
+  /* 浅色下图表色板需要更深的同色系，保证在白色画布上可辨 */
+  --c1: #2F63D6;
+  --c2: #0F7A5C;
+  --c3: #96660F;
+  --c4: #C03A45;
+  --c5: #5B4ED1;
+  --c6: #16607A;
+  --c7: #A8551A;
+  --c8: #5A6577;
+  --c9: #7A828D;
+}
+
+/* ---------------------------------------------------------------------------
+   4. 系统偏好（用户未手动选择时生效）
+   --------------------------------------------------------------------------- */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    color-scheme: light;
+    --canvas: #F4F5F7;
+    --surface: #FFFFFF;
+    --surface-2: #F7F8FA;
+    --surface-3: #EDEFF3;
+    --side: #FAFAFB;
+    --inset: #F2F3F6;
+    --surface-hover: #EDEFF3;
+    --overlay: rgba(23, 26, 31, 0.42);
+    --line: #DFE3E9;
+    --line-soft: #EBEEF2;
+    --line-strong: #C6CCD5;
+    --ink: #14171C;
+    --text: #3A4149;
+    --text-2: #535A63;
+    --muted: #5E656E;
+    --m-dim: #616870;
+    --brand: #2F63D6;
+    --brand-strong: #2354C4;
+    --brand-soft: rgba(47, 99, 214, 0.10);
+    --brand-line: rgba(47, 99, 214, 0.28);
+    --brand-ink: #FFFFFF;
+    --pos: #0F6B4F;
+    --pos-soft: rgba(15, 107, 79, 0.10);
+    --warn: #8A5A08;
+    --warn-soft: rgba(138, 90, 8, 0.10);
+    --neg: #B0242F;
+    --neg-soft: rgba(176, 36, 47, 0.10);
+    --info: #16607A;
+    --info-soft: rgba(22, 96, 122, 0.10);
+    --m-token: #2F63D6;
+    --m-cost: #96500E;
+    --m-req: #0F6B4F;
+    --m-avg: #5B4ED1;
+    --m-cache: #16607A;
+    --dot-ok: #17A06B;
+    --dot-busy: #C08A1E;
+    --dot-err: #D4383F;
+    --shadow-sm: 0 1px 2px rgba(20, 23, 28, 0.05);
+    --shadow-md: 0 1px 2px rgba(20, 23, 28, 0.06), 0 8px 24px rgba(20, 23, 28, 0.08);
+    --shadow-lg: 0 2px 4px rgba(20, 23, 28, 0.07), 0 20px 44px rgba(20, 23, 28, 0.14);
+    --shadow-focus: 0 0 0 3px rgba(47, 99, 214, 0.28);
+    --card-bg: linear-gradient(180deg, #FFFFFF 0%, #FCFCFD 100%);
+    --card-bg-raised: linear-gradient(180deg, #FFFFFF 0%, #F6F8FC 100%);
+    --aurora: radial-gradient(900px 420px at 16% -14%, rgba(47, 99, 214, 0.07), transparent 60%),
+              radial-gradient(700px 380px at 92% -18%, rgba(168, 90, 18, 0.05), transparent 58%);
+    --topbar-bg: rgba(244, 245, 247, 0.82);
+    --scroll-thumb: #C9CED6;
+    --scroll-thumb-hover: #AEB5BF;
+    --selection: rgba(47, 99, 214, 0.18);
+    --skeleton: linear-gradient(90deg, #EDEFF3 25%, #E2E6EC 37%, #EDEFF3 63%);
+    --c1: #2F63D6;
+    --c2: #0F7A5C;
+    --c3: #96660F;
+    --c4: #C03A45;
+    --c5: #5B4ED1;
+    --c6: #16607A;
+    --c7: #A8551A;
+    --c8: #5A6577;
+    --c9: #7A828D;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   5. 兼容别名：历史样式（legacy 层）仍在用这些旧变量名
+   -----------------------------------------------------------------------------
+   11 个历史文件里有 400+ 处 var(--bg)/var(--txt)/var(--card2)/var(--radius-lg)…
+   直接删旧名会让它们整片褪色。下面把旧名映射到新 token，只做兼容，不再新增使用；
+   新代码请直接用上面的语义 token。
+   --------------------------------------------------------------------------- */
+:root {
+  --bg: var(--canvas);
+  --card: var(--surface);
+  --card-soft: var(--surface-2);
+  --card-hover: var(--surface-hover);
+  --card2: var(--surface-3);
+  --txt: var(--ink);
+  --sub: var(--text-2);
+  --dim: var(--muted);
+  --blue: var(--brand);
+  --blue-bright: var(--brand-strong);
+  --cyan: var(--m-cache);
+  --green: var(--pos);
+  --amber: var(--warn);
+  --red: var(--neg);
+  --purple: var(--m-avg);
+  --radius: var(--r-md);
+  --radius-sm: var(--r-sm);
+  --radius-lg: var(--r-xl);
+  --shadow-inset: var(--shadow-sm);
+  --sidebar-width: var(--sidebar-w);
+  --topbar-height: var(--topbar-h);
+  --ease: var(--dur-base) var(--ease-standard);
+  --glow: var(--shadow-md);
+  --glow-soft: var(--shadow-sm);
+  --mono: var(--font-mono);   /* theme.css 引用了 --mono，但历史上从未定义 */
+}
+
+/* ---------------------------------------------------------------------------
+   6. 减少动态效果 / 高对比度
+   --------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-instant: 0ms;
+    --dur-fast: 0ms;
+    --dur-base: 0ms;
+    --dur-slow: 0ms;
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --line: #4A4A52;
+    --line-strong: #6A6A74;
+    --text: #E4E6E9;
+    --text-2: #D2D5D9;
+    --muted: #C2C6CC;
+    --m-dim: #B0B5BC;
+  }
+  :root[data-theme="light"] {
+    --line: #9AA1AB;
+    --line-strong: #6E757F;
+    --text: #23282E;
+    --text-2: #2E343B;
+    --muted: #3C4249;
+    --m-dim: #4A5057;
+  }
 }
