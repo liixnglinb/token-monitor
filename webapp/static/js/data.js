@@ -73,7 +73,12 @@ function rowsFor(keepUnknown){
     return true;
   });
 }
-const cellVal = (r, m) => m === "cost" ? r.cost : m === "tokens" ? r.tokens : r.requests;
+/* 行内指标取值：cost/tokens/requests 是主口径，其余（cr/cw/inp/out/think 等
+   Token 五态字段）直接按字段名取，供「物理构成 / 缓存杠杆」视角复用。 */
+const cellVal = (r, m) => m === "cost" ? r.cost
+  : m === "tokens" ? r.tokens
+  : m === "requests" ? r.requests
+  : (r[m] || 0);
 
 function groupSeries(rows, metric, grain){
   const map = new Map();

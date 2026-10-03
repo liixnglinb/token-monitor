@@ -28,6 +28,10 @@
   --fs-3xl: 30px;
   --fs-4xl: 32px;
   --fs-hero: 40px;
+  /* Hero 排版阶梯：Bento 大数字用独立字号，形成杂志化层级 */
+  --fs-display: 38px;
+  --fs-display-sm: 30px;
+  --fs-display-xs: 24px;
 
   /* 字重：只用三档 */
   --fw-regular: 400;
@@ -73,13 +77,30 @@
   --ctl-lg: 40px;
   --ctl-touch: 44px;
 
-  /* 布局 */
-  --sidebar-w: 248px;
-  --topbar-h: 60px;
-  --content-max: 1240px;
+  /* 布局：极简左侧导航栏 + 全局上下文顶栏 + 居中内容列 */
+  --rail-w: 64px;
+  --sidebar-w: 64px;              /* 兼容别名：旧样式仍引用 --sidebar-w */
+  --topbar-h: 58px;
+  --context-h: 58px;
+  --content-max: 1440px;
   --content-pad-x: 28px;
-  --content-pad-y: 22px;
-  --grid-gap: 14px;
+  --content-pad-y: 20px;
+  --grid-gap: 16px;
+  /* 统一网格间距：Bento Box 用 lg，紧邻元素用 sm */
+  --grid-gap-lg: 24px;
+  --grid-gap-sm: 12px;
+  --kpi-h: 168px;                 /* 4 联 KPI 网格统一高度，保证矩形拼图对齐 */
+
+  /* 毛玻璃材质：浮动控件（视角切换、顶栏、侧栏）共用 */
+  --glass-blur: 20px;
+  --glass-sat: 1.4;
+
+  /* 基准网格：所有尺寸按 4px 递进，卡片间距按 8/12 递进 */
+  --u: 4px;
+
+  /* 吸顶偏移：吸顶元素（表格动作栏 / 表头）需要让开上下文顶栏的高度 */
+  --sticky-top: var(--context-h);
+  --toolbar-h: 52px;
 
   /* 动效：统一时长与缓动 */
   --dur-instant: 90ms;
@@ -119,19 +140,20 @@
   color-scheme: dark;
 
   /* 面：从最底到最高 */
-  --canvas: #0C0C0D;
-  --surface: #161617;
-  --surface-2: #1C1C1F;
-  --surface-3: #252529;
-  --side: #111112;
-  --inset: #101012;
-  --surface-hover: #202024;
-  --overlay: rgba(0, 0, 0, 0.58);
+  --canvas: #0B0D10;
+  --surface: #14161A;
+  --surface-2: #191C21;
+  --surface-3: #23272E;
+  --side: #0E1013;
+  --inset: #0F1115;
+  --surface-hover: #1E2228;
+  --overlay: rgba(0, 0, 0, 0.60);
+  --hairline: rgba(255, 255, 255, 0.06);   /* 排版驱动的极细分隔线 */
 
   /* 线：三级 */
-  --line: #2A2A2E;
-  --line-soft: #1F1F23;
-  --line-strong: #3A3A40;
+  --line: #24282F;
+  --line-soft: #1B1F25;
+  --line-strong: #333941;
 
   /* 文字：三级 + 极弱（仅装饰，不承载信息） */
   --ink: #F2F3F4;
@@ -183,11 +205,25 @@
   --shadow-md: 0 1px 0 rgba(255, 255, 255, 0.035) inset, 0 10px 26px rgba(0, 0, 0, 0.30);
   --shadow-lg: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 22px 48px rgba(0, 0, 0, 0.46);
   --shadow-focus: 0 0 0 3px rgba(122, 164, 255, 0.38);
-  --card-bg: linear-gradient(180deg, #18181B 0%, #141416 100%);
-  --card-bg-raised: linear-gradient(180deg, #1B1D24 0%, #15161A 100%);
+  --card-bg: linear-gradient(180deg, #171A1F 0%, #121418 100%);
+  --card-bg-raised: linear-gradient(180deg, #1B1F26 0%, #14161B 100%);
+  --card-hover-bg: linear-gradient(180deg, #1C2027 0%, #15181D 100%);
+  /* 悬停边缘光泽 + 底层弥散阴影：替代单纯的背景色变化 */
+  --edge-glow: 0 0 0 1px rgba(255, 255, 255, 0.045),
+               inset 0 1px 0 rgba(255, 255, 255, 0.06),
+               0 18px 40px -18px rgba(0, 0, 0, 0.72);
+  --shadow-float: 0 20px 46px -22px rgba(0, 0, 0, 0.78), 0 1px 0 rgba(255, 255, 255, 0.05) inset;
+  /* 材质纹理：噪点 + 极弱网格，只作背景质感 */
+  --noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
+  --noise-opacity: 0.035;
+  --grid-tex: linear-gradient(rgba(255, 255, 255, 0.022) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(255, 255, 255, 0.022) 1px, transparent 1px);
+  --grid-tex-size: 48px 48px;
+  --glass-bg: rgba(14, 16, 20, 0.62);
+  --glass-line: rgba(255, 255, 255, 0.09);
   --aurora: radial-gradient(1000px 460px at 18% -12%, rgba(108, 155, 255, 0.10), transparent 62%),
             radial-gradient(760px 400px at 92% -16%, rgba(255, 178, 122, 0.06), transparent 60%);
-  --topbar-bg: rgba(12, 12, 13, 0.78);
+  --topbar-bg: rgba(11, 13, 16, 0.72);
   --scroll-thumb: #2C2C30;
   --scroll-thumb-hover: #3A3A40;
   --selection: rgba(91, 141, 239, 0.32);
@@ -208,6 +244,7 @@
   --inset: #F2F3F6;
   --surface-hover: #EDEFF3;
   --overlay: rgba(23, 26, 31, 0.42);
+  --hairline: rgba(20, 23, 28, 0.07);
 
   --line: #DFE3E9;
   --line-soft: #EBEEF2;
@@ -258,6 +295,16 @@
   --shadow-focus: 0 0 0 3px rgba(47, 99, 214, 0.28);
   --card-bg: linear-gradient(180deg, #FFFFFF 0%, #FCFCFD 100%);
   --card-bg-raised: linear-gradient(180deg, #FFFFFF 0%, #F6F8FC 100%);
+  --card-hover-bg: linear-gradient(180deg, #FFFFFF 0%, #F7F9FD 100%);
+  --edge-glow: 0 0 0 1px rgba(20, 23, 28, 0.05),
+               inset 0 1px 0 rgba(255, 255, 255, 0.9),
+               0 16px 34px -20px rgba(20, 23, 28, 0.28);
+  --shadow-float: 0 18px 40px -22px rgba(20, 23, 28, 0.30), 0 1px 0 rgba(255, 255, 255, 0.9) inset;
+  --noise-opacity: 0.022;
+  --grid-tex: linear-gradient(rgba(20, 23, 28, 0.028) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(20, 23, 28, 0.028) 1px, transparent 1px);
+  --glass-bg: rgba(255, 255, 255, 0.70);
+  --glass-line: rgba(20, 23, 28, 0.08);
   --aurora: radial-gradient(900px 420px at 16% -14%, rgba(47, 99, 214, 0.07), transparent 60%),
             radial-gradient(700px 380px at 92% -18%, rgba(168, 90, 18, 0.05), transparent 58%);
   --topbar-bg: rgba(244, 245, 247, 0.82);
@@ -292,6 +339,7 @@
     --inset: #F2F3F6;
     --surface-hover: #EDEFF3;
     --overlay: rgba(23, 26, 31, 0.42);
+    --hairline: rgba(20, 23, 28, 0.07);
     --line: #DFE3E9;
     --line-soft: #EBEEF2;
     --line-strong: #C6CCD5;
@@ -333,6 +381,16 @@
     --shadow-focus: 0 0 0 3px rgba(47, 99, 214, 0.28);
     --card-bg: linear-gradient(180deg, #FFFFFF 0%, #FCFCFD 100%);
     --card-bg-raised: linear-gradient(180deg, #FFFFFF 0%, #F6F8FC 100%);
+    --card-hover-bg: linear-gradient(180deg, #FFFFFF 0%, #F7F9FD 100%);
+    --edge-glow: 0 0 0 1px rgba(20, 23, 28, 0.05),
+                 inset 0 1px 0 rgba(255, 255, 255, 0.9),
+                 0 16px 34px -20px rgba(20, 23, 28, 0.28);
+    --shadow-float: 0 18px 40px -22px rgba(20, 23, 28, 0.30), 0 1px 0 rgba(255, 255, 255, 0.9) inset;
+    --noise-opacity: 0.022;
+    --grid-tex: linear-gradient(rgba(20, 23, 28, 0.028) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(20, 23, 28, 0.028) 1px, transparent 1px);
+    --glass-bg: rgba(255, 255, 255, 0.70);
+    --glass-line: rgba(20, 23, 28, 0.08);
     --aurora: radial-gradient(900px 420px at 16% -14%, rgba(47, 99, 214, 0.07), transparent 60%),
               radial-gradient(700px 380px at 92% -18%, rgba(168, 90, 18, 0.05), transparent 58%);
     --topbar-bg: rgba(244, 245, 247, 0.82);

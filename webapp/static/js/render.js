@@ -1,6 +1,7 @@
 /* ---------- 主流程 ---------- */
 /* 模型表格的分页 / 搜索状态（纯前端，不改后端契约） */
 const PAGE = { index: 0, size: 50, query: "" };
+
 function renderAll(){
   /* 首扫期间 /api/summary 返回 building 占位（无 range/matrix），此时不渲染也不报错，
      等后台扫描完成后 pollMeta 会拉到真数据再走一遍这里 */
@@ -8,11 +9,17 @@ function renderAll(){
   /* 套餐模型集合先行设置：renderAgentList / renderModelDist 都要用它区分「套餐」与「缺价」 */
   window.PLAN_SET = new Set(((DATA.kpi_all && DATA.kpi_all.plan_models) || [])
     .map(x => String(x).toLowerCase()));
-  renderSideAgents();
+  renderAgentFilter();
   renderRangeMenu();
-  renderHero(); renderMain(); renderAgentList();
-  renderModelDist(); renderModelTable(); renderNote(); renderScanInfo();
+  renderHero();
+  renderMain();
+  renderAgentList();
+  renderModelDist();
+  renderModelTable();
+  renderNote();
+  renderScanInfo();
   syncFilterSummary();
+  replayEntrance();
   if (window.TMUI){
     TMUI.clearKpiSkeleton();
     ["heroValAbbr", "heroReq", "heroAvg", "heroCost", "heroEquiv"].forEach(id => { const el = $(id); if (el) el.dataset.loaded = "1"; });
@@ -21,13 +28,32 @@ function renderAll(){
   }
 }
 
+/* 网格错开入场：重新挂 .enter 让 CSS 动画重放（瀑布流式加载体验）。
+   读取 offsetWidth 强制回流，否则同帧增删类名不会重启动画。 */
+function replayEntrance(){
+  const groups = [$("bentoKpis")].concat(
+    Array.prototype.slice.call(document.querySelectorAll(".stage-grid, .bottom-grid")));
+  groups.forEach(el => {
+    if (!el) return;
+    el.classList.remove("enter");
+    void el.offsetWidth;
+    el.classList.add("enter");
+  });
+}
+
 /* 主题切换 → Chart.js 图表重绘：MAIN/DONUT 的颜色在构造时从 CSS 变量解析成
    真实色值，切主题后必须按新 token 重建；SVG 走势（currentColor）与表格占比条
-   （var()）会自动适配，无需处理。 */
+   （var()）会自动适配，无需处理。
+   画布不直接闪变：先给容器降透明度，重绘完成后恢复。 */
 window.addEventListener("tm:theme", () => {
   if (!DATA || DATA.building || !DATA.range) return;
-  renderMain();
-  renderModelDist();
+  const wrap = document.querySelector(".chart-wrap");
+  if (wrap) wrap.classList.add("is-swapping");
+  requestAnimationFrame(() => {
+    renderMain();
+    renderModelDist();
+    if (wrap) wrap.classList.remove("is-swapping");
+  });
 });
 
 /* 扫描开销：命中/未命中/判定跳过，让"这次为什么慢"有处可看 */
@@ -46,33 +72,69 @@ function renderRangeMenu(){
   menu.innerHTML = RANGES.map(([k, label]) =>
     `<button data-k="${k}" class="${F.rangeKey===k ? "on" : ""}"><span>${label}</span><span class="ck">✓</span></button>`).join("");
   $("ddRangeVal").textContent = RANGE_LABEL[F.rangeKey];
-  const hint = $("rangeHint");
-  if (hint){
-    const text = {
-      today:"仅显示今天的数据",
-      yesterday:"仅显示昨天的数据",
-      last7:"仅显示最近 7 天的数据",
-      last30:"仅显示最近 30 天的数据",
-      last90:"仅显示最近 90 天的数据",
-      thismonth:"仅显示本月数据",
-      lastmonth:"仅显示上月数据",
-      all:"显示全部历史数据",
-    };
-    hint.textContent = text[F.rangeKey] || "";
-  }
 }
+function bindDropdown(ddId, menuId, onPick){
+  const dd = $(ddId), menu = $(menuId);
+  if (!dd || !menu) return;
+  dd.querySelector(".dd-btn").onclick = e => {
+    e.stopPropagation();
+    const wasOpen = dd.classList.contains("open");
+    closeAllDropdowns();
+    if (!wasOpen){
+      dd.classList.add("open");
+      menu.hidden = false;
+      if (window.TMUI) TMUI.syncAria();
+    }
+  };
+  menu.onclick = e => {
+    const b = e.target.closest("button[data-k]"); if (!b) return;
+    onPick(b.dataset.k);
+    closeAllDropdowns();
+  };
+}
+/* 数据源下拉：菜单项带图标与用量，与窄屏抽屉共用同一份渲染 */
+function bindAgentDropdown(){
+  const dd = $("ddAgent"), menu = $("ddAgentMenu");
+  if (!dd || !menu) return;
+  dd.querySelector(".dd-btn").onclick = e => {
+    e.stopPropagation();
+    const wasOpen = dd.classList.contains("open");
+    closeAllDropdowns();
+    if (!wasOpen){
+      dd.classList.add("open");
+      menu.hidden = false;
+      if (window.TMUI) TMUI.syncAria();
+    }
+  };
+  menu.onclick = e => {
+    const b = e.target.closest("[data-agent-filter]");
+    if (!b) return;
+    applyAgentFilter(b.dataset.agentFilter);
+  };
+}
+function closeAllDropdowns(){
+  document.querySelectorAll(".dd.open").forEach(d => d.classList.remove("open"));
+  document.querySelectorAll(".dd-menu").forEach(m => m.hidden = true);
+}
+document.addEventListener("click", closeAllDropdowns);
 
-function renderSideAgents(){
+/* ---------- 数据源筛选（顶栏下拉 + 窄屏抽屉） ---------- */
+function renderAgentFilter(){
   if (!DATA || !Array.isArray(DATA.agents)) return;
-  const allBtn = document.querySelector('[data-agent-filter="all"]');
-  if (allBtn) allBtn.classList.toggle("active", F.agent === "all");
-  /* 侧栏与窄屏抽屉共用同一份列表：一处渲染、两处注入 */
-  const sideWrap = $("sideAgents"), drawerWrap = $("drawerAgents");
-  const totalEls = [$("sideAgentTotal"), $("drawerAgentTotal")];
+  document.querySelectorAll('[data-agent-filter="all"]').forEach(b => {
+    const on = F.agent === "all";
+    b.classList.toggle("active", on);
+    b.setAttribute("aria-pressed", String(on));
+  });
+  if ($("ddAgentVal")) $("ddAgentVal").textContent = F.agent === "all" ? "全部数据源" : agentLabel(F.agent);
+
+  /* 顶栏下拉与窄屏抽屉共用同一份列表：一处渲染、两处注入 */
+  const menuWrap = $("ddAgents"), drawerWrap = $("drawerAgents");
+  const totalEls = [$("ddAgentTotal"), $("drawerAgentTotal")];
   totalEls.forEach(el => { if (el) el.textContent = String(DATA.agents.length); });
   if (!DATA.agents.length){
-    const empty = '<div class="side-empty">未发现用量数据 · 点顶部「重新扫描」</div>';
-    if (sideWrap) sideWrap.innerHTML = empty;
+    const empty = '<div class="side-empty">未发现用量数据 · 点顶部「刷新」</div>';
+    if (menuWrap) menuWrap.innerHTML = empty;
     if (drawerWrap) drawerWrap.innerHTML = empty;
   } else {
     const html = DATA.agents.map(a => {
@@ -83,11 +145,11 @@ function renderSideAgents(){
         + '<span class="side-project-name">' + esc(agentLabel(name)) + '</span>'
         + '<em>' + esc(fmtTok(a.tokens)) + '</em></button>';
     }).join("");
-    if (sideWrap) sideWrap.innerHTML = html;
+    if (menuWrap) menuWrap.innerHTML = html;
     if (drawerWrap) drawerWrap.innerHTML = html;
   }
   /* 未计入分组：本机检出、但拿不到可用用量（或体量超预算）的来源 —— 让覆盖情况可见 */
-  const unc = $("sideUncounted"), drawerUnc = $("drawerUncounted");
+  const unc = $("ddUncounted"), drawerUnc = $("drawerUncounted");
   const counted = new Set(DATA.agents.map(a => String(a.name)));
   const norm = s => String(s).toLowerCase().replace(/[\s\-_]+/g, "");
   const labels = DATA.agents.map(a => norm(agentLabel(a.name)));
@@ -106,28 +168,9 @@ function renderSideAgents(){
   if (unc) unc.innerHTML = uncHtml;
   if (drawerUnc) drawerUnc.innerHTML = uncHtml;
 }
-function bindDropdown(ddId, menuId, onPick){
-  const dd = $(ddId), menu = $(menuId);
-  dd.querySelector(".dd-btn").onclick = e => {
-    e.stopPropagation();
-    const wasOpen = dd.classList.contains("open");
-    closeAllDropdowns();
-    if (!wasOpen){ dd.classList.add("open"); menu.hidden = false; }
-  };
-  menu.onclick = e => {
-    const b = e.target.closest("button[data-k]"); if (!b) return;
-    onPick(b.dataset.k);
-    closeAllDropdowns();
-  };
-}
-function closeAllDropdowns(){
-  document.querySelectorAll(".dd.open").forEach(d => d.classList.remove("open"));
-  document.querySelectorAll(".dd-menu").forEach(m => m.hidden = true);
-}
-document.addEventListener("click", closeAllDropdowns);
 
 function renderNote(){
-  /* 说明性内容移到侧栏「设置」浮层，主区只保留扫描错误 —— 顶部不再有大段说明 */
+  /* 说明性内容移到设置页「扫描与缓存」，主区只保留扫描错误 —— 顶部不再有大段说明 */
   const main = $("noteBox"), side = $("sideNotes");
   if (!main || !side) return;
   const k = DATA.kpi_all;
@@ -147,28 +190,73 @@ function renderNote(){
   side.innerHTML = side_html;
 }
 
-
-/* ---------- Hero：Token 吞吐全景（宏观指标 + 物理构成 + 经济账本） ---------- */
+/* =============================================================================
+   Hero：4 联 Bento KPI 网格
+   -----------------------------------------------------------------------------
+   拆分为四个独立渲染子函数，各自只关心一张卡：
+     renderTotalTokenCard  网格 1 · Token 总量（大数 + 计费双色条）
+     renderCacheCard       网格 2 · 缓存杠杆（等效节省 + 四色迷你环形图）
+     renderApiCard         网格 3 · API 与并发（请求数 + 背景 sparkline）
+     renderCostCard        网格 4 · 资金消耗（¥/$ 双显，悬停翻转看单次均价）
+   ============================================================================= */
 /* 缓存经济学的典型比例：读取按输入价 10%、写入按 125%。仅用于"等效计费量/节省"
    的估算展示，真实金额仍由后端按各模型价格计算。 */
 const CR_RATIO = 0.1, CW_RATIO = 1.25;
 
-function renderHero(){
-  const rows = rowsFor(true);
-  const sum = key => rows.reduce((s,r)=>s+(r[key]||0),0);
-  const tokens = sum("tokens");
+/* 一次遍历取齐所有宏观口径，四个子函数共用，避免重复 reduce */
+function heroTotals(rows){
+  const sum = key => rows.reduce((s, r) => s + (r[key] || 0), 0);
   const inp = sum("inp"), out = sum("out"), cr = sum("cr"), cw = sum("cw");
-  const think = rows.reduce((s,r)=>s+(r.think||0),0);
-  const req = sum("requests");
-  const cost = sum("cost");
   const planSet = window.PLAN_SET || new Set();
-  const planTokens = rows.reduce((s,r)=>s+(planSet.has(String(r.model).toLowerCase())?r.tokens:0),0);
-  const compTotal = inp + out + cr + cw;
+  const planTokens = rows.reduce((s, r) => s + (planSet.has(String(r.model).toLowerCase()) ? r.tokens : 0), 0);
+  const tokens = sum("tokens"), req = sum("requests"), cost = sum("cost");
+  const unpricedTokens = rows.reduce((s, r) =>
+    s + ((r.cost <= 0 && !planSet.has(String(r.model).toLowerCase())) ? r.tokens : 0), 0);
+  return {
+    rows, inp, out, cr, cw,
+    think: rows.reduce((s, r) => s + (r.think || 0), 0),
+    compTotal: inp + out + cr + cw,
+    planTokens, tokens, req, cost, unpricedTokens,
+  };
+}
 
-  /* 大数：缩写 ↔ 完整（点击锁定，悬停预览） */
-  const fullText = fmtInt(compTotal);
+/* 时间跨度（天）：优先用筛选区间，否则用数据整体跨度 */
+function spanDays(){
+  const range = rangeDates();
+  if (range) return Math.round((new Date(range[1]) - new Date(range[0])) / 864e5) + 1;
+  if (DATA.range.max && DATA.range.min)
+    return Math.round((new Date(DATA.range.max) - new Date(DATA.range.min)) / 864e5) + 1;
+  return 0;
+}
+
+/* 迷你环形图：四段弧（缓存读取/输入/写入/输出），stroke-dasharray 拼接 */
+function miniDonutSVG(parts, total){
+  const size = 78, cx = size / 2, cy = size / 2, R = 29;
+  const C = 2 * Math.PI * R;
+  const gap = total > 0 ? 2.2 : 0;
+  let offset = 0;
+  const arcs = parts.map(([label, val, color]) => {
+    const frac = total > 0 ? val / total : 0;
+    const len = Math.max(frac * C - gap, 0);
+    const seg = '<circle cx="' + cx + '" cy="' + cy + '" r="' + R + '" fill="none" stroke="' + color
+      + '" stroke-width="9" stroke-linecap="round"'
+      + ' stroke-dasharray="' + len.toFixed(2) + ' ' + (C - len).toFixed(2) + '"'
+      + ' stroke-dashoffset="' + (-offset).toFixed(2) + '">'
+      + '<title>' + esc(label + '：' + fmtTok(val) + '（' + (frac * 100).toFixed(1) + '%）') + '</title></circle>';
+    offset += frac * C;
+    return seg;
+  }).join("");
+  const ring = total > 0 ? arcs
+    : '<circle cx="' + cx + '" cy="' + cy + '" r="' + R + '" fill="none" stroke="var(--surface-3)" stroke-width="9"/>';
+  return '<svg viewBox="0 0 ' + size + ' ' + size + '" role="img" aria-label="Token 物理构成占比">'
+    + '<g transform="rotate(-90 ' + cx + ' ' + cy + ')">' + ring + '</g></svg>';
+}
+
+/* 网格 1 · Token 总量 */
+function renderTotalTokenCard(t){
+  const compTotal = t.compTotal;
   $("heroValAbbr").textContent = fmtTok(compTotal);
-  $("heroValFull").textContent = fullText;
+  $("heroValFull").textContent = fmtInt(compTotal);
   const numBtn = $("heroNum");
   if (numBtn && !numBtn.dataset.bound){
     numBtn.dataset.bound = "1";
@@ -179,78 +267,111 @@ function renderHero(){
       $("heroValAbbr").hidden = mode === "full";
     };
   }
-
   /* 计费拆分 pill（按 Token 占比） */
   const pillM = $("heroPillMetered"), pillP = $("heroPillPlan");
-  const meteredTokens = Math.max(compTotal - planTokens, 0);
-  if (planTokens > 0){
+  const meteredTokens = Math.max(compTotal - t.planTokens, 0);
+  if (t.planTokens > 0 && compTotal > 0){
     pillP.hidden = false;
-    pillP.textContent = "套餐覆盖 " + fmtTok(planTokens) + " · " + (planTokens/compTotal*100).toFixed(0) + "%";
+    pillP.textContent = "套餐 " + (t.planTokens / compTotal * 100).toFixed(0) + "%";
     pillM.hidden = false;
-    pillM.textContent = "按量计费 " + fmtTok(meteredTokens) + " · " + (meteredTokens/compTotal*100).toFixed(0) + "%";
-  } else { pillP.hidden = true; pillM.hidden = true; }
+    pillM.textContent = "按量 " + (meteredTokens / compTotal * 100).toFixed(0) + "%";
+  } else {
+    pillP.hidden = true;
+    pillM.hidden = true;
+  }
+  /* 微型双色进度条：按量计费 vs 套餐覆盖 */
+  const barM = $("heroDualMetered"), barP = $("heroDualPlan");
+  const total = Math.max(compTotal, 1);
+  if (barM) barM.style.setProperty("--w", (meteredTokens / total * 100).toFixed(1) + "%");
+  if (barP) barP.style.setProperty("--w", (t.planTokens / total * 100).toFixed(1) + "%");
+  const dual = $("heroDualBar");
+  if (dual) dual.setAttribute("aria-label",
+    "计费构成：按量计费 " + fmtTok(meteredTokens) + "，套餐覆盖 " + fmtTok(t.planTokens));
+  const sub = $("heroTokenSub");
+  if (sub) sub.textContent = compTotal > 0
+    ? "缓存读取 + 输入 + 写入 + 输出 合计"
+    : "物理构成总量（缓存读取 + 输入 + 写入 + 输出）";
+}
 
-  /* 缓存命中与等效计费量 */
-  const cacheBase = inp + cw + cr;
+/* 网格 2 · 缓存杠杆 */
+function renderCacheCard(t){
+  const compTotal = t.compTotal;
+  const cacheBase = t.inp + t.cw + t.cr;
   $("heroCache").textContent = cacheBase > 0
-    ? "缓存命中 " + (cr/cacheBase*100).toFixed(1) + "%" : "缓存命中 —";
-  const equiv = inp + CR_RATIO*cr + CW_RATIO*cw;
+    ? "缓存命中 " + (t.cr / cacheBase * 100).toFixed(1) + "%" : "缓存命中 —";
+  const equiv = t.inp + CR_RATIO * t.cr + CW_RATIO * t.cw;
   $("heroEquiv").textContent = compTotal > 0 ? fmtTok(equiv) + " tok" : "—";
   $("heroSavingPct").textContent = compTotal > 0
-    ? "较全量直连节省 " + Math.max(0, (1 - equiv/compTotal)*100).toFixed(1) + "%" : "";
+    ? "较全量直连节省 " + Math.max(0, (1 - equiv / compTotal) * 100).toFixed(1) + "%" : "无缓存数据";
 
-  /* 物理构成分段条（think 属于输出的子段，不参与总和） */
-  const seg = $("heroSegBar");
-  const parts = [
-    ["cr",  "缓存读取", cr],
-    ["inp", "基础输入", inp],
-    ["cw",  "缓存写入", cw],
-    ["out", "输出生成", out],
-  ].filter(p => p[2] > 0);
-  const pct = v => compTotal > 0 ? (v/compTotal*100) : 0;
-  seg.innerHTML = parts.map(([cls, label, val]) => {
-    const w = pct(val);
-    const sub = (cls === "out" && think > 0)
-      ? '<div class="seg-sub seg-think" style="--sub-w:' + (think/Math.max(val,1)*100).toFixed(1)
-        + '%" title="其中深度思考: ' + esc(fmtTok(think)) + ' (' + esc(fmtInt(think/Math.max(val,1)*100)) + '% of 输出)"></div>'
-      : "";
-    return '<div class="seg seg-' + cls + '" style="--w:' + w.toFixed(1) + '%" title="'
-      + label + ': ' + esc(fmtTok(val)) + ' (' + w.toFixed(1) + '%)">' + sub + '</div>';
-  }).join("") || '<div class="seg seg-empty" style="--w:100%" title="暂无数据"></div>';
-  seg.setAttribute("aria-label", "Token 物理构成：" + parts.map(([l,v])=>l+" "+(pct(v)).toFixed(1)+"%").join("、"));
-
-  /* 图例网格 */
-  $("heroLegend").innerHTML = parts.map(([cls, label, val]) =>
-    '<div class="legend-item"><i class="dot dot-' + cls + '"></i><span>' + label
-    + (cls === "out" && think > 0 ? '<small class="legend-think">含思考 ' + esc(fmtTok(think)) + '</small>' : "")
-    + '</span><b>' + esc(fmtTok(val)) + '</b><em>' + pct(val).toFixed(1) + '%</em></div>'
-  ).join("") || '<div class="legend-item"><span>暂无构成数据</span></div>';
-
-  /* 经济账本 */
-  const unpricedTokens = rows.reduce((s,r)=>s+((r.cost<=0 && !planSet.has(String(r.model).toLowerCase()))?r.tokens:0),0);
-  const planOnly = tokens > 0 && planTokens >= tokens * 0.995;
-  const costEl = $("heroCost");
-  costEl.textContent = cost > 0 ? fmtCNY(cost * DATA.cny_rate)
-    : (planOnly ? "套餐" : (unpricedTokens > 0 ? "未计价" : fmtCNY(0)));
-  costEl.title = cost > 0 ? "按各模型价格估算，不代表实际账单 · 等效 $" + fmtUSD(cost).slice(1)
-    : "套餐模型不计费；单价缺失的用量不记为免费";
-  $("heroCostSub").textContent = cost > 0 ? "$" + fmtUSD(cost).slice(1) + " · 汇率 " + DATA.cny_rate : "";
   /* 节省资金：被缓存吸收的那部分输入 × 输入等效价（比例法估算） */
-  const savedTokens = cr * (1 - CR_RATIO) - cw * (CW_RATIO - 1);
-  const perTokPrice = compTotal > 0 ? (cost * DATA.cny_rate) / compTotal : 0;
-  $("heroSave").textContent = savedTokens > 0 && cost > 0
+  const savedTokens = t.cr * (1 - CR_RATIO) - t.cw * (CW_RATIO - 1);
+  const perTokPrice = compTotal > 0 ? (t.cost * DATA.cny_rate) / compTotal : 0;
+  const saveEl = $("heroSave");
+  saveEl.textContent = savedTokens > 0 && t.cost > 0
     ? "≈ " + fmtCNY(savedTokens * perTokPrice) : "—";
-  $("heroSave").title = savedTokens > 0
-    ? "按典型比例估算：读取省下的约 " + fmtTok(Math.max(savedTokens,0)) + " tokens × 平均输入单价"
+  saveEl.title = savedTokens > 0
+    ? "按典型比例估算：读取省下的约 " + fmtTok(Math.max(savedTokens, 0)) + " tokens × 平均输入单价"
     : "当前缓存写入开销高于读取收益或无缓存数据";
-  const range = rangeDates();
-  const days = range ? Math.round((new Date(range[1]) - new Date(range[0]))/864e5) + 1
-    : (DATA.range.max && DATA.range.min
-      ? Math.round((new Date(DATA.range.max) - new Date(DATA.range.min))/864e5)+1 : 0);
-  $("heroReq").textContent = fmtInt(req);
-  $("heroReqSub").textContent = days ? "日均 " + (req/days < 1 ? "<1" : fmtInt(req/days)) : "全部时间";
-  $("heroAvg").textContent = req ? fmtInt(Math.round(tokens / req)) : "—";
-  $("heroAvgSub").textContent = req ? "tokens / 请求" : "无记录";
+
+  /* 四色迷你环形图（替代原有的分段条） */
+  const parts = [
+    ["缓存读取", t.cr, cssVar("--tok-cr", "#10B981")],
+    ["基础输入", t.inp, cssVar("--tok-inp", "#60A5FA")],
+    ["缓存写入", t.cw, cssVar("--tok-cw", "#A78BFA")],
+    ["输出生成", t.out, cssVar("--tok-out", "#F97316")],
+  ].filter(p => p[1] > 0);
+  $("heroMiniDonut").innerHTML = miniDonutSVG(parts, compTotal);
+
+  /* 紧凑图例 */
+  const pct = v => compTotal > 0 ? (v / compTotal * 100) : 0;
+  const legend = $("heroLegend");
+  legend.innerHTML = parts.map(([label, val, color]) =>
+    '<span><i style="background:' + color + '"></i>' + esc(label)
+    + '<b>' + esc(fmtTok(val)) + '</b></span>').join("")
+    || '<span>暂无构成数据</span>';
+  void pct;
+}
+
+/* 网格 3 · API 与并发 */
+function renderApiCard(t){
+  const days = spanDays();
+  $("heroReq").textContent = fmtInt(t.req);
+  $("heroReqSub").textContent = days ? "日均 " + (t.req / days < 1 ? "<1" : fmtInt(t.req / days)) + " 次" : "全部时间";
+  $("heroAvg").textContent = t.req ? fmtInt(Math.round(t.tokens / t.req)) : "—";
+  $("heroAvgSub").textContent = t.req ? "tokens / 请求" : "无记录";
+  /* 背景极弱 sparkline：每日请求量走势 */
+  const rows = rowsFor(true);
+  const start = (rangeDates() || [])[0];
+  $("heroApiSpark").innerHTML = sparklineSVG(sparkPairsFor(rows, "requests", start), null);
+}
+
+/* 网格 4 · 资金消耗（正面 ¥/$ 双显，背面单次均价） */
+function renderCostCard(t){
+  const planOnly = t.tokens > 0 && t.planTokens >= t.tokens * 0.995;
+  const costEl = $("heroCost");
+  costEl.textContent = t.cost > 0 ? fmtCNY(t.cost * DATA.cny_rate)
+    : (planOnly ? "套餐" : (t.unpricedTokens > 0 ? "未计价" : fmtCNY(0)));
+  costEl.title = t.cost > 0
+    ? "按各模型价格估算，不代表实际账单 · 等效 $" + fmtUSD(t.cost).slice(1)
+    : "套餐模型不计费；单价缺失的用量不记为免费";
+  $("heroCostSub").textContent = t.cost > 0
+    ? "$" + fmtUSD(t.cost).slice(1) + " · 汇率 " + DATA.cny_rate : "";
+
+  const unit = $("heroUnitCost");
+  unit.textContent = t.cost > 0 && t.req > 0
+    ? fmtCNY(t.cost * DATA.cny_rate / t.req, 4) : "—";
+  $("heroUnitSub").textContent = t.req > 0
+    ? "共 " + fmtInt(t.req) + " 次请求 · 按各模型价格估算"
+    : "按各模型价格估算";
+}
+
+function renderHero(){
+  const t = heroTotals(rowsFor(true));
+  renderTotalTokenCard(t);
+  renderCacheCard(t);
+  renderApiCard(t);
+  renderCostCard(t);
 }
 
 /* ---------- 主图与每日统计 ---------- */
@@ -528,7 +649,6 @@ function renderComposition(rows, range, theme){
     return { key, label, data: labels.map(l => map.get(l) || 0) };
   }).filter(s => s.data.some(v => v > 0));
   const totalTok = series.reduce((acc, s) => acc + s.data.reduce((a, b) => a + b, 0), 0);
-  const thinkTotal = rows.reduce((s, r) => s + (r.think || 0), 0);
 
   $("mainTitle").textContent = "Token 物理构成" + (F.grain === "month" ? "（按月）" : "");
   $("mainSum").textContent = "总量 · " + fmtTok(totalTok) + " tok";
@@ -547,17 +667,20 @@ function renderComposition(rows, range, theme){
     borderRadius: 4, borderSkipped: false,
   })), opts, "bar");
 
+  /* 构成摘要与明细都按"图表同一口径"（补零日期轴内的构成量）统计，
+     避免把区间外的 unknown 日期计入而出现 >100% 的占比 */
+  const totals = new Map(series.map(s => [s.key, s.data.reduce((a, b) => a + b, 0)]));
   $("trendSummary").innerHTML = COMP_META.map(([key, label]) => {
-    const total = rows.reduce((s, r) => s + (r[key] || 0), 0);
+    const total = totals.get(key) || 0;
     return '<div class="trend-stat"><span>' + label + '</span><b>' + esc(fmtTok(total))
       + '</b><small>' + (totalTok > 0 ? (total / totalTok * 100).toFixed(1) + "%" : "—") + '</small></div>';
   }).join("");
-  renderDailyDetail(rows, [], "tokens");
+  renderDailyDetail(rows, seriesAxis(groupSeries(rows, "tokens", F.grain), range)
+    .map(([label, value]) => ({ label, value })), "tokens");
   const emp = $("mainEmpty");
   emp.hidden = totalTok > 0;
   if (totalTok === 0) emp.innerHTML = '<div class="t1">当前筛选下无 Token 记录</div>'
     + '<div class="t2">试试把时间范围切换到近 7 天或全部</div>';
-  void thinkTotal;
 }
 function renderCacheLeverage(rows, range, theme){
   const perDay = new Map();
@@ -609,15 +732,17 @@ function renderCacheLeverage(rows, range, theme){
     + '<div class="trend-stat"><span>真实付费输入</span><b>' + esc(fmtTok(totPaid)) + '</b><small>含读取 10% · 写入 125%</small></div>'
     + '<div class="trend-stat"><span>缓存吸收</span><b>' + esc(fmtTok(saved)) + '</b><small>阴影区面积</small></div>'
     + '<div class="trend-stat"><span>节省率</span><b>' + (totFull > 0 ? (saved / totFull * 100).toFixed(1) + "%" : "—") + '</b><small>估算口径</small></div>';
-  renderDailyDetail(rows, [], "tokens");
+  renderDailyDetail(rows, seriesAxis(groupSeries(rows, "tokens", F.grain), range)
+    .map(([label, value]) => ({ label, value })), "tokens");
   const emp = $("mainEmpty");
   emp.hidden = totFull > 0;
   if (totFull === 0) emp.innerHTML = '<div class="t1">当前筛选下无缓存数据</div>'
     + '<div class="t2">该口径需要来源记录缓存读取/写入明细（Codex、Claude 等已支持）</div>';
 }
 
-/* ---------- Agent 用量榜（可折叠 + 会话明细已并入 SVG title） ---------- */
-
+/* =============================================================================
+   Agent 侧栏：行高压缩 + 悬停浮现 sparkline + 0fr/1fr 高度过渡
+   ============================================================================= */
 /* ---------- 迷你走势：纯 SVG 折线 + 渐变面积，不用 Chart.js ----------
    排行榜里每个数据源、展开后每个模型都有一条走势。
    之前用 Chart.js 实例，几十条同时驻留会吃掉大量内存并掉帧；
@@ -637,17 +762,19 @@ function sparklineSVG(pairs, cssColor){
     + " L " + pts + " L " + xs(n - 1).toFixed(1) + "," + H + " L " + xs(0).toFixed(1) + "," + H + " Z";
   const nonzero = vals.filter(v => v > 0).length;
   return '<svg class="sparkline" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none"'
-    + ' role="img" aria-label="每日 Token 走势，' + nonzero + ' 天有数据，峰值 ' + esc(md(pairs[peak][0])) + ' ' + esc(fmtTok(vals[peak])) + ' tok"'
+    + ' role="img" aria-label="每日走势，' + nonzero + ' 天有数据，峰值 ' + esc(md(pairs[peak][0])) + ' ' + esc(fmtTok(vals[peak])) + ' tok"'
     + (cssColor ? ' style="color:' + cssColor + '"' : "") + '>'
     + '<path d="' + area + '" fill="currentColor" fill-opacity="0.16" stroke="none"/>'
     + '<polyline fill="none" stroke="currentColor" stroke-width="1.8" vector-effect="non-scaling-stroke"'
     + ' stroke-linecap="round" stroke-linejoin="round" points="' + pts + '"/>'
     + '</svg>';
 }
-/* 迷你走势对应的"每日 Token"序列：与旧迷你图同源（fillDays 补零日期轴） */
-function sparkPairs(rows, start){
-  return fillDays(groupSeries(rows, "tokens", "day"), start);
+/* 迷你走势对应的序列：fillDays 补零日期轴 */
+function sparkPairsFor(rows, metric, start){
+  return fillDays(groupSeries(rows, metric, "day"), start);
 }
+function sparkPairs(rows, start){ return sparkPairsFor(rows, "tokens", start); }
+
 /* 金额为 0 但有用量时，用三态徽标区分「按量计费 / 套餐覆盖 / 未计价」，
    避免把缺价或订阅制误读成真正免费 */
 function costText(cost, tokens, model, forcePlan){
@@ -671,7 +798,115 @@ function modelCellHTML(name){
     + '<span class="model-name">' + esc(core) + '</span></span>';
 }
 
-/* ---------- 模型用量分布（环形图 + 双列 Top10，参考阿里云百炼看板） ---------- */
+const CHEV_SVG = '<svg class="ar-chev" viewBox="0 0 12 12" fill="none" stroke="currentColor" '
+  + 'stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="m4.5 2.5 4 3.5-4 3.5"/></svg>';
+
+function renderAgentList(){
+  const rows = rowsFor(false);
+  const range = rangeDates();
+  const start = range && range[0];
+  const planSet = window.PLAN_SET || new Set();
+  const ag = new Map();
+  for (const r of rows){
+    const o = ag.get(r.agent) || {tokens:0, cost:0, requests:0, planTokens:0};
+    o.tokens += r.tokens; o.cost += r.cost; o.requests += r.requests;
+    if (planSet.has(String(r.model).toLowerCase())) o.planTokens += r.tokens;
+    ag.set(r.agent, o);
+  }
+  const list = [...ag.entries()].sort((a,b)=>b[1].tokens-a[1].tokens);   // 消耗多的在上
+  const wrap = $("agentList");
+  if (!wrap) return;
+  const countEl = $("agentRailCount");
+  if (countEl) countEl.textContent = list.length ? fmtInt(list.length) + " 个数据源" : "";
+  if (!list.length){
+    wrap.innerHTML = '<div class="empty">当前筛选下无数据</div>';
+    return;
+  }
+  const totalTok = list.reduce((s, x) => s + x[1].tokens, 0) || 1;
+  wrap.innerHTML = "";
+
+  /* 分批挂 DOM：几十条目一次性 innerHTML 会造成长任务；每批 12 条保持滚动流畅 */
+  const CHUNK = 12;
+  let rendered = 0;
+
+  function fillModels(box, name){
+    const arows = rowsFor(false).filter(r => r.agent === name);
+    const mm = new Map();
+    for (const r of arows){
+      const o2 = mm.get(r.model) || {tokens:0, cost:0, requests:0};
+      o2.tokens += r.tokens; o2.cost += r.cost; o2.requests += r.requests;
+      mm.set(r.model, o2);
+    }
+    const mlist = [...mm.entries()].sort((a,b)=>b[1].tokens-a[1].tokens);
+    box.dataset.filled = "1";
+    if (!mlist.length){
+      box.innerHTML = '<div class="ar-empty">该数据源在当前筛选下没有模型明细</div>';
+      return;
+    }
+    box.innerHTML = mlist.map(([mname, o2]) =>
+      '<div class="mrow"><span class="nm">' + modelCellHTML(mname) + '</span>'
+      + '<span class="num">' + fmtInt(o2.tokens) + ' tok · ' + fmtInt(o2.requests) + ' 次 · '
+      + costText(o2.cost, o2.tokens, mname) + '</span></div>').join("");
+  }
+
+  function toggleEntry(entry, name){
+    const open = !entry.classList.contains("open");
+    entry.classList.toggle("open", open);
+    const row = entry.querySelector(".ar-row");
+    if (row) row.setAttribute("aria-expanded", String(open));
+    if (open) F.open.add(name); else F.open.delete(name);
+    const box = entry.querySelector(".ar-models");
+    if (open && box && !box.dataset.filled) fillModels(box, name);
+  }
+
+  function renderChunk(){
+    const slice = list.slice(rendered, rendered + CHUNK);
+    slice.forEach(([name, o], offset)=>{
+      const i = rendered + offset;
+      /* 用 CSS 变量取色：主题切换时 sparkline 与图标随 currentColor 自动换色 */
+      const cssColor = "var(--c" + (i % 9 + 1) + ")";
+      const open = F.open.has(name);
+      const share = o.tokens / totalTok * 100;
+      const entry = document.createElement("div");
+      entry.className = "ar-entry" + (open ? " open" : "");
+      entry.innerHTML =
+        '<button class="ar-row" type="button" aria-expanded="' + (open ? "true" : "false") + '"'
+        + ' title="' + esc(agentLabel(name)) + '">'
+        +   '<span class="ar-rank" aria-hidden="true">' + String(i + 1).padStart(2, "0") + '</span>'
+        +   '<span class="ar-icon" style="color:' + cssColor + '">' + agentIcon(name) + '</span>'
+        +   '<span class="ar-body">'
+        +     '<span class="ar-name">' + esc(agentLabel(name)) + '</span>'
+        +     '<span class="ar-meta">' + fmtInt(o.requests) + ' 次 · '
+        +        costText(o.cost, o.tokens, null, o.planTokens > 0 && o.planTokens >= o.tokens * 0.995) + '</span>'
+        +   '</span>'
+        +   '<span class="ar-spark" aria-hidden="true">' + sparklineSVG(sparkPairs(rows.filter(r=>r.agent===name), start), cssColor) + '</span>'
+        +   '<span class="ar-val"><b>' + fmtTok(o.tokens) + '</b><small>' + share.toFixed(1) + '%</small></span>'
+        +   CHEV_SVG
+        + '</button>'
+        + '<div class="ar-detail"><div class="ar-detail-inner"><div class="ar-models"></div></div></div>';
+      wrap.appendChild(entry);
+      const row = entry.querySelector(".ar-row");
+      row.onclick = () => toggleEntry(entry, name);
+      /* 已展开（来自 F.open 记忆）→ 立即填充明细，不播放入场动画 */
+      if (open){
+        const box = entry.querySelector(".ar-models");
+        fillModels(box, name);
+      }
+    });
+    rendered += slice.length;
+    if (rendered < list.length){
+      const more = document.createElement("button");
+      more.type = "button";
+      more.className = "btn btn-sm agent-more";
+      more.textContent = "继续显示剩余 " + (list.length - rendered) + " 个数据源";
+      more.onclick = function(){ more.remove(); renderChunk(); };
+      wrap.appendChild(more);
+    }
+  }
+  renderChunk();
+}
+
+/* ---------- 模型用量分布（环形图 + 单列排行，原 Top10 双列条已融合） ---------- */
 let DONUT = null;
 function renderModelDist(){
   const rows = rowsFor(false);
@@ -705,11 +940,11 @@ function renderModelDist(){
         datasets: [{
           data: items.map(i=>i.val),
           backgroundColor: items.map((_, i)=>PAL[i % PAL.length]),
-          borderColor: cssVar("--surface", "#161B22"), borderWidth: 3, hoverOffset: 7,
+          borderColor: cssVar("--surface", "#14161A"), borderWidth: 3, hoverOffset: 7,
         }],
       },
       options: {
-        responsive: true, maintainAspectRatio: false, cutout: "76%",
+        responsive: true, maintainAspectRatio: false, cutout: "74%",
         plugins: {
           legend: { display: false },
           tooltip: Object.assign({}, TT, {
@@ -725,21 +960,20 @@ function renderModelDist(){
   $("donutLegend").innerHTML = items.slice(0, 8).map((i, k)=>
     '<span><i style="background:' + PAL[k % PAL.length] + '"></i>' + esc(i.name) + '</span>').join("");
 
-  /* 双列 Top10：按调用次数排序（与百炼一致） */
+  /* 单列排行：按调用次数排序（原双列 Top10 融合为环形图右侧的附带列表） */
   const top = byReq.slice(0, 10);
   const maxReq = Math.max(...top.map(([, o]) => o.req), 1);
-  const col = (arr, start) => arr.map(([n, o], k)=>
+  const box = $("top10");
+  box.innerHTML = top.map(([n, o], k)=>
     '<div class="t10-row" data-model="' + esc(n) + '" title="查看 ' + esc(n) + ' 的明细">'
-    + '<span class="idx">Top ' + (start + k + 1) + '</span>'
-    + '<span class="dot" style="background:' + PAL[(start + k) % PAL.length] + '"></span>'
+    + '<span class="idx">' + String(k + 1).padStart(2, "0") + '</span>'
+    + '<span class="dot" style="background:' + PAL[k % PAL.length] + '"></span>'
     + '<span class="nm">' + esc(n) + '</span>'
-    + '<span class="t10-bar"><i style="width:' + Math.max(3, o.req / maxReq * 100).toFixed(1) + '%;background:' + PAL[(start + k) % PAL.length] + '"></i></span>'
+    + '<span class="t10-bar"><i style="width:' + Math.max(4, o.req / maxReq * 100).toFixed(1) + '%;background:' + PAL[k % PAL.length] + '"></i></span>'
     + '<span class="val">' + fmtInt(o.req) + '<em>次</em></span>'
     + '</div>').join("");
-  const box = $("top10");
-  box.innerHTML = '<div>' + col(top.slice(0, 5), 0) + '</div><div>' + col(top.slice(5, 10), 5) + '</div>';
 
-  /* 点击某行 → 跳到「模型成本」视图看明细 */
+  /* 点击某行 → 跳到「模型用量」视图看明细 */
   box.querySelectorAll(".t10-row").forEach(el=>{
     el.onclick = () => {
       switchView("models");
@@ -748,115 +982,11 @@ function renderModelDist(){
   });
 }
 
-function renderAgentList(){
-  const rows = rowsFor(false);
-  const range = rangeDates();
-  const start = range && range[0];
-  const ag = new Map();
-  const planSet = window.PLAN_SET || new Set();
-  for (const r of rows){
-    const o = ag.get(r.agent) || {tokens:0, cost:0, requests:0, planTokens:0};
-    o.tokens += r.tokens; o.cost += r.cost; o.requests += r.requests;
-    if (planSet.has(String(r.model).toLowerCase())) o.planTokens += r.tokens;
-    ag.set(r.agent, o);
-  }
-  const list = [...ag.entries()].sort((a,b)=>b[1].tokens-a[1].tokens);   // 消耗多的在上
-  const wrap = $("agentList");
-  if (!list.length){
-    wrap.innerHTML = '<div class="card"><div class="empty">当前筛选下无数据</div></div>'; return;
-  }
-
-  wrap.innerHTML =
-    '<section class="agent-panel">' +
-      '<div class="agent-panel-head">' +
-        '<div><h3>Agent 用量排行</h3><p>按 Token 消耗排序，点行展开模型明细</p></div>' +
-        '<span class="agent-panel-count">' + fmtInt(list.length) + ' 个数据源</span>' +
-      '</div>' +
-      '<div id="agCards"></div>' +
-    '</section>';
-  const box = $("agCards");
-  /* 分批挂 DOM：几十条目一次性 innerHTML 会造成长任务；每批 12 条保持滚动流畅 */
-  const CHUNK = 12;
-  let rendered = 0;
-
-  function renderChunk(){
-    const slice = list.slice(rendered, rendered + CHUNK);
-    slice.forEach(([name, o], offset)=>{
-      const i = rendered + offset;
-      /* 用 CSS 变量取色：主题切换时 sparkline 与图标随 currentColor 自动换色 */
-      const cssColor = "var(--c" + (i % 9 + 1) + ")";
-      const open = F.open.has(name);
-      const sec = document.createElement("div");
-      sec.className = "agent-entry";
-      sec.innerHTML =
-        '<div class="ar' + (open ? " open" : "") + '">' +
-          '<div class="ar-head" role="button" tabindex="0" aria-expanded="' + (open ? "true" : "false") + '">' +
-            '<span class="ar-fold" aria-hidden="true">▶</span>' +
-            '<span class="ar-rank" aria-hidden="true">' + String(i + 1).padStart(2, "0") + '</span>' +
-            '<span class="ar-icon" style="color:' + cssColor + '">' + agentIcon(name) + '</span>' +
-            '<span class="nm">' + esc(agentLabel(name)) + '</span>' +
-            '<span class="ar-metrics">' +
-              '<span><small>Tokens</small><b>' + fmtInt(o.tokens) + '</b></span>' +
-              '<span><small>请求</small><b>' + fmtInt(o.requests) + '</b></span>' +
-              '<span><small>金额</small><b>' + costText(o.cost, o.tokens, null, o.planTokens > 0 && o.planTokens >= o.tokens * 0.995) + '</b></span>' +
-            '</span>' +
-          '</div>' +
-          '<div class="ar-chart">' + sparklineSVG(sparkPairs(rows.filter(r=>r.agent===name), start), cssColor) + '</div>' +
-          '<div class="ar-models" id="am-' + i + '"></div>' +
-        '</div>';
-      box.appendChild(sec);
-      const arEl = sec.querySelector(".ar");
-      const arHead = arEl.querySelector(".ar-head");
-      const toggleAgent = () => {
-        F.open.has(name) ? F.open.delete(name) : F.open.add(name);
-        renderAgentList();
-      };
-      arHead.onclick = toggleAgent;
-      arHead.onkeydown = e => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          toggleAgent();
-        }
-      };
-
-      if (open){
-        const arows = rows.filter(r=>r.agent===name);
-        const mm = new Map();
-        for (const r of arows){
-          const o2 = mm.get(r.model) || {tokens:0, cost:0, requests:0};
-          o2.tokens += r.tokens; o2.cost += r.cost; o2.requests += r.requests;
-          mm.set(r.model, o2);
-        }
-        const mlist = [...mm.entries()].sort((a,b)=>b[1].tokens-a[1].tokens);
-        const boxM = arEl.querySelector(".ar-models");
-        if (!mlist.length) boxM.innerHTML = '<div class="empty">该数据源在当前筛选下没有模型明细</div>';
-        mlist.forEach(([mname, o2])=>{
-          const row = document.createElement("div");
-          row.className = "mrow";
-          row.innerHTML =
-            '<span class="nm">' + modelCellHTML(mname) + '</span>' +
-            '<span class="num">Tokens <b>' + fmtInt(o2.tokens) + '</b> · ' + fmtInt(o2.requests) + ' 次 · ' + costText(o2.cost, o2.tokens, mname) + '</span>' +
-            '<div class="ch">' + sparklineSVG(sparkPairs(arows.filter(r=>r.model===mname), start), cssColor) + '</div>';
-          boxM.appendChild(row);
-        });
-      }
-    });
-    rendered += slice.length;
-    if (rendered < list.length){
-      const more = document.createElement("button");
-      more.type = "button";
-      more.className = "btn btn-sm agent-more";
-      more.textContent = "继续显示剩余 " + (list.length - rendered) + " 个数据源";
-      more.onclick = function(){ more.remove(); renderChunk(); };
-      box.appendChild(more);
-    }
-  }
-  renderChunk();
-}
-
 /* ---------- 表格视图 ---------- */
+/* 占比条：轨道 = 模型色 20% 透明，标识头 = 模型色 100%（柔和进度带） */
 function barCell(v, max, color){
-  return `<td class="bar-cell"><div class="bar"><i style="width:${max?Math.max(v/max*100,1):0}%;background:${color}"></i></div></td>`;
+  const pct = max ? Math.max(v / max * 100, 1) : 0;
+  return `<td class="bar-cell"><div class="bar" style="--bar-c:${color}"><i style="width:${pct}%"></i></div></td>`;
 }
 /* 表格排序状态：默认按 Token 降序（口径：Token 是主口径） */
 const SORT = { key: "tokens", dir: -1 };
@@ -885,6 +1015,11 @@ function renderModelTable(){
     : (totalTokens > 0 ? "套餐/未计价" : fmtCNY(0));
   costEl.title = totalCost > 0 ? "按当前价表估算，仅供参考"
     : "当前模型属于套餐/订阅制（只记用量不计金额），或单价不在价格库中";
+
+  /* 占比条配色：与环形图同源（按 Token 降序取 PAL），排序变化不改变颜色语义 */
+  const colorOf = new Map(
+    [...agg.entries()].sort((a,b)=>b[1].tokens-a[1].tokens)
+      .map(([n], i) => [n, PAL[i % PAL.length]]));
 
   /* 本地搜索与计费筛选：只影响表格行，不改变 KPI 与图表口径 */
   const query = (PAGE.query || "").trim().toLowerCase();
@@ -926,10 +1061,9 @@ function renderModelTable(){
     /* data-label 供窄屏"卡片化"降级使用（CSS ::before 显示字段名） */
     body.innerHTML = view.map(([name,o],i)=>{
       const avg = o.tokens ? o.cost*DATA.cny_rate/o.tokens*1e6 : 0;
-      const rank = start + i;
       return `<tr><td class="mono" data-label="模型"><span class="m-ico">${modelIcon(name)}</span>${modelCellHTML(name)}</td>
       <td class="num" data-label="Tokens">${fmtInt(o.tokens)}</td><td class="num" data-label="请求次数">${fmtInt(o.requests)}</td>
-      ${barCell(o.tokens,max,rank<3?"var(--m-token)":"var(--line-strong)")}
+      ${barCell(o.tokens, max, colorOf.get(name) || "var(--m-token)")}
       <td class="num" data-label="金额（估算）">${costText(o.cost, o.tokens, name)}</td>
       <td class="num" data-label="均价（¥/百万 tok）">${avg ? "¥"+avg.toFixed(2) : '<span class="muted">价格未知</span>'}</td>
       </tr>`;

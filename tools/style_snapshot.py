@@ -34,11 +34,17 @@ PROBE = r"""
     'padding','margin','gap','fontSize','fontWeight','lineHeight','color','backgroundColor',
     'borderRadius','borderColor','boxShadow','opacity','overflowX','overflowY','textAlign'];
   const nodes = [];
-  const selectors = ['body','aside','#nav a','.side-project','.side-section-head','.side-foot','.side-settings',
-    'main','.topbar','.page-title','.content','.filters','.dd-btn','.kpis','.kpi','.kpi .v','.kpi .s','.k-corner',
-    '.card','.chart-card','.card-head h3','.seg','.seg button','.trend-summary','.trend-stat','.daily-row',
-    '.agent-panel','.ar-head','.ar-metrics','.dist','.donut-legend','.t10-row','.table-card','.table-card thead th',
-    '.table-card tbody td','.model-stat','.set-card','.set-row','.set-info .t','.set-sel','.switch','.btn',
+  /* 选择器清单随 v2.0 Bento 架构更新：Slim Rail + 上下文顶栏 + Bento KPI + 主舞台 + 侧栏 + 底部双栏 */
+  const selectors = ['body','#sidebar.slim-rail','.rail-top','.rail-nav','.rail-nav a','.rail-tip','.rail-avatar','.side-online',
+    'main','.context-bar','.cb-inner','.page-title','.global-filters','.dd-btn','.actions','.top-status',
+    '.content','.bento-kpis','.kpi-card','.kc-head','.kc-label','.kc-hero','.kc-sub','.kc-foot','.dual-bar',
+    '.mini-donut','.legend-mini','.kc-spark','.flip-card',
+    '.stage-grid','.main-stage','.stage-title','.glass-seg','.glass-seg button','.chart-toolbar','.seg','.seg button',
+    '.trend-summary','.trend-stat','.chart-wrap','.daily-row','.daily-track',
+    '.agent-rail','.ar-row','.ar-name','.ar-val','.ar-spark',
+    '.bottom-grid','.dist-card','.dist-body','.donut-wrap','.donut-legend','.t10-row','.daily-card',
+    '.table-card','.table-toolbar','.table-card thead th','.table-card tbody td','.bar','.th-sort',
+    '.model-stat','.set-shell','.set-tabs','.set-item','.set-card','.set-row','.set-info .t','.set-sel','.switch','.btn',
     '#tabbar','.pager','.toast-stack','#view-overview','#view-models','#view-settings'];
   for (const sel of selectors) {
     const el = document.querySelector(sel);
@@ -65,6 +71,13 @@ def capture(base: str, out_path: pathlib.Path) -> dict:
             errors: list[str] = []
             page.on("pageerror", lambda e: errors.append(str(e)))
             page.goto(base, wait_until="networkidle")
+            # 等真实数据渲染完成再取快照，否则数据区节点（排行/每日明细/占比条）会被判为 missing
+            try:
+                page.wait_for_function(
+                    "() => typeof DATA !== 'undefined' && DATA && !DATA.building && DATA.range",
+                    timeout=30000)
+            except Exception:
+                pass
             page.wait_for_timeout(900)
             if view == "models":
                 page.evaluate("window.TMUI.route('models')")

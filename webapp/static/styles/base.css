@@ -192,10 +192,11 @@ table { border-collapse: collapse; border-spacing: 0; }
 /* ── 打印：只留数据，去掉装饰 ── */
 @media print {
   body::before,
-  aside,
+  body::after,
+  .slim-rail,
   #tabbar,
-  .top-actions,
-  .chart-controls { display: none !important; }
+  .actions,
+  .chart-toolbar { display: none !important; }
   body { display: block; background: #fff; color: #000; }
   .card { break-inside: avoid; box-shadow: none; border-color: #ccc; }
 }

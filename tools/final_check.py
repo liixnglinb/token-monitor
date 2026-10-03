@@ -92,22 +92,29 @@ def main() -> None:
         page.evaluate("window.TMTheme.set('dark', {announce:false})")
         page.wait_for_timeout(400)
 
-        # 组件与三态容器
+        # 组件与三态容器（v2.0 重构：Slim Rail + 上下文顶栏 + Bento Box）
         for selector, label in [
-            (".token-meter-card", "Hero 全景舱"),
+            (".bento-kpis .kpi-card", "4 联 Bento KPI 网格"),
+            (".slim-rail", "极简左侧导航栏"),
+            (".context-bar", "全局上下文顶栏"),
+            (".stage-grid .main-stage", "主数据舞台"),
+            (".stage-grid .agent-rail", "Agent 侧栏"),
+            (".bottom-grid .dist-card", "模型分布卡"),
+            (".bottom-grid .daily-card", "每日明细卡"),
+            (".glass-seg", "毛玻璃分段控件"),
             (".card", "卡片"),
             (".seg", "分段控件"),
             (".dd-menu", "下拉菜单"),
             ("#ddRange", "时间范围下拉"),
+            ("#ddAgent", "数据源下拉"),
             ("#modelPager", "分页容器"),
             (".field-search", "搜索框"),
             (".switch", "开关"),
             (".confirm-card", "危险操作确认框"),
             ("#toastStack", "Toast 容器"),
             ("#collectionState", "数据状态条（三态）"),
-            ("#setNav", "设置二级导航"),
+            ("#setNav", "设置分类选项卡"),
             ("#tabbar", "窄屏标签栏"),
-            (".crumb", "面包屑"),
         ]:
             check(f"组件存在：{label}", page.locator(selector).count() > 0)
 
@@ -141,10 +148,13 @@ def main() -> None:
         instances = page.evaluate("Object.keys(Chart.instances).length")
         check("Chart 实例不超过 4 个（主图+环形+余量）", instances <= 4, f"instances={instances}")
 
-        # Hero 全景舱与五态构成
-        check("构成条有分段", page.locator("#heroSegBar .seg").count() >= 1)
-        check("图例网格有项", page.locator("#heroLegend .legend-item").count() >= 1)
-        check("经济账本 4 项", page.locator(".meter-econ .econ-item").count() == 4)
+        # Bento KPI：4 张等高卡 + 四色迷你环形图 + 双色计费条
+        check("KPI 网格 4 张等高卡", page.locator("#bentoKpis .kpi-card").count() == 4)
+        check("四色迷你环形图有弧段", page.locator("#heroMiniDonut circle").count() >= 1)
+        check("紧凑图例有项", page.locator("#heroLegend span").count() >= 1)
+        check("计费双色进度条存在", page.locator("#heroDualBar .db-metered").count() == 1)
+        check("背景 sparkline 已渲染", page.locator("#heroApiSpark .sparkline").count() == 1)
+        check("资金卡可翻转（背面单次均价）", page.locator(".flip-card .flip-back #heroUnitCost").count() == 1)
 
         # 主图视角切换
         page.locator('#segLens button[data-lens="composition"]').click()

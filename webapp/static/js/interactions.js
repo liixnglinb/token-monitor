@@ -98,22 +98,8 @@ function applyAgentFilter(name){
   F.agent = name === "all" || F.agent === name ? "all" : name;
   renderAll();
 }
-$("sideAgentBox").addEventListener("click", e => {
-  const b = e.target.closest("[data-agent-filter]");
-  if (!b) return;
-  applyAgentFilter(b.dataset.agentFilter);
-});
-document.querySelector("aside").addEventListener("click", e => {
-  const toggle = e.target.closest("[data-side-toggle]");
-  if (toggle){
-    const section = toggle.closest(".side-section");
-    const collapsed = section.classList.toggle("collapsed");
-    toggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
-    return;
-  }
-  const recent = e.target.closest(".side-recent[data-view]");
-  if (recent) go(recent.dataset.view);
-});
+/* 数据源筛选：顶栏下拉（bindAgentDropdown 定义在 render.js）与窄屏抽屉共用 applyAgentFilter */
+bindAgentDropdown();
 if ($("sideReload")) $("sideReload").onclick = () => $("reloadTop").click();
 /* 窄屏底部标签栏：复用同一套视图切换逻辑；"设置"与 #settingsBtn 共用入口 */
 $("tabbar").addEventListener("click", e=>{
@@ -128,8 +114,7 @@ $("setNav").addEventListener("click", e=>{
   go("settings", a.dataset.cat);
 });
 $("setBack").onclick = () => go("overview");
-bindDropdown("ddRange", "ddRangeMenu", k => { F.rangeKey = k; renderAll(); syncFilterHash(); });
-$("segDim").onclick = e => { const b=e.target.closest("button"); if(!b) return;
+bindDropdown("ddRange", "ddRangeMenu", k => { F.rangeKey = k; renderAll(); syncFilterHash(); });$("segDim").onclick = e => { const b=e.target.closest("button"); if(!b) return;
   F.dim=b.dataset.d;
   document.querySelectorAll("#segDim button").forEach(x=>x.classList.toggle("on",x===b));
   renderMain(); syncFilterHash(); };
@@ -282,7 +267,7 @@ if ($("reloadTop")) $("reloadTop").onclick = function(){
 /* 统一点击反馈：鼠标、触控和键盘操作都得到一致的按下效果。 */
 document.addEventListener("pointerdown", e => {
   const el = e.target.closest(
-    "button,a[data-view],.side-project,.side-recent,.side-section-head,.set-item,.t10-row,.ar-head");
+    "button,a[data-view],.side-project,.set-tabs .set-item,.t10-row");
   if (el) el.classList.add("is-pressing");
 }, { passive: true });
 function clearPressed(e){

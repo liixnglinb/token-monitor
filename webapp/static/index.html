@@ -24,143 +24,113 @@
 <a class="skip-link" href="#main">跳到主要内容</a>
 <h1 class="sr-only">Token Monitor —— 本机 Agent Token 用量面板</h1>
 
-<aside id="sidebar" aria-label="主导航">
-  <!-- 原生标题栏（左上角已有应用图标）下方的拖拽留白区 -->
-  <div class="aside-top" aria-hidden="true"></div>
+<!-- ═══════════════════════════════════════════════════════════════════════
+     极简左侧导航栏（Slim Rail，64px）
+     仅保留图标导航；数据源筛选与时间筛选已上移至全局顶栏。
+     ═══════════════════════════════════════════════════════════════════════ -->
+<nav id="sidebar" class="slim-rail" aria-label="主导航">
+  <!-- 原生标题栏拖拽留白区 -->
+  <div class="rail-top" aria-hidden="true"></div>
 
-  <div class="side-scroll">
-    <nav id="nav" aria-label="视图切换">
-      <a data-view="overview" href="#/overview" class="active" aria-current="page">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M2 13.5V8M6 13.5V3M10 13.5V6M14 13.5V9.5"/></svg>
-        <span>用量总览</span>
-      </a>
-      <a data-view="models" href="#/models">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/><path d="M8 2.5v11M2.5 8h11"/></svg>
-        <span>模型用量</span>
-      </a>
-    </nav>
-
-    <section class="side-section" id="sideAgentBox" aria-labelledby="sideAgentHead">
-      <h2 class="side-section-title sr-only" id="sideAgentHead">数据源筛选</h2>
-      <button class="side-section-head" type="button" data-side-toggle="agents" aria-expanded="true" aria-controls="sideAgentBody">
-        <span>数据源</span>
-        <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d="m3 4.5 3 3 3-3"/></svg>
-      </button>
-      <div class="side-section-body" id="sideAgentBody">
-        <button class="side-project active" type="button" data-agent-filter="all" aria-pressed="true">
-          <span class="side-project-icon"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><ellipse cx="8" cy="4" rx="5" ry="2.2"/><path d="M3 4v4c0 1.2 2.2 2.2 5 2.2s5-1 5-2.2V4M3 8v4c0 1.2 2.2 2.2 5 2.2s5-1 5-2.2V8"/></svg></span>
-          <span class="side-project-name">全部数据源</span>
-          <em id="sideAgentTotal" aria-label="数据源数量">0</em>
-        </button>
-        <div id="sideAgents" role="group" aria-label="已计入的数据源"></div>
-        <div id="sideUncounted" class="side-unc-wrap"></div>
-      </div>
-    </section>
-
-    <section class="side-section" aria-labelledby="sideRecentHead">
-      <h2 class="side-section-title sr-only" id="sideRecentHead">最近</h2>
-      <button class="side-section-head" type="button" data-side-toggle="recent" aria-expanded="true" aria-controls="sideRecentBody">
-        <span>最近</span>
-        <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d="m3 4.5 3 3 3-3"/></svg>
-      </button>
-      <div class="side-section-body" id="sideRecentBody">
-        <button class="side-recent" type="button" data-view="overview">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/><path d="M8 4.8V8l2.2 1.5"/></svg>
-          <span class="side-recent-label">本次扫描</span>
-          <small id="sideBuiltAt">—</small>
-        </button>
-      </div>
-    </section>
-  </div>
-
-  <nav id="setNav" aria-label="设置分类">
-    <button id="setBack" class="set-back" type="button">
-      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M9.5 3.5 5 8l4.5 4.5"/></svg>
-      返回总览
-    </button>
-    <div class="set-group" id="setGroupGeneral">常规</div>
-    <a class="set-item active" data-cat="general" href="#/settings/general" aria-current="true">
-      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><path d="M3 4.5h10M3 8h10M3 11.5h6"/></svg>
-      <span>通用偏好</span>
+  <div id="nav" class="rail-nav" role="group" aria-label="视图切换">
+    <a data-view="overview" href="#/overview" class="active" aria-current="page"
+       title="用量总览" aria-label="用量总览">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M2 13.5V8M6 13.5V3M10 13.5V6M14 13.5V9.5"/></svg>
+      <span class="rail-tip" aria-hidden="true">用量总览</span>
     </a>
-    <div class="set-group">数据</div>
-    <a class="set-item" data-cat="data" href="#/settings/data">
-      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><ellipse cx="8" cy="4" rx="5" ry="2.2"/><path d="M3 4v4c0 1.2 2.2 2.2 5 2.2s5-1 5-2.2V4M3 8v4c0 1.2 2.2 2.2 5 2.2s5-1 5-2.2V8"/></svg>
-      <span>扫描与缓存</span>
+    <a data-view="models" href="#/models" title="模型用量" aria-label="模型用量">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/><path d="M8 2.5v11M2.5 8h11"/></svg>
+      <span class="rail-tip" aria-hidden="true">模型用量</span>
     </a>
-    <div class="set-group">其他</div>
-    <a class="set-item" data-cat="about" href="#/settings/about">
-      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/><path d="M8 7.2v4M8 4.8h.01"/></svg>
-      <span>关于</span>
-    </a>
-  </nav>
-
-  <div class="side-foot">
-    <button id="settingsBtn" class="side-settings side-combined" type="button" title="设置 · 本机" aria-label="打开设置（本机）">
+    <a data-view="settings" href="#/settings/general" title="设置" aria-label="设置">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="2.2"/><path d="M13 8a5 5 0 0 0-.1-1l1.6-1.2-1.3-2.3-1.9.8a5 5 0 0 0-.9-.5L10 2H6l-.3 1.8a5 5 0 0 0-.9.5l-1.9-.8-1.3 2.3L3.1 7a5 5 0 0 0 0 2l-1.6 1.2 1.3 2.3 1.9-.8c.27.2.57.37.9.5l.3 1.8h4l.3-1.8a5 5 0 0 0 1.6-1.1"/></svg>
-      <span class="sf-label">设置</span>
-      <span class="sf-sep" aria-hidden="true"></span>
-      <span class="side-avatar" aria-hidden="true">TM</span>
-      <span class="side-account-copy"><b>本机</b></span>
-      <span class="dot" id="updBadge" hidden></span>
-      <span class="side-online" title="本机只读模式"></span>
-    </button>
+      <span class="rail-tip" aria-hidden="true">设置</span>
+    </a>
   </div>
-</aside>
+
+  <div class="rail-foot">
+    <button id="settingsBtn" class="rail-avatar" type="button" title="设置 · 本机" aria-label="打开设置（本机）">
+      <span class="side-avatar" aria-hidden="true">TM</span>
+      <span class="dot" id="updBadge" hidden></span>
+    </button>
+    <span class="side-online" id="railOnline" title="本机只读模式" aria-hidden="true"></span>
+  </div>
+</nav>
 
 <main id="main" tabindex="-1">
-  <header class="topbar">
-    <div class="page-heading">
-      <nav class="crumb" id="crumb" aria-label="面包屑">
-        <span class="crumb-root">Token Monitor</span>
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="m6.5 4 4 4-4 4"/></svg>
-        <span class="crumb-current" id="crumbCurrent" aria-current="page">用量总览</span>
-      </nav>
-      <h2 class="page-title" id="pageTitle">用量总览</h2>
-      <p class="page-subtitle" id="pageSubtitle">本机 AI 软件的 Token 消耗与请求统计</p>
-    </div>
+  <!-- ═════════════════════════════════════════════════════════════════════
+       全局上下文顶栏（Context Bar，Sticky）
+       页面标题 + 全局筛选（时间 / 数据源） + 操作区（同步状态 / 刷新 / 主题 / 导出）
+       ═════════════════════════════════════════════════════════════════════ -->
+  <header class="context-bar">
+    <div class="cb-inner">
+      <div class="page-heading">
+        <h2 class="page-title" id="pageTitle">用量总览</h2>
+        <p class="page-subtitle" id="pageSubtitle">本机 AI 软件的 Token 消耗与请求统计</p>
+        <span class="sr-only" id="crumbCurrent" aria-current="page">用量总览</span>
+      </div>
 
-    <div class="top-status" id="topStatus" role="status" aria-live="polite">
-      <span class="sync-dot" id="syncDot" aria-hidden="true"></span>
-      <span id="topScanState">等待同步</span>
-      <span class="top-sep" aria-hidden="true"></span>
-      <span>数据截至 <b id="builtAt">—</b></span>
-    </div>
+      <div class="global-filters">
+        <div class="dd" id="ddRange">
+          <button class="dd-btn" type="button" aria-label="选择时间范围" aria-haspopup="menu" aria-expanded="false" aria-controls="ddRangeMenu">
+            <svg class="dd-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="2.5" y="3.5" width="11" height="10" rx="1.5"/><path d="M5 2.5v2M11 2.5v2M2.5 6.5h11"/></svg>
+            <b id="ddRangeVal">近 7 天</b>
+            <i class="dd-caret" aria-hidden="true">▼</i>
+          </button>
+          <div class="dd-menu" id="ddRangeMenu" role="menu" hidden></div>
+        </div>
 
-    <div class="top-actions">
-      <button class="update-progress" id="updateProgress" type="button" hidden
-              aria-live="polite" title="正在下载更新">0%</button>
-      <!-- 窄屏专用：侧栏隐藏后从这里打开数据源筛选抽屉（桌面端隐藏） -->
-      <button class="btn btn-ghost icon-btn filter-btn" id="filterBtn" type="button"
-              title="筛选数据源" aria-label="筛选数据源" aria-haspopup="dialog" aria-expanded="false" aria-controls="agentDrawer">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 3.5h11M4.5 8h7M6.5 12.5h3"/></svg>
-      </button>
-      <button class="btn btn-ghost icon-btn" id="themeBtn" type="button"
-              title="切换主题（跟随系统 / 浅色 / 深色）" aria-label="切换主题">
-        <span id="themeIcon" aria-hidden="true"></span>
-      </button>
-      <button class="btn btn-ghost icon-btn export-btn" id="fExport" type="button"
-              title="导出当前筛选为 CSV" aria-label="导出当前筛选为 CSV">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v7M5.5 7 8 9.5 10.5 7M3 11.5v2h10v-2"/></svg>
-      </button>
+        <div class="dd" id="ddAgent">
+          <button class="dd-btn" type="button" aria-label="筛选数据源" aria-haspopup="menu" aria-expanded="false" aria-controls="ddAgentMenu">
+            <svg class="dd-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><ellipse cx="8" cy="4" rx="5" ry="2.2"/><path d="M3 4v4c0 1.2 2.2 2.2 5 2.2s5-1 5-2.2V4M3 8v4c0 1.2 2.2 2.2 5 2.2s5-1 5-2.2V8"/></svg>
+            <b id="ddAgentVal">全部数据源</b>
+            <i class="dd-caret" aria-hidden="true">▼</i>
+          </button>
+          <div class="dd-menu dd-menu-wide" id="ddAgentMenu" role="menu" hidden>
+            <button data-agent-filter="all" class="active" type="button" role="menuitemradio" aria-checked="true">
+              <span class="dd-agent-name">全部数据源</span>
+              <em id="ddAgentTotal" aria-label="数据源数量">0</em>
+            </button>
+            <div id="ddAgents"></div>
+            <div id="ddUncounted" class="side-unc-wrap"></div>
+          </div>
+        </div>
+
+        <span id="filterSummary" class="filter-summary" aria-live="polite"></span>
+        <button type="button" class="btn btn-sm btn-ghost" id="clearFilters" hidden>清除筛选</button>
+      </div>
+
+      <div class="actions">
+        <div class="top-status" id="topStatus" role="status" aria-live="polite">
+          <span class="sync-dot" id="syncDot" aria-hidden="true"></span>
+          <span id="topScanState">等待同步</span>
+          <span class="top-sep" aria-hidden="true"></span>
+          <span class="top-built">数据截至 <b id="builtAt">—</b></span>
+        </div>
+        <button class="update-progress" id="updateProgress" type="button" hidden
+                aria-live="polite" title="正在下载更新">0%</button>
+        <!-- 窄屏专用：顶栏筛选折叠后从这里打开数据源抽屉（桌面端隐藏） -->
+        <button class="btn btn-ghost icon-btn filter-btn" id="filterBtn" type="button"
+                title="筛选数据源" aria-label="筛选数据源" aria-haspopup="dialog" aria-expanded="false" aria-controls="agentDrawer">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 3.5h11M4.5 8h7M6.5 12.5h3"/></svg>
+        </button>
+        <button class="btn btn-ghost" id="reloadTop" type="button" title="重新扫描本机数据源">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.7-3.97"/><path d="M13.6 2.6v3.2h-3.2"/></svg>
+          <span>刷新</span>
+        </button>
+        <button class="btn btn-ghost icon-btn" id="themeBtn" type="button"
+                title="切换主题（跟随系统 / 浅色 / 深色）" aria-label="切换主题">
+          <span id="themeIcon" aria-hidden="true"></span>
+        </button>
+        <button class="btn btn-ghost icon-btn export-btn" id="fExport" type="button"
+                title="导出当前筛选为 CSV" aria-label="导出当前筛选为 CSV">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v7M5.5 7 8 9.5 10.5 7M3 11.5v2h10v-2"/></svg>
+        </button>
+      </div>
     </div>
   </header>
 
-  <div class="content">
-    <div class="filters">
-      <div class="dd" id="ddRange">
-        <button class="dd-btn" type="button" aria-label="选择时间范围" aria-haspopup="menu" aria-expanded="false" aria-controls="ddRangeMenu">
-          <svg class="dd-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="2.5" y="3.5" width="11" height="10" rx="1.5"/><path d="M5 2.5v2M11 2.5v2M2.5 6.5h11"/></svg>
-          <b id="ddRangeVal">近 7 天</b>
-          <i class="dd-caret" aria-hidden="true">▼</i>
-        </button>
-        <div class="dd-menu" id="ddRangeMenu" role="menu" hidden></div>
-      </div>
-      <div class="spacer"></div>
-      <span id="filterSummary" class="filter-summary" aria-live="polite"></span>
-      <button type="button" class="btn btn-sm" id="clearFilters" hidden>清除筛选</button>
-    </div>
-
+  <div class="content grid-layout">
     <div id="noteBox"></div>
 
     <section id="collectionState" class="collection-state" hidden aria-labelledby="collectionStateTitle">
@@ -173,55 +143,101 @@
       <span class="sr-only" id="collectionAnnouncement" role="status" aria-live="polite"></span>
     </section>
 
-    <!-- ── 视图 1：用量总览 ── -->
+    <!-- ═══════════════════════════════════════════════════════════════════
+         视图 1：用量总览 —— 4 联网格（Bento Box）+ 主舞台（Main Stage）
+         ═══════════════════════════════════════════════════════════════════ -->
     <section id="view-overview" aria-label="用量总览">
-      <!-- Hero：Token 吞吐全景（宏观指标 + 物理构成条 + 经济账本） -->
-      <section class="card token-meter-card" aria-labelledby="heroTitle">
-        <div class="meter-head">
-          <div class="meter-main">
-            <span class="l" id="heroTitle">Token 吞吐全景</span>
-            <button class="num-toggle" id="heroNum" type="button" data-mode="abbr"
-                    title="点击在缩写 / 完整数值间切换" aria-label="Token 总量，点击切换缩写与完整数值">
-              <span class="val-abbr" id="heroValAbbr">—</span>
-              <span class="val-full" id="heroValFull" hidden>—</span>
-            </button>
-            <div class="meter-badges">
+
+      <!-- ── Top：4 联核心 KPI 网格 ── -->
+      <div class="bento-kpis" id="bentoKpis">
+        <!-- 网格 1 · Token 总量 -->
+        <article class="card kpi-card kpi-token" style="--i:0">
+          <header class="kc-head">
+            <span class="kc-label" id="kpiTokenTitle">Token 总量</span>
+            <span class="kc-chips">
               <span class="chip chip-metered" id="heroPillMetered" hidden></span>
               <span class="chip chip-plan" id="heroPillPlan" hidden></span>
-              <span class="chip" id="heroCache">缓存命中 —</span>
+            </span>
+          </header>
+          <button class="num-toggle" id="heroNum" type="button" data-mode="abbr"
+                  title="点击在缩写 / 完整数值间切换" aria-label="Token 总量，点击切换缩写与完整数值">
+            <span class="val-abbr" id="heroValAbbr">—</span>
+            <span class="val-full" id="heroValFull" hidden>—</span>
+          </button>
+          <div class="kc-sub" id="heroTokenSub">物理构成总量（缓存读取 + 输入 + 写入 + 输出）</div>
+          <div class="dual-bar" id="heroDualBar" role="img" aria-label="计费构成：按量计费与套餐覆盖占比">
+            <i class="db-metered" id="heroDualMetered" style="--w:0%"></i>
+            <i class="db-plan" id="heroDualPlan" style="--w:0%"></i>
+          </div>
+        </article>
+
+        <!-- 网格 2 · 缓存杠杆 -->
+        <article class="card kpi-card kpi-cache" style="--i:1">
+          <header class="kc-head">
+            <span class="kc-label">缓存杠杆</span>
+            <span class="chip chip-cache" id="heroCache">缓存命中 —</span>
+          </header>
+          <div class="kc-split">
+            <div class="kc-split-main">
+              <b class="kc-hero" id="heroSave">—</b>
+              <span class="kc-cap">等效节省金额</span>
+              <span class="kc-note" id="heroSavingPct">—</span>
+            </div>
+            <div class="mini-donut" id="heroMiniDonut" role="img" aria-label="Token 物理构成占比"></div>
+          </div>
+          <div class="kc-foot kc-foot-split">
+            <span>等效计费量 <b id="heroEquiv">—</b></span>
+          </div>
+          <div class="legend-mini" id="heroLegend"></div>
+        </article>
+
+        <!-- 网格 3 · API 与并发 -->
+        <article class="card kpi-card kpi-api" style="--i:2">
+          <div class="kc-spark" id="heroApiSpark" aria-hidden="true"></div>
+          <header class="kc-head">
+            <span class="kc-label">API 与并发</span>
+          </header>
+          <b class="kc-hero" id="heroReq">—</b>
+          <div class="kc-sub" id="heroReqSub">—</div>
+          <div class="kc-foot">
+            <span>平均单次</span><b id="heroAvg">—</b><em id="heroAvgSub">tokens / 请求</em>
+          </div>
+        </article>
+
+        <!-- 网格 4 · 资金消耗（悬停翻转 → 单次均价） -->
+        <article class="card kpi-card kpi-cost flip-card" style="--i:3" tabindex="0"
+                 aria-label="资金消耗，悬停查看单次均价">
+          <div class="flip-inner">
+            <div class="flip-face flip-front">
+              <header class="kc-head"><span class="kc-label">资金消耗</span><span class="flip-hint" aria-hidden="true">悬停</span></header>
+              <b class="kc-hero" id="heroCost">—</b>
+              <div class="kc-sub" id="heroCostSub"></div>
+            </div>
+            <div class="flip-face flip-back">
+              <header class="kc-head"><span class="kc-label">单次均价</span></header>
+              <b class="kc-hero" id="heroUnitCost">—</b>
+              <div class="kc-sub" id="heroUnitSub">按各模型价格估算</div>
             </div>
           </div>
-          <div class="meter-equiv">
-            <span class="l">等效计费量</span>
-            <b id="heroEquiv">—</b>
-            <em id="heroSavingPct" title="等效计费量 = 输入 + 10%×缓存读取 + 125%×缓存写入；与全量直连相比的节省比例">—</em>
-          </div>
-        </div>
+        </article>
+      </div>
 
-        <div class="token-seg-bar" id="heroSegBar" role="img"
-             aria-label="Token 物理构成：缓存读取、基础输入、缓存写入、输出生成占比"></div>
-
-        <div class="token-legend-grid" id="heroLegend"></div>
-
-        <div class="meter-econ">
-          <div class="econ-item"><span>预估金额</span><b id="heroCost">—</b><em id="heroCostSub"></em></div>
-          <div class="econ-item"><span>缓存节省资金</span><b id="heroSave">—</b><em title="按典型比例估算：缓存读取按输入价 10%、写入按 125%；实际以各模型计价为准">估算参考</em></div>
-          <div class="econ-item"><span>API 请求次数</span><b id="heroReq">—</b><em id="heroReqSub"></em></div>
-          <div class="econ-item"><span>平均单次</span><b id="heroAvg">—</b><em id="heroAvgSub"></em></div>
-        </div>
-      </section>
-
-      <section class="card chart-card" aria-labelledby="mainTitle">
-        <div class="card-head">
-          <h3 id="mainTitle">Tokens</h3>
-          <span class="val" id="mainSum"></span>
-          <div class="grow"></div>
-          <div class="chart-controls">
-            <div class="seg seg-text" id="segLens" role="group" aria-label="图表视角">
+      <!-- ── Middle：主数据舞台（2/3） + 数据源排行（1/3） ── -->
+      <div class="stage-grid">
+        <section class="card main-stage" aria-labelledby="mainTitle">
+          <div class="stage-head">
+            <div class="stage-title">
+              <h3 id="mainTitle">Tokens</h3>
+              <span class="val" id="mainSum"></span>
+            </div>
+            <!-- 视角切换：浮动在图表右上角的半透明毛玻璃分段选择器 -->
+            <div class="glass-seg" id="segLens" role="group" aria-label="图表视角">
               <button type="button" data-lens="entity" class="on" aria-pressed="true">实体堆叠</button>
               <button type="button" data-lens="composition" aria-pressed="false">物理构成</button>
               <button type="button" data-lens="cache" aria-pressed="false">缓存杠杆</button>
             </div>
+          </div>
+          <div class="chart-toolbar">
             <div class="seg" id="segDim" role="group" aria-label="拆分维度">
               <button type="button" data-d="total" class="on" title="总用量趋势" aria-label="总用量趋势" aria-pressed="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 11.5 5.5 8l2.6 2 5.4-6"/><path d="M11 4h2.5v2.5"/></svg></button>
               <button type="button" data-d="agent" title="按数据源拆分" aria-label="按数据源拆分" aria-pressed="false"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.45" aria-hidden="true"><ellipse cx="8" cy="4" rx="5" ry="2.2"/><path d="M3 4v4c0 1.2 2.2 2.2 5 2.2s5-1 5-2.2V4M3 8v4c0 1.2 2.2 2.2 5 2.2s5-1 5-2.2V8"/></svg></button>
@@ -236,15 +252,52 @@
               <button type="button" data-g="day" class="on" title="按日" aria-label="按日" aria-pressed="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.45" aria-hidden="true"><rect x="2.5" y="3.5" width="11" height="10" rx="1.5"/><path d="M5 2.5v2M11 2.5v2M2.5 6.5h11"/></svg></button>
               <button type="button" data-g="month" title="按月" aria-label="按月" aria-pressed="false"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.45" aria-hidden="true"><rect x="2.5" y="3.5" width="11" height="10" rx="1.5"/><path d="M5 2.5v2M11 2.5v2M2.5 6.5h11M5.5 9.5h2M9 9.5h2"/></svg></button>
             </div>
+            <div class="grow"></div>
+            <p class="chart-hint" id="chartHint">按日聚合的 Token 趋势，可切换数据源与模型拆分</p>
           </div>
-        </div>
-        <p class="chart-hint" id="chartHint">按日聚合的 Token 趋势，可切换数据源与模型拆分</p>
-        <div class="trend-summary" id="trendSummary"></div>
-        <div class="chart-wrap trend-chart">
-          <canvas id="mainChart" role="img" aria-label="主图表：随时间变化的金额、Token 或请求量趋势图">加载中…</canvas>
-          <div class="chart-empty" id="mainEmpty" hidden></div>
-        </div>
-        <section class="daily-panel" aria-labelledby="dailyTitle">
+          <div class="trend-summary" id="trendSummary"></div>
+          <div class="chart-wrap trend-chart">
+            <canvas id="mainChart" role="img" aria-label="主图表：随时间变化的金额、Token 或请求量趋势图">加载中…</canvas>
+            <div class="chart-empty" id="mainEmpty" hidden></div>
+          </div>
+        </section>
+
+        <aside class="card agent-rail" aria-labelledby="agentRailTitle">
+          <header class="rail-head">
+            <div>
+              <h3 id="agentRailTitle">Agent 用量排行</h3>
+              <p>按 Token 消耗排序，点行展开模型明细</p>
+            </div>
+            <span class="agent-panel-count" id="agentRailCount"></span>
+          </header>
+          <div id="agentList"></div>
+        </aside>
+      </div>
+
+      <!-- ── Bottom：模型分布（环形图 + 排行列表） + 每日明细 ── -->
+      <div class="bottom-grid">
+        <section class="card dist-card" aria-labelledby="distTitle">
+          <div class="card-head">
+            <h3 id="distTitle">模型用量分布</h3>
+            <div class="grow"></div>
+            <span class="val" id="distSum"></span>
+          </div>
+          <div class="dist-body">
+            <div class="donut-wrap">
+              <canvas id="donutChart" role="img" aria-label="各模型 Token 占比环形图">加载中…</canvas>
+              <div class="donut-center"><b id="donutN">—</b><span id="donutCap">个模型</span></div>
+            </div>
+            <div class="dist-side">
+              <div class="dist-side-head">
+                <span id="top10Title">调用次数 Top 10</span>
+              </div>
+              <div class="t10" id="top10"></div>
+            </div>
+          </div>
+          <div class="donut-legend" id="donutLegend"></div>
+        </section>
+
+        <section class="card daily-card" aria-labelledby="dailyTitle">
           <div class="daily-panel-head">
             <h4 id="dailyTitle">每日明细</h4>
             <p class="daily-hint" id="dailyHint"></p>
@@ -253,31 +306,12 @@
           </div>
           <div class="daily-list" id="dailyList" role="list"></div>
         </section>
-      </section>
-
-      <div id="agentList"></div>
-
-      <section class="card dist" aria-labelledby="distTitle">
-        <div class="dist-col">
-          <div class="card-head">
-            <h3 id="distTitle">模型用量分布</h3>
-            <div class="grow"></div>
-            <span class="val" id="distSum"></span>
-          </div>
-          <div class="donut-wrap">
-            <canvas id="donutChart" role="img" aria-label="各模型 Token 占比环形图">加载中…</canvas>
-            <div class="donut-center"><b id="donutN">—</b><span id="donutCap">个模型</span></div>
-          </div>
-          <div class="donut-legend" id="donutLegend"></div>
-        </div>
-        <div class="dist-col">
-          <div class="card-head"><h3 id="top10Title">调用次数 Top 10</h3></div>
-          <div class="t10" id="top10"></div>
-        </div>
-      </section>
+      </div>
     </section>
 
-    <!-- ── 视图 2：模型用量 ── -->
+    <!-- ═══════════════════════════════════════════════════════════════════
+         视图 2：模型用量 —— 沉浸式数据表
+         ═══════════════════════════════════════════════════════════════════ -->
     <section id="view-models" hidden aria-label="模型用量明细">
       <div class="section-heading">
         <h2>模型用量明细</h2>
@@ -341,11 +375,34 @@
       </div>
     </section>
 
-    <!-- ── 视图 3：设置 ── -->
+    <!-- ═══════════════════════════════════════════════════════════════════
+         视图 3：设置 —— 居中平铺单列
+         ═══════════════════════════════════════════════════════════════════ -->
     <section id="view-settings" hidden aria-label="设置">
-      <div class="set-main">
-        <h2 id="setTitle">通用偏好</h2>
-        <p class="set-lead" id="setLead">应用偏好、数据扫描与软件更新</p>
+      <div class="set-shell">
+        <div class="set-head">
+          <button id="setBack" class="set-back" type="button">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M9.5 3.5 5 8l4.5 4.5"/></svg>
+            返回总览
+          </button>
+          <h2 id="setTitle">通用偏好</h2>
+          <p class="set-lead" id="setLead">应用偏好、数据扫描与软件更新</p>
+        </div>
+
+        <nav id="setNav" class="set-tabs" aria-label="设置分类">
+          <button class="set-item active" data-cat="general" type="button" aria-current="true">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><path d="M3 4.5h10M3 8h10M3 11.5h6"/></svg>
+            <span>通用偏好</span>
+          </button>
+          <button class="set-item" data-cat="data" type="button">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><ellipse cx="8" cy="4" rx="5" ry="2.2"/><path d="M3 4v4c0 1.2 2.2 2.2 5 2.2s5-1 5-2.2V4M3 8v4c0 1.2 2.2 2.2 5 2.2s5-1 5-2.2V8"/></svg>
+            <span>扫描与缓存</span>
+          </button>
+          <button class="set-item" data-cat="about" type="button">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/><path d="M8 7.2v4M8 4.8h.01"/></svg>
+            <span>关于</span>
+          </button>
+        </nav>
 
         <div class="set-cards" data-cat="general">
           <div class="set-cat-h">外观</div>
@@ -477,7 +534,7 @@
   </button>
 </nav>
 
-<!-- 窄屏数据源筛选抽屉：与侧栏共用同一份渲染（renderSideAgents 双容器注入） -->
+<!-- 窄屏数据源筛选抽屉：与顶栏下拉共用同一份渲染（renderAgentFilter 双容器注入） -->
 <div class="drawer" id="agentDrawer" hidden>
   <div class="drawer-scrim" data-drawer-close></div>
   <div class="drawer-panel" role="dialog" aria-modal="true" aria-labelledby="drawerTitle">

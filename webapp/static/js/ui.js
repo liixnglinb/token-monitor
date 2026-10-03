@@ -279,7 +279,7 @@
       const on = item.classList.contains("active");
       item.setAttribute("aria-current", on ? "page" : "false");
     });
-    qsa("#setNav a[data-cat]").forEach(function (item) {
+    qsa("#setNav [data-cat]").forEach(function (item) {
       const on = item.classList.contains("active");
       item.setAttribute("aria-current", on ? "true" : "false");
     });
@@ -288,8 +288,8 @@
       if (on) item.setAttribute("aria-current", "page");
       else item.removeAttribute("aria-current");
     });
-    // 分段控件
-    qsa(".seg").forEach(function (group) {
+    // 分段控件（含主图右上角的毛玻璃视角切换）
+    qsa(".seg, .glass-seg").forEach(function (group) {
       const multi = group.id === "themeSeg";
       qsa("button", group).forEach(function (button) {
         const on = button.classList.contains("on");
@@ -314,14 +314,15 @@
         option.tabIndex = -1;
       });
     });
-    // 折叠行
-    qsa(".ar-head").forEach(function (head) {
-      const open = head.parentElement && head.parentElement.classList.contains("open");
+    // 折叠行（Agent 侧栏）
+    qsa(".ar-row").forEach(function (head) {
+      const entry = head.closest(".ar-entry");
+      const open = entry && entry.classList.contains("open");
       head.setAttribute("aria-expanded", String(!!open));
     });
     // 图表：给读屏一个可理解的替代描述
     qsa("canvas[role=img]").forEach(function (canvas) {
-      const section = canvas.closest(".card,.agent-panel,.agent-entry");
+      const section = canvas.closest(".card,.ar-entry,.main-stage,.dist-card");
       const heading = section && section.querySelector("h3,h4");
       const label = (heading && heading.textContent.trim()) || "统计图";
       canvas.setAttribute("aria-label", label + "。精确数值见同一区域的文字与明细表。");
@@ -333,7 +334,7 @@
     // 分段控件：左右键在组内移动
     document.addEventListener("keydown", function (event) {
       const insideField = /^(INPUT|SELECT|TEXTAREA)$/.test(event.target.tagName) || event.target.isContentEditable;
-      const seg = event.target.closest && event.target.closest(".seg");
+      const seg = event.target.closest && event.target.closest(".seg, .glass-seg");
       if (seg && ["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
         const items = qsa("button:not([disabled])", seg);
         const index = items.indexOf(document.activeElement);
