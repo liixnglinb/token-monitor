@@ -31,7 +31,7 @@ PROBE = r"""
   out.themes = {};
   const read = () => {
     const cs = getComputedStyle(document.body);
-    const card = document.querySelector('.card, .kpi');
+    const card = document.querySelector('.card, .token-meter-card');
     return {
       bodyBg: cs.backgroundColor,
       text: cs.color,
@@ -94,7 +94,7 @@ def main() -> None:
 
         # 组件与三态容器
         for selector, label in [
-            (".kpi", "KPI 卡片"),
+            (".token-meter-card", "Hero 全景舱"),
             (".card", "卡片"),
             (".seg", "分段控件"),
             (".dd-menu", "下拉菜单"),
@@ -140,6 +140,21 @@ def main() -> None:
               f"sparklines={page.locator('.sparkline').count()}")
         instances = page.evaluate("Object.keys(Chart.instances).length")
         check("Chart 实例不超过 4 个（主图+环形+余量）", instances <= 4, f"instances={instances}")
+
+        # Hero 全景舱与五态构成
+        check("构成条有分段", page.locator("#heroSegBar .seg").count() >= 1)
+        check("图例网格有项", page.locator("#heroLegend .legend-item").count() >= 1)
+        check("经济账本 4 项", page.locator(".meter-econ .econ-item").count() == 4)
+
+        # 主图视角切换
+        page.locator('#segLens button[data-lens="composition"]').click()
+        page.wait_for_timeout(500)
+        check("物理构成视角生效", page.locator('#segLens button[data-lens="composition"]').get_attribute("aria-pressed") == "true")
+        page.locator('#segLens button[data-lens="cache"]').click()
+        page.wait_for_timeout(500)
+        check("缓存杠杆视角生效", "缓存杠杆" in page.eval_on_selector("#mainTitle", "el => el.textContent"))
+        page.locator('#segLens button[data-lens="entity"]').click()
+        page.wait_for_timeout(400)
 
         # 筛选状态进 hash
         h = page.evaluate("location.hash")

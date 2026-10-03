@@ -163,6 +163,16 @@
   --m-avg: #BCA9FC;
   --m-cache: #8AD6E6;
 
+  /* Token 五态分流（物理构成语义色）：
+     inp=刚性输入 / out=模型生成 / cr=缓存读取 / cw=缓存写入 / think=深度思考。
+     深色取 500/400 系（近黑底 AA ≥4.5），浅色主题在下方覆盖为 700 系。 */
+  --tok-inp: #60A5FA;
+  --tok-out: #F97316;
+  --tok-cr: #10B981;
+  --tok-cw: #A78BFA;
+  --tok-think: #F472B6;
+  --tok-think-soft: rgba(244, 114, 182, 0.18);
+
   /* 状态点 */
   --dot-ok: #3ECF8E;
   --dot-busy: #E2B76B;
@@ -229,6 +239,14 @@
   --m-req: #0F6B4F;
   --m-avg: #5B4ED1;
   --m-cache: #16607A;
+
+  /* Token 五态（浅色取 700 系，白底 AA ≥4.5；色相族与深色一一对应） */
+  --tok-inp: #1D4ED8;
+  --tok-out: #9A3412;
+  --tok-cr: #047857;
+  --tok-cw: #6D28D9;
+  --tok-think: #BE185D;
+  --tok-think-soft: rgba(190, 24, 93, 0.14);
 
   --dot-ok: #17A06B;
   --dot-busy: #C08A1E;
@@ -300,6 +318,12 @@
     --m-req: #0F6B4F;
     --m-avg: #5B4ED1;
     --m-cache: #16607A;
+    --tok-inp: #1D4ED8;
+    --tok-out: #9A3412;
+    --tok-cr: #047857;
+    --tok-cw: #6D28D9;
+    --tok-think: #BE185D;
+    --tok-think-soft: rgba(190, 24, 93, 0.14);
     --dot-ok: #17A06B;
     --dot-busy: #C08A1E;
     --dot-err: #D4383F;

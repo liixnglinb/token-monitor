@@ -179,7 +179,7 @@ def _build() -> dict:
         cell = cells.get(k)
         if cell is None:
             cell = cells[k] = {"tokens": 0, "cost": 0.0, "requests": 0,
-                               "inp": 0, "out": 0, "cr": 0, "cw": 0,
+                               "inp": 0, "out": 0, "cr": 0, "cw": 0, "think": 0,
                                "priced": 0, "unpriced": 0}
         cell["tokens"] += r.total()
         cell["cost"] += c
@@ -188,6 +188,10 @@ def _build() -> dict:
         cell["out"] += r.out
         cell["cr"] += r.cr
         cell["cw"] += r.cw
+        # 深度思考 Token（Codex reasoning / Claude reasoning_tokens 等）。
+        # 语义上属于输出的一部分，单独透出供前端做「输出内思考」子段展示；
+        # 不参与 tokens 总和（避免重复计数）。旧前端多收此字段无副作用（增量键）。
+        cell["think"] += getattr(r, "think", 0) or 0
         cell["unpriced" if (t is None or isplan) else "priced"] += 1
 
     matrix = [{"date": d, "agent": a, "model": m, "session": s, **v}

@@ -21,6 +21,13 @@ print("== 最近 workflow 运行 ==")
 print(gh("api", f"repos/{repo}/actions/runs?per_page=3",
          "--jq", r'.workflow_runs[] | "\(.name) | \(.head_branch) | \(.status) | \(.conclusion // "-") | \(.created_at)"'))
 
+print("\n== 最近提交 ==")
+print(gh("api", f"repos/{repo}/commits?per_page=3", "--jq",
+         r'.[] | .sha[0:8] + " " + (.commit.message | split("\n")[0])'))
+
+print("\n== main HEAD 改动文件 ==")
+print(gh("api", f"repos/{repo}/commits/main", "--jq", r'.files[] | .status + " " + .filename'))
+
 print("\n== 最近 release ==")
 print(gh("api", f"repos/{repo}/releases?per_page=3",
          "--jq", r'.[] | "\(.tag_name) | \(.published_at // "未发布") | assets=\(.assets | length)"'))

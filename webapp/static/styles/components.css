@@ -964,6 +964,118 @@ th.num .th-sort { justify-content: flex-end; }
 .set-back svg { width: 14px; height: 14px; }
 
 /* =============================================================================
+   17. Hero 全景舱：Token 吞吐全景（宏观指标 + 物理构成条 + 经济账本）
+   ============================================================================= */
+.token-meter-card { margin-bottom: var(--sp-4); }
+.meter-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-4); flex-wrap: wrap; }
+.meter-main .l { font-size: var(--fs-xs); color: var(--muted); }
+.num-toggle {
+  display: block;
+  border: 0;
+  background: none;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  color: var(--ink);
+}
+.num-toggle .val-abbr,
+.num-toggle .val-full {
+  display: block;
+  font-size: var(--fs-4xl);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--ls-tight);
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.num-toggle .val-full { font-family: var(--font-mono); font-size: var(--fs-2xl); padding-top: 4px; }
+.num-toggle[data-mode="abbr"] .val-abbr { border-bottom: 1px dashed var(--line-strong); }
+.num-toggle[data-mode="full"] .val-full { border-bottom: 1px dashed var(--line-strong); }
+.meter-badges { display: flex; align-items: center; gap: var(--sp-2); margin-top: var(--sp-2); flex-wrap: wrap; }
+.chip-metered { background: var(--brand-soft); color: var(--brand-strong); border-color: transparent; }
+.chip-plan { background: var(--info-soft); color: var(--info); border-color: transparent; }
+.meter-equiv { text-align: right; }
+.meter-equiv .l { font-size: var(--fs-2xs); color: var(--muted); }
+.meter-equiv b { display: block; font-size: var(--fs-xl); color: var(--ink); font-variant-numeric: tabular-nums; }
+.meter-equiv em { font-style: normal; font-size: var(--fs-2xs); color: var(--pos); }
+
+/* 分段构成条 */
+.token-seg-bar {
+  display: flex;
+  height: 10px;
+  border-radius: var(--r-pill);
+  overflow: hidden;
+  background: var(--surface-3);
+  margin: var(--sp-4) 0 var(--sp-3);
+}
+.token-seg-bar .seg { height: 100%; width: var(--w, 0%); position: relative; min-width: 2px; transition: width var(--dur-slow) var(--ease-out); }
+.seg-cr  { background: var(--tok-cr); }
+.seg-inp { background: var(--tok-inp); }
+.seg-cw  { background: var(--tok-cw); }
+.seg-out { background: var(--tok-out); }
+.seg-empty { background: var(--surface-3); }
+.seg-sub { position: absolute; right: 0; top: 0; bottom: 0; width: var(--sub-w, 0%); }
+.seg-think { background: var(--tok-think); }
+
+/* 图例网格 */
+.token-legend-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--sp-2) var(--sp-4);
+  margin-bottom: var(--sp-3);
+}
+.legend-item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+  min-width: 0;
+}
+.legend-item .dot { width: 9px; height: 9px; border-radius: 3px; flex: none; align-self: center; }
+.dot-cr  { background: var(--tok-cr); }
+.dot-inp { background: var(--tok-inp); }
+.dot-cw  { background: var(--tok-cw); }
+.dot-out { background: var(--tok-out); }
+.legend-item b { margin-left: auto; color: var(--ink); font-variant-numeric: tabular-nums; font-weight: var(--fw-medium); }
+.legend-item em { font-style: normal; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 44px; text-align: right; }
+.legend-think { color: var(--tok-think); font-size: var(--fs-2xs); margin-left: 2px; }
+
+/* 经济账本行 */
+.meter-econ {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--sp-3);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--line-soft);
+}
+.econ-item { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.econ-item > span { font-size: var(--fs-2xs); color: var(--muted); }
+.econ-item b { font-size: var(--fs-md); color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.econ-item em { font-style: normal; font-size: var(--fs-2xs); color: var(--muted); }
+
+/* 费用三态徽标 */
+.pill-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px var(--sp-2);
+  border-radius: var(--r-pill);
+  font-size: var(--fs-2xs);
+  white-space: nowrap;
+}
+.pill-plan { background: var(--info-soft); color: var(--info); }
+.pill-unpriced { background: var(--surface-3); color: var(--muted); border: 1px dashed var(--line-strong); }
+.cost-priced { font-variant-numeric: tabular-nums; }
+
+/* 长模型名：Provider 前缀弱化、核心名醒目 */
+.model-cell { display: inline-flex; align-items: baseline; min-width: 0; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+.model-provider { color: var(--muted); flex: none; }
+.model-name { color: var(--ink); font-weight: var(--fw-medium); overflow: hidden; text-overflow: ellipsis; }
+
+/* 结构视角下停用指标/维度切换 */
+.seg-disabled { opacity: 0.45; pointer-events: none; }
+
+/* =============================================================================
    15. SVG 迷你走势（替代 Chart.js 迷你实例）
    -----------------------------------------------------------------------------
    fill 用 currentColor，颜色由容器上的 style="color:var(--cN)" 控制 ——

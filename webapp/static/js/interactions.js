@@ -55,6 +55,7 @@ function applyRoute(route, replace){
     if (["day","month"].includes(p.grain)) F.grain = p.grain;
     if (["total","agent","model"].includes(p.dim)) F.dim = p.dim;
     if (["all","metered","plan","unpriced"].includes(p.billing)) F.billing = p.billing;
+    if (["entity","composition","cache"].includes(p.lens)) F.lens = p.lens;
     /* 已存在的视图已渲染过旧筛选：让数据按新筛选重算一遍 */
     if (DATA && !DATA.building && DATA.range) renderAll();
   }
@@ -74,6 +75,7 @@ function syncFilterHash(){
   params.set("grain", F.grain);
   params.set("dim", F.dim);
   if (F.billing !== "all") params.set("billing", F.billing);
+  if (F.lens !== "entity") params.set("lens", F.lens);
   const target = "#/" + view + "?" + params.toString();
   if (location.hash !== target){
     try { history.replaceState(null, "", target); } catch { /* 沙箱环境忽略 */ }
@@ -139,6 +141,19 @@ $("segGrain").onclick = e => { const b=e.target.closest("button"); if(!b) return
   F.grain=b.dataset.g;
   document.querySelectorAll("#segGrain button").forEach(x=>x.classList.toggle("on",x===b));
   renderMain(); syncFilterHash(); };
+/* 主图视角：实体堆叠 / 物理构成 / 缓存杠杆（结构视角自动停用指标与维度切换） */
+if ($("segLens")) $("segLens").onclick = e => {
+  const b = e.target.closest("button[data-lens]"); if (!b) return;
+  F.lens = b.dataset.lens;
+  document.querySelectorAll("#segLens button").forEach(x=>{
+    const on = x === b;
+    x.classList.toggle("on", on);
+    x.setAttribute("aria-pressed", String(on));
+  });
+  renderMain();
+  syncFilterHash();
+};
+
 /* 计费类型筛选：全部 / 按量计费 / 套餐 / 未计价（只影响模型表） */
 if ($("segBilling")) $("segBilling").onclick = e => {
   const b = e.target.closest("button[data-b]"); if (!b) return;

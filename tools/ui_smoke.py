@@ -56,7 +56,8 @@ def main() -> None:
         page.click('#nav a[data-view="models"]')
         page.wait_for_timeout(400)
         check("切到模型用量", page.is_visible("#view-models"))
-        check("hash 同步为 models", page.evaluate("location.hash") == "#/models")
+        check("hash 同步为 models（含筛选参数）", page.evaluate("location.hash").startswith("#/models"),
+              page.evaluate("location.hash"))
         page.screenshot(path=str(SHOTS / "smoke-models.png"), full_page=True)
 
         # 表格工具：搜索 + 分页 + 排序

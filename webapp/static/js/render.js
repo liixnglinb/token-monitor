@@ -10,12 +10,12 @@ function renderAll(){
     .map(x => String(x).toLowerCase()));
   renderSideAgents();
   renderRangeMenu();
-  renderKPI(); renderMain(); renderAgentList();
+  renderHero(); renderMain(); renderAgentList();
   renderModelDist(); renderModelTable(); renderNote(); renderScanInfo();
   syncFilterSummary();
   if (window.TMUI){
     TMUI.clearKpiSkeleton();
-    ["kTok", "kReq", "kAvg", "kCost"].forEach(id => { const el = $(id); if (el) el.dataset.loaded = "1"; });
+    ["heroValAbbr", "heroReq", "heroAvg", "heroCost", "heroEquiv"].forEach(id => { const el = $(id); if (el) el.dataset.loaded = "1"; });
     TMUI.syncAria();
     window.dispatchEvent(new Event("tm:render"));
   }
@@ -148,45 +148,109 @@ function renderNote(){
 }
 
 
-function renderKPI(){
-  const rows = rowsFor(true);                       // KPI 含日期未知行
-  const tokens = rows.reduce((s,r)=>s+r.tokens,0);
-  const req = rows.reduce((s,r)=>s+r.requests,0);
-  const cost = rows.reduce((s,r)=>s+r.cost,0);
-  const cr = rows.reduce((s,r)=>s+r.cr,0);
-  const base = rows.reduce((s,r)=>s+r.inp+r.cw+r.cr,0);
-  const planTokens = rows.reduce((s,r)=>s+((window.PLAN_SET||new Set()).has(String(r.model).toLowerCase()) ? r.tokens : 0),0);
+/* ---------- Hero：Token 吞吐全景（宏观指标 + 物理构成 + 经济账本） ---------- */
+/* 缓存经济学的典型比例：读取按输入价 10%、写入按 125%。仅用于"等效计费量/节省"
+   的估算展示，真实金额仍由后端按各模型价格计算。 */
+const CR_RATIO = 0.1, CW_RATIO = 1.25;
 
-  const unknownRequests = rows.reduce((sum,row)=>sum+((window.PLAN_SET||new Set()).has(String(row.model).toLowerCase()) ? 0 : (row.unpriced || 0)),0);
-  const pricedRequests = rows.reduce((sum,row)=>sum+(row.priced || 0),0);
-  const planOnly = tokens > 0 && planTokens >= tokens * 0.995;
-  $("kCost").textContent = unknownRequests > 0 && !pricedRequests ? "未定价" : planOnly ? "套餐" : fmtCNY(cost * DATA.cny_rate);
-  $("kCost").title = unknownRequests > 0 ? "未知价格不等于免费；金额仅包含已定价用量。" : planOnly ? "套餐模型只统计用量，不计金额。" : "按模型价格估算，不代表实际账单。";
-  if (planOnly || unknownRequests > 0){
-    const costSub = $("kCostSub");
-    costSub.textContent = planOnly
-      ? "套餐用量"
-      : (pricedRequests > 0 ? "仅已定价部分 · " + fmtInt(unknownRequests) + " 次未定价" : "价格未知，不记为免费");
-    costSub.title = planTokens >= tokens * 0.995
-      ? "套餐/订阅制模型只统计用量，不计金额"
-      : (planTokens > 0 ? "套餐模型不计费，部分模型价格未知" : "模型单价不在价格库，未计入金额");
-  } else {
-    $("kCostSub").textContent = fmtUSD(cost) + " · 汇率 " + DATA.cny_rate;
+function renderHero(){
+  const rows = rowsFor(true);
+  const sum = key => rows.reduce((s,r)=>s+(r[key]||0),0);
+  const tokens = sum("tokens");
+  const inp = sum("inp"), out = sum("out"), cr = sum("cr"), cw = sum("cw");
+  const think = rows.reduce((s,r)=>s+(r.think||0),0);
+  const req = sum("requests");
+  const cost = sum("cost");
+  const planSet = window.PLAN_SET || new Set();
+  const planTokens = rows.reduce((s,r)=>s+(planSet.has(String(r.model).toLowerCase())?r.tokens:0),0);
+  const compTotal = inp + out + cr + cw;
+
+  /* 大数：缩写 ↔ 完整（点击锁定，悬停预览） */
+  const fullText = fmtInt(compTotal);
+  $("heroValAbbr").textContent = fmtTok(compTotal);
+  $("heroValFull").textContent = fullText;
+  const numBtn = $("heroNum");
+  if (numBtn && !numBtn.dataset.bound){
+    numBtn.dataset.bound = "1";
+    numBtn.onclick = () => {
+      const mode = numBtn.dataset.mode === "abbr" ? "full" : "abbr";
+      numBtn.dataset.mode = mode;
+      $("heroValFull").hidden = mode !== "full";
+      $("heroValAbbr").hidden = mode === "full";
+    };
   }
-  $("kReq").textContent = fmtInt(req);
+
+  /* 计费拆分 pill（按 Token 占比） */
+  const pillM = $("heroPillMetered"), pillP = $("heroPillPlan");
+  const meteredTokens = Math.max(compTotal - planTokens, 0);
+  if (planTokens > 0){
+    pillP.hidden = false;
+    pillP.textContent = "套餐覆盖 " + fmtTok(planTokens) + " · " + (planTokens/compTotal*100).toFixed(0) + "%";
+    pillM.hidden = false;
+    pillM.textContent = "按量计费 " + fmtTok(meteredTokens) + " · " + (meteredTokens/compTotal*100).toFixed(0) + "%";
+  } else { pillP.hidden = true; pillM.hidden = true; }
+
+  /* 缓存命中与等效计费量 */
+  const cacheBase = inp + cw + cr;
+  $("heroCache").textContent = cacheBase > 0
+    ? "缓存命中 " + (cr/cacheBase*100).toFixed(1) + "%" : "缓存命中 —";
+  const equiv = inp + CR_RATIO*cr + CW_RATIO*cw;
+  $("heroEquiv").textContent = compTotal > 0 ? fmtTok(equiv) + " tok" : "—";
+  $("heroSavingPct").textContent = compTotal > 0
+    ? "较全量直连节省 " + Math.max(0, (1 - equiv/compTotal)*100).toFixed(1) + "%" : "";
+
+  /* 物理构成分段条（think 属于输出的子段，不参与总和） */
+  const seg = $("heroSegBar");
+  const parts = [
+    ["cr",  "缓存读取", cr],
+    ["inp", "基础输入", inp],
+    ["cw",  "缓存写入", cw],
+    ["out", "输出生成", out],
+  ].filter(p => p[2] > 0);
+  const pct = v => compTotal > 0 ? (v/compTotal*100) : 0;
+  seg.innerHTML = parts.map(([cls, label, val]) => {
+    const w = pct(val);
+    const sub = (cls === "out" && think > 0)
+      ? '<div class="seg-sub seg-think" style="--sub-w:' + (think/Math.max(val,1)*100).toFixed(1)
+        + '%" title="其中深度思考: ' + esc(fmtTok(think)) + ' (' + esc(fmtInt(think/Math.max(val,1)*100)) + '% of 输出)"></div>'
+      : "";
+    return '<div class="seg seg-' + cls + '" style="--w:' + w.toFixed(1) + '%" title="'
+      + label + ': ' + esc(fmtTok(val)) + ' (' + w.toFixed(1) + '%)">' + sub + '</div>';
+  }).join("") || '<div class="seg seg-empty" style="--w:100%" title="暂无数据"></div>';
+  seg.setAttribute("aria-label", "Token 物理构成：" + parts.map(([l,v])=>l+" "+(pct(v)).toFixed(1)+"%").join("、"));
+
+  /* 图例网格 */
+  $("heroLegend").innerHTML = parts.map(([cls, label, val]) =>
+    '<div class="legend-item"><i class="dot dot-' + cls + '"></i><span>' + label
+    + (cls === "out" && think > 0 ? '<small class="legend-think">含思考 ' + esc(fmtTok(think)) + '</small>' : "")
+    + '</span><b>' + esc(fmtTok(val)) + '</b><em>' + pct(val).toFixed(1) + '%</em></div>'
+  ).join("") || '<div class="legend-item"><span>暂无构成数据</span></div>';
+
+  /* 经济账本 */
+  const unpricedTokens = rows.reduce((s,r)=>s+((r.cost<=0 && !planSet.has(String(r.model).toLowerCase()))?r.tokens:0),0);
+  const planOnly = tokens > 0 && planTokens >= tokens * 0.995;
+  const costEl = $("heroCost");
+  costEl.textContent = cost > 0 ? fmtCNY(cost * DATA.cny_rate)
+    : (planOnly ? "套餐" : (unpricedTokens > 0 ? "未计价" : fmtCNY(0)));
+  costEl.title = cost > 0 ? "按各模型价格估算，不代表实际账单 · 等效 $" + fmtUSD(cost).slice(1)
+    : "套餐模型不计费；单价缺失的用量不记为免费";
+  $("heroCostSub").textContent = cost > 0 ? "$" + fmtUSD(cost).slice(1) + " · 汇率 " + DATA.cny_rate : "";
+  /* 节省资金：被缓存吸收的那部分输入 × 输入等效价（比例法估算） */
+  const savedTokens = cr * (1 - CR_RATIO) - cw * (CW_RATIO - 1);
+  const perTokPrice = compTotal > 0 ? (cost * DATA.cny_rate) / compTotal : 0;
+  $("heroSave").textContent = savedTokens > 0 && cost > 0
+    ? "≈ " + fmtCNY(savedTokens * perTokPrice) : "—";
+  $("heroSave").title = savedTokens > 0
+    ? "按典型比例估算：读取省下的约 " + fmtTok(Math.max(savedTokens,0)) + " tokens × 平均输入单价"
+    : "当前缓存写入开销高于读取收益或无缓存数据";
   const range = rangeDates();
   const days = range ? Math.round((new Date(range[1]) - new Date(range[0]))/864e5) + 1
     : (DATA.range.max && DATA.range.min
       ? Math.round((new Date(DATA.range.max) - new Date(DATA.range.min))/864e5)+1 : 0);
-  $("kReqSub").textContent = days
-    ? (req/days < 1 ? "日均 <1" : "日均 " + fmtInt(req/days))
-    : "全部时间";
-  $("kTok").textContent = fmtInt(tokens);           // 对齐 DeepSeek：完整千分位
-  $("kTokSub").textContent = fmtTok(tokens);
-  $("kCache").textContent = base > 0 ? "缓存命中 " + (cr/base*100).toFixed(1) + "%" : "缓存命中 —";
-  /* 平均单次请求（参考百炼的「平均单次请求Token」） */
-  $("kAvg").textContent = req ? fmtInt(Math.round(tokens / req)) : "—";
-  $("kAvgSub").textContent = req ? fmtInt(req) + " 次请求" : "无记录";
+  $("heroReq").textContent = fmtInt(req);
+  $("heroReqSub").textContent = days ? "日均 " + (req/days < 1 ? "<1" : fmtInt(req/days)) : "全部时间";
+  $("heroAvg").textContent = req ? fmtInt(Math.round(tokens / req)) : "—";
+  $("heroAvgSub").textContent = req ? "tokens / 请求" : "无记录";
 }
 
 /* ---------- 主图与每日统计 ---------- */
@@ -298,6 +362,17 @@ function renderMain(){
   const range = rangeDates();
   const theme = refreshChartTokens();
   refreshPalette();
+  syncSegAvailability();
+  if (F.lens === "composition"){
+    $("chartHint").textContent = "按 Token 物理构成（读取/写入/输入/输出）堆叠，观察上下文膨胀与生成强度";
+    return renderComposition(rows, range, theme);
+  }
+  if (F.lens === "cache"){
+    $("chartHint").textContent = "上轨=全量等效输入（虚线），下轨=真实付费输入；阴影区为缓存吸收的开销";
+    return renderCacheLeverage(rows, range, theme);
+  }
+  $("chartHint").textContent = "按日聚合的 Token 趋势，可切换数据源与模型拆分";
+
   const fmt = fmtTick[F.metric];
   const suffix = F.grain === "month" ? "（按月）" : "";
   const title = F.grain === "month"
@@ -407,47 +482,193 @@ function renderMain(){
   });
 }
 
+/* ---------- 视角：实体 / 物理构成 / 缓存杠杆 ----------
+   composition：Token 五态分流堆叠（cr/cw/inp/out，颜色取 --tok-*）；
+   cache：缓存杠杆效益双轨（上轨=全量等效输入，下轨=真实付费输入）。
+   两个视角都是 Token 口径，故自动停用「指标/维度」切换。 */
+const COMP_META = [
+  ["cr",  "缓存读取", "--tok-cr"],
+  ["cw",  "缓存写入", "--tok-cw"],
+  ["inp", "基础输入", "--tok-inp"],
+  ["out", "输出生成", "--tok-out"],
+];
+function syncSegAvailability(){
+  const structured = F.lens !== "entity";
+  ["segMetric", "segDim"].forEach(id => {
+    const seg = $(id);
+    if (!seg) return;
+    seg.classList.toggle("seg-disabled", structured);
+    seg.querySelectorAll("button").forEach(b => { b.disabled = structured; });
+  });
+}
+function seriesAxis(raw, range){
+  if (F.grain === "day") return fillDays(raw, range && range[0]);
+  const endSrc = (range && range[1]) || DATA.range.max;
+  const startSrc = (range && range[0]) || DATA.range.min;
+  const endM = endSrc ? endSrc.slice(0, 7) : null;
+  const startM = startSrc ? startSrc.slice(0, 7) : null;
+  const floorM = endM ? addMonths(endM, -11) : null;
+  const axisStart = (startM && floorM && startM < floorM) ? startM : (floorM || startM);
+  return fillMonths(raw, axisStart, endM);
+}
+function axisTickCallback(opts, labels){
+  if (F.grain === "day") opts.scales.x.ticks.callback = (v, i) => md(labels[i] || v);
+  else opts.scales.x.ticks.callback = (v, i) => fmtMonth(labels[i] || v);
+}
+function rebuildMain(labels, datasets, opts, type){
+  if (MAIN) MAIN.destroy();
+  MAIN = new Chart($("mainChart"), {
+    type, data: { labels, datasets }, options: opts, plugins: [crosshair]
+  });
+}
+function renderComposition(rows, range, theme){
+  const labels = seriesAxis([], range).map(d => d[0]);
+  const series = COMP_META.map(([key, label]) => {
+    const map = new Map(groupSeries(rows, key, F.grain));
+    return { key, label, data: labels.map(l => map.get(l) || 0) };
+  }).filter(s => s.data.some(v => v > 0));
+  const totalTok = series.reduce((acc, s) => acc + s.data.reduce((a, b) => a + b, 0), 0);
+  const thinkTotal = rows.reduce((s, r) => s + (r.think || 0), 0);
+
+  $("mainTitle").textContent = "Token 物理构成" + (F.grain === "month" ? "（按月）" : "");
+  $("mainSum").textContent = "总量 · " + fmtTok(totalTok) + " tok";
+  const opts = baseOpts(fmtTick.tokens, "");
+  opts.scales.x.stacked = true;
+  opts.scales.y.stacked = true;
+  opts.plugins.tooltip.callbacks.title = items => items && items.length
+    ? (F.grain === "month" ? fmtMonth(items[0].label) : items[0].label) + "    "
+      + fmtTok(items.reduce((s, i) => s + (i.parsed.y || 0), 0)) + " tok" : "";
+  opts.plugins.tooltip.callbacks.label = c => " " + c.dataset.label + "   " + fmtTok(c.parsed.y) + " tok";
+  axisTickCallback(opts, labels);
+  rebuildMain(labels, series.map((s, i) => ({
+    label: s.label, data: s.data,
+    backgroundColor: context => barGradient(context, i),
+    stack: "comp", maxBarThickness: 28, barPercentage: .66, categoryPercentage: .78,
+    borderRadius: 4, borderSkipped: false,
+  })), opts, "bar");
+
+  $("trendSummary").innerHTML = COMP_META.map(([key, label]) => {
+    const total = rows.reduce((s, r) => s + (r[key] || 0), 0);
+    return '<div class="trend-stat"><span>' + label + '</span><b>' + esc(fmtTok(total))
+      + '</b><small>' + (totalTok > 0 ? (total / totalTok * 100).toFixed(1) + "%" : "—") + '</small></div>';
+  }).join("");
+  renderDailyDetail(rows, [], "tokens");
+  const emp = $("mainEmpty");
+  emp.hidden = totalTok > 0;
+  if (totalTok === 0) emp.innerHTML = '<div class="t1">当前筛选下无 Token 记录</div>'
+    + '<div class="t2">试试把时间范围切换到近 7 天或全部</div>';
+  void thinkTotal;
+}
+function renderCacheLeverage(rows, range, theme){
+  const perDay = new Map();
+  for (const r of rows){
+    if (r.date === "unknown") continue;
+    const o = perDay.get(r.date) || { inp: 0, cr: 0, cw: 0 };
+    o.inp += r.inp || 0; o.cr += r.cr || 0; o.cw += r.cw || 0;
+    perDay.set(r.date, o);
+  }
+  const raw = [...perDay.entries()].sort((a, b) => a[0] < b[0] ? -1 : 1)
+    .map(([d, o]) => [d, o.inp + o.cr + o.cw]);
+  const labels = seriesAxis(raw, range).map(d => d[0]);
+  const byDate = new Map([...perDay.entries()]);
+  const full = [], paid = [];
+  for (const l of labels){
+    const o = byDate.get(l) || { inp: 0, cr: 0, cw: 0 };
+    full.push(o.inp + o.cr);
+    paid.push(o.inp + CR_RATIO * o.cr + CW_RATIO * o.cw);
+  }
+  const totFull = full.reduce((a, b) => a + b, 0);
+  const totPaid = paid.reduce((a, b) => a + b, 0);
+  const saved = Math.max(totFull - totPaid, 0);
+
+  $("mainTitle").textContent = "缓存杠杆效益" + (F.grain === "month" ? "（按月）" : "");
+  $("mainSum").textContent = "等效输入 " + fmtTok(totFull) + " · 实付 " + fmtTok(totPaid);
+  const fmtT = v => v >= 1e9 ? (v/1e9).toFixed(1)+"B" : v >= 1e6 ? (v/1e6).toFixed(1)+"M" : v >= 1e3 ? (v/1e3).toFixed(0)+"k" : String(Math.round(v));
+  const opts = baseOpts(fmtT, "");
+  opts.scales.y.stacked = false;
+  opts.plugins.tooltip.callbacks.title = items => items && items.length
+    ? (F.grain === "month" ? fmtMonth(items[0].label) : items[0].label) : "";
+  opts.plugins.tooltip.callbacks.label = c => c.datasetIndex === 0
+    ? " 全量等效输入   " + fmtTok(c.parsed.y) + " tok"
+    : " 真实付费输入   " + fmtTok(c.parsed.y) + " tok";
+  axisTickCallback(opts, labels);
+  const solid = cssVar("--brand-strong", "#7AA4FF");
+  const green = cssVar("--tok-cr", "#10B981");
+  rebuildMain(labels, [
+    { label: "全量等效输入", data: full, borderColor: theme.muted,
+      borderDash: [5, 4], borderWidth: 1.6, pointRadius: labels.length <= 12 ? 2.4 : 0,
+      pointBackgroundColor: theme.surface, tension: .3, fill: false },
+    { label: "真实付费输入", data: paid, borderColor: solid,
+      backgroundColor: hexA(green.startsWith("#") ? green : "#10B981", .16),
+      fill: "-1", borderWidth: 2.2, pointRadius: labels.length <= 12 ? 2.4 : 0,
+      pointBackgroundColor: theme.surface, tension: .3 },
+  ], opts, "line");
+
+  $("trendSummary").innerHTML =
+    '<div class="trend-stat"><span>全量等效输入</span><b>' + esc(fmtTok(totFull)) + '</b><small>输入 + 缓存读取 + 写入</small></div>'
+    + '<div class="trend-stat"><span>真实付费输入</span><b>' + esc(fmtTok(totPaid)) + '</b><small>含读取 10% · 写入 125%</small></div>'
+    + '<div class="trend-stat"><span>缓存吸收</span><b>' + esc(fmtTok(saved)) + '</b><small>阴影区面积</small></div>'
+    + '<div class="trend-stat"><span>节省率</span><b>' + (totFull > 0 ? (saved / totFull * 100).toFixed(1) + "%" : "—") + '</b><small>估算口径</small></div>';
+  renderDailyDetail(rows, [], "tokens");
+  const emp = $("mainEmpty");
+  emp.hidden = totFull > 0;
+  if (totFull === 0) emp.innerHTML = '<div class="t1">当前筛选下无缓存数据</div>'
+    + '<div class="t2">该口径需要来源记录缓存读取/写入明细（Codex、Claude 等已支持）</div>';
+}
+
 /* ---------- Agent 用量榜（可折叠 + 会话明细已并入 SVG title） ---------- */
 
-/* ---------- 迷你走势：纯 SVG，不用 Chart.js ----------
+/* ---------- 迷你走势：纯 SVG 折线 + 渐变面积，不用 Chart.js ----------
    排行榜里每个数据源、展开后每个模型都有一条走势。
    之前用 Chart.js 实例，几十条同时驻留会吃掉大量内存并掉帧；
-   SVG 由字符串直接生成：0 实例、0 监听器，主题切换靠 currentColor 自动换色。 */
+   SVG 由字符串直接生成：0 实例、0 监听器，主题切换靠 currentColor 自动换色。
+   面积填充直接用 fill-opacity，不引入 <defs> 随机 id（避免碰撞与注入面）。 */
 function sparklineSVG(pairs, cssColor){
-  const values = pairs.map(p => p[1]);
-  const max = Math.max(...values, 1);
-  const H = 26, PAD = 1;
-  const bw = 100 / Math.max(pairs.length, 1);   /* viewBox 固定 100×26，宽度交给 CSS 拉伸 */
-  const rects = pairs.map(([date, value], index) => {
-    if (!(value > 0)) return "";
-    const h = Math.max(value / max * (H - PAD * 2), 1.6);   /* 有数据的柱给最小可见高度 */
-    const x = (index * bw + bw * 0.18).toFixed(2);
-    const w = Math.max(bw * 0.64, 0.8).toFixed(2);
-    const y = (H - PAD - h).toFixed(2);
-    return '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h.toFixed(2)
-      + '" rx="0.8"><title>' + esc(md(date)) + ' · ' + esc(fmtTok(value)) + ' tok</title></rect>';
-  }).join("");
-  const nonzero = values.filter(v => v > 0).length;
-  return '<svg class="sparkline" viewBox="0 0 100 ' + H + '" preserveAspectRatio="none"'
-    + ' role="img" aria-label="每日 Token 走势，' + nonzero + ' 天有数据"'
-    + (cssColor ? ' style="color:' + cssColor + '"' : "") + '>' + rects + '</svg>';
+  const vals = pairs.map(p => p[1]);
+  const n = vals.length;
+  if (!n) return '<span class="spark-empty">—</span>';
+  const W = 120, H = 28, PAD = 2;
+  const max = Math.max(...vals, 1);
+  const peak = vals.indexOf(Math.max(...vals));
+  const xs = i => PAD + (n === 1 ? (W - 2 * PAD) / 2 : (i / (n - 1)) * (W - 2 * PAD));
+  const ys = v => H - PAD - (v / max) * (H - 2 * PAD);
+  const pts = vals.map((v, i) => xs(i).toFixed(1) + "," + ys(v).toFixed(1)).join(" ");
+  const area = "M " + xs(0).toFixed(1) + "," + ys(vals[0]).toFixed(1)
+    + " L " + pts + " L " + xs(n - 1).toFixed(1) + "," + H + " L " + xs(0).toFixed(1) + "," + H + " Z";
+  const nonzero = vals.filter(v => v > 0).length;
+  return '<svg class="sparkline" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none"'
+    + ' role="img" aria-label="每日 Token 走势，' + nonzero + ' 天有数据，峰值 ' + esc(md(pairs[peak][0])) + ' ' + esc(fmtTok(vals[peak])) + ' tok"'
+    + (cssColor ? ' style="color:' + cssColor + '"' : "") + '>'
+    + '<path d="' + area + '" fill="currentColor" fill-opacity="0.16" stroke="none"/>'
+    + '<polyline fill="none" stroke="currentColor" stroke-width="1.8" vector-effect="non-scaling-stroke"'
+    + ' stroke-linecap="round" stroke-linejoin="round" points="' + pts + '"/>'
+    + '</svg>';
 }
 /* 迷你走势对应的"每日 Token"序列：与旧迷你图同源（fillDays 补零日期轴） */
 function sparkPairs(rows, start){
   return fillDays(groupSeries(rows, "tokens", "day"), start);
 }
-/* 金额为 0 但有用量时，标注"价格未知"，避免误以为算错 */
-/* 成本列文案：区分「有计价 / 套餐不计费 / 价表缺价」三态
-   model       —— 模型名，用于查套餐集合（Agent 行传 null）
-   forcePlan   —— Agent 行用：该 Agent 全部为套餐模型时直接标套餐 */
+/* 金额为 0 但有用量时，用三态徽标区分「按量计费 / 套餐覆盖 / 未计价」，
+   避免把缺价或订阅制误读成真正免费 */
 function costText(cost, tokens, model, forcePlan){
-  if (cost > 0) return fmtCNY(cost * DATA.cny_rate);
+  if (cost > 0) return '<span class="cost-priced">' + fmtCNY(cost * DATA.cny_rate) + '</span>';
   if (!(tokens > 0)) return fmtCNY(0);
   const set = window.PLAN_SET || new Set();
   const isPlan = !!forcePlan || !!(model && set.has(String(model).toLowerCase()));
-  const tip = isPlan ? "套餐/订阅制，按口径只记用量、不计金额" : "单价不在价表中";
-  const label = isPlan ? "套餐不计费" : "价格未知";
-  return fmtCNY(0) + ' <span class="muted" title="' + tip + '">' + label + '</span>';
+  if (isPlan){
+    return '<span class="pill-pill pill-plan" title="套餐/订阅制模型（如商汤小浣熊、Agnes 等）：只记吞吐量，金额按 ¥0 统计">套餐覆盖</span>';
+  }
+  return '<span class="pill-pill pill-unpriced" title="单价不在价格库，未计入金额 —— 不是免费；可在 custom-pricing.json 补充单价">未计价</span>';
+}
+/* 长模型名智能分段：Provider 前缀弱化、尾部核心名保持醒目 */
+function modelCellHTML(name){
+  const s = String(name);
+  const cut = s.lastIndexOf("/");
+  const prov = cut > 0 ? s.slice(0, cut + 1) : "";
+  const core = cut > 0 ? s.slice(cut + 1) : s;
+  return '<span class="model-cell" title="' + esc(s) + '">'
+    + (prov ? '<span class="model-provider">' + esc(prov) + '</span>' : "")
+    + '<span class="model-name">' + esc(core) + '</span></span>';
 }
 
 /* ---------- 模型用量分布（环形图 + 双列 Top10，参考阿里云百炼看板） ---------- */
@@ -613,7 +834,7 @@ function renderAgentList(){
           const row = document.createElement("div");
           row.className = "mrow";
           row.innerHTML =
-            '<span class="nm" title="' + esc(mname) + '">' + esc(mname) + '</span>' +
+            '<span class="nm">' + modelCellHTML(mname) + '</span>' +
             '<span class="num">Tokens <b>' + fmtInt(o2.tokens) + '</b> · ' + fmtInt(o2.requests) + ' 次 · ' + costText(o2.cost, o2.tokens, mname) + '</span>' +
             '<div class="ch">' + sparklineSVG(sparkPairs(arows.filter(r=>r.model===mname), start), cssColor) + '</div>';
           boxM.appendChild(row);
@@ -706,7 +927,7 @@ function renderModelTable(){
     body.innerHTML = view.map(([name,o],i)=>{
       const avg = o.tokens ? o.cost*DATA.cny_rate/o.tokens*1e6 : 0;
       const rank = start + i;
-      return `<tr><td class="mono" data-label="模型" title="${esc(name)}"><span class="m-ico">${modelIcon(name)}</span>${esc(name)}</td>
+      return `<tr><td class="mono" data-label="模型"><span class="m-ico">${modelIcon(name)}</span>${modelCellHTML(name)}</td>
       <td class="num" data-label="Tokens">${fmtInt(o.tokens)}</td><td class="num" data-label="请求次数">${fmtInt(o.requests)}</td>
       ${barCell(o.tokens,max,rank<3?"var(--m-token)":"var(--line-strong)")}
       <td class="num" data-label="金额（估算）">${costText(o.cost, o.tokens, name)}</td>

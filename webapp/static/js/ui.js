@@ -207,29 +207,20 @@
     if (node) node.removeAttribute("aria-busy");
   }
 
-  /* 首屏 KPI 占位：数据到达前显示骨架而不是"—" */
+  /* 首屏 Hero 占位：数据到达前显示骨架而不是"—" */
   function skeletonKpis() {
-    ["kTok", "kReq", "kAvg", "kCost"].forEach(function (id) {
+    ["heroValAbbr", "heroReq", "heroAvg", "heroCost", "heroEquiv"].forEach(function (id) {
       const node = $(id);
       if (!node || node.dataset.loaded === "1") return;
       node.classList.add("skeleton");
       node.textContent = "";
     });
-    ["kTokSub", "kReqSub", "kAvgSub", "kCostSub"].forEach(function (id) {
-      const node = $(id);
-      if (!node || node.dataset.loaded === "1") return;
-      node.innerHTML = '<span class="skeleton skeleton-line" style="--w:52%"></span>';
-    });
   }
 
   function clearKpiSkeleton() {
-    ["kTok", "kReq", "kAvg", "kCost"].forEach(function (id) {
+    ["heroValAbbr", "heroReq", "heroAvg", "heroCost", "heroEquiv"].forEach(function (id) {
       const node = $(id);
       if (node) node.classList.remove("skeleton");
-    });
-    ["kTokSub", "kReqSub", "kAvgSub", "kCostSub"].forEach(function (id) {
-      const node = $(id);
-      if (node) node.innerHTML = "";
     });
   }
 
@@ -259,7 +250,7 @@
     const params = {};
     if (qIndex !== -1) {
       new URLSearchParams(raw.slice(qIndex + 1)).forEach(function (value, key) {
-        if (["range", "agent", "metric", "grain", "dim", "billing"].includes(key)) params[key] = value;
+        if (["range", "agent", "metric", "grain", "dim", "billing", "lens"].includes(key)) params[key] = value;
       });
     }
     return Object.assign({}, base, { params: params });

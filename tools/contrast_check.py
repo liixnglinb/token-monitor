@@ -28,7 +28,8 @@ VAR_RE = re.compile(r"var\(\s*(--[\w-]+)\s*(?:,\s*([^)]+))?\)")
 
 TEXT_TOKENS = ["--ink", "--text", "--text-2", "--muted", "--m-dim",
                "--brand", "--brand-strong", "--pos", "--warn", "--neg", "--info",
-               "--m-token", "--m-cost", "--m-req", "--m-avg", "--m-cache"]
+               "--m-token", "--m-cost", "--m-req", "--m-avg", "--m-cache",
+               "--tok-inp", "--tok-out", "--tok-cr", "--tok-cw", "--tok-think"]
 SURFACE_TOKENS = ["--canvas", "--surface", "--surface-2", "--surface-3", "--side", "--inset"]
 
 

@@ -1,7 +1,7 @@
 "use strict";
 let DATA = null, MAIN = null;
 const F = { rangeKey: "last7", agent: "all", metric: "tokens", grain: "day", dim: "total",
-            billing: "all", open: new Set() };
+            billing: "all", lens: "entity", open: new Set() };
 try {
   const saved = JSON.parse(sessionStorage.getItem("voyra-token-filters") || "null");
   if (saved) {
@@ -11,6 +11,7 @@ try {
     if (["day","month"].includes(saved.grain)) F.grain=saved.grain;
     if (["total","agent","model"].includes(saved.dim)) F.dim=saved.dim;
     if (["all","metered","plan","unpriced"].includes(saved.billing)) F.billing=saved.billing;
+    if (["entity","composition","cache"].includes(saved.lens)) F.lens=saved.lens;
   }
 } catch { /* corrupt storage never blocks the dashboard */ }
 /* 图表调色板：PAL_FALLBACK / palette() 定义在 charts.js（先加载），
