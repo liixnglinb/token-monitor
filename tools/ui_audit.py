@@ -48,8 +48,8 @@ def sources(suffixes=(".js", ".css", ".html")):
             continue
         if ".mimosa" in path.parts or "vendor" in path.parts:
             continue
-        # legacy.css 是历史样式归档，已不再被 styles.css 引用，不计入"在用的硬编码"
-        if path.name == "legacy.css":
+        # legacy.css / legacy-src/ 是历史样式归档（已不被 styles.css 引用），不计入在用的硬编码
+        if path.name == "legacy.css" or "legacy-src" in path.parts:
             continue
         yield path
 
@@ -98,11 +98,27 @@ def main() -> None:
         add(f"| `{row['path']}` | {row['size']} | {len(row['hex'])} | {row['hex_n']} |"
             f" {row['rgba_n']} | {row['important_n']} | {row['px_n']} | {row['inline_style_n']} |")
     add("")
+    add("## 2. 在用的硬编码颜色（按文件拆开）")
+    add("")
+    add("`legacy.css` 是历史归档（不加载），不计入。")
+    add("")
+    add("| 文件 | #hex 次数 | 不同色值 | 说明 |")
+    add("| --- | ---: | ---: | --- |")
+    for row in sorted((r for r in rows if r["hex_n"]), key=lambda r: -r["hex_n"]):
+        note = ""
+        if row["path"].endswith("tokens.css"):
+            note = "设计 token 唯一来源（调色板定义处）"
+        elif row["path"].endswith("core.js"):
+            note = "各软件/模型厂商品牌色（数据，不是界面配色）"
+        elif row["path"].endswith("charts.js"):
+            note = "取不到 CSS 变量时的兜底值"
+        add(f"| `{row['path']}` | {row['hex_n']} | {len({c.lower() for c in row['hex']})} | {note} |")
+    add("")
     add(f"- 全站 #hex 字面量合计：**{sum(r['hex_n'] for r in rows)}** 次，"
         f"互不相同的颜色值 **{len({c.lower() for r in rows for c in r['hex']})}** 个")
     add("")
 
-    add("## 2. 字号阶梯（全站实际出现的 font-size）")
+    add("## 3. 字号阶梯（全站实际出现的 font-size）")
     add("")
     sizes: dict[float, int] = {}
     for row in rows:
@@ -113,7 +129,7 @@ def main() -> None:
     add(" / ".join(f"{s:g}px×{n}" for s, n in sorted(sizes.items())))
     add("")
 
-    add("## 3. 规范要求项在代码里的覆盖情况")
+    add("## 4. 规范要求项在代码里的覆盖情况")
     add("")
     add("| 规范项 | 出现次数 | 判定 |")
     add("| --- | ---: | --- |")
@@ -122,12 +138,12 @@ def main() -> None:
         add(f"| {label} | {found} | {'有' if found else '**缺失**'} |")
     add("")
 
-    add("## 4. tokens.css 现有 token")
+    add("## 5. tokens.css 现有 token")
     add("")
     add(f"共 {len(token_names)} 个：`" + "`、`".join(token_names) + "`")
     add("")
 
-    add("## 5. index.html 结构统计")
+    add("## 6. index.html 结构统计")
     add("")
     add(f"- 行内 style 属性：{len(re.findall(r'style=\"', html_text))} 处")
     add(f"- `aria-*` 属性：{len(re.findall(r'aria-[a-z]+=', html_text))} 处")
