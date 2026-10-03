@@ -97,6 +97,8 @@ main {
 @keyframes dot-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 
 .top-actions { display: flex; align-items: center; gap: var(--sp-2); }
+/* 数据源筛选按钮：桌面端侧栏常驻用不到，窄屏才显示（见 ≤760px 媒体查询） */
+.filter-btn { display: none; }
 
 /* ── 内容列：12 列栅格 + 间距阶梯 ── */
 .content {
@@ -342,6 +344,52 @@ body:not([data-mode="settings"]) #setNav { display: none !important; }
   .table-toolbar { gap: var(--sp-2); }
   .field-search { flex: 1; }
   .field-search input { min-width: 0; width: 100%; }
+
+  /* 数据源筛选抽屉入口：侧栏隐藏后从这里找回按数据源过滤的能力 */
+  .filter-btn { display: inline-flex; }
+
+  /* 模型表卡片化降级：6 列表格在窄屏改为逐行卡片，杜绝横向破版。
+     字段名由 td[data-label]::before 提供。 */
+  .table-card thead { display: none; }
+  .table-card table,
+  .table-card tbody,
+  .table-card tr,
+  .table-card td { display: block; width: 100%; }
+  .table-card table { min-width: 0; }
+  .table-card tr {
+    padding: var(--sp-3);
+    margin-bottom: var(--sp-2);
+    border: 1px solid var(--line-soft);
+    border-radius: var(--r-lg);
+  }
+  .table-card tr:last-child { margin-bottom: 0; }
+  .table-card tbody tr:hover td { background: transparent; }
+  .table-card td {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--sp-3);
+    padding: var(--sp-1) 0;
+    border-bottom: 0;
+    text-align: right;
+  }
+  .table-card td[data-label]::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-size: var(--fs-2xs);
+    text-align: left;
+  }
+  .table-card td.mono {
+    justify-content: flex-start;
+    text-align: left;
+    font-weight: var(--fw-semibold);
+    color: var(--ink);
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .table-card td.mono::before { display: none; }
+  .table-card .bar-cell .bar { flex: 1; margin-left: var(--sp-3); }
+
   .toast-stack { right: var(--sp-3); left: var(--sp-3); bottom: 72px; max-width: none; }
   .confirm-card { padding: var(--sp-4); }
   .confirm-actions { grid-column: 1 / -1; }

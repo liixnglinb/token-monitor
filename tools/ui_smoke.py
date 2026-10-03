@@ -47,8 +47,10 @@ def main() -> None:
 
         check("初始无 JS 异常", not errors, "; ".join(errors)[:300])
         check("默认落在总览", page.is_visible("#view-overview"))
-        check("hash 已规范化", page.evaluate("location.hash") in ("#/overview", ""),
-              page.evaluate("location.hash"))
+        initial_hash = page.evaluate("location.hash")
+        check("hash 已规范化（视图 + 筛选参数）",
+              initial_hash in ("#/overview", "") or initial_hash.startswith("#/overview?"),
+              initial_hash)
 
         # 视图切换 + 路由
         page.click('#nav a[data-view="models"]')
@@ -89,6 +91,45 @@ def main() -> None:
             page.wait_for_timeout(300)
             check("表头可排序", sort_btn.get_attribute("aria-sort") in ("ascending", "descending"),
                   str(sort_btn.get_attribute("aria-sort")))
+
+        # 计费类型筛选（全部 / 按量计费 / 套餐 / 未计价）
+        billing = page.locator('#segBilling button[data-b="unpriced"]')
+        if billing.count():
+            rows_before = page.locator("#tbModel tr").count()
+            billing.click()
+            page.wait_for_timeout(300)
+            rows_after = page.locator("#tbModel tr").count()
+            check("计费筛选改变表格行", rows_after != rows_before or rows_after <= 1,
+                  f"{rows_before} → {rows_after}")
+            page.locator('#segBilling button[data-b="all"]').click()
+            page.wait_for_timeout(200)
+
+        # 筛选状态序列化进 hash：切范围 → hash 变化 → 刷新后保留
+        page.click("#nav a[data-view='overview']")
+        page.wait_for_timeout(300)
+        page.click("#ddRange .dd-btn")
+        page.wait_for_timeout(200)
+        page.click('#ddRangeMenu button[data-k="today"]')
+        page.wait_for_timeout(400)
+        check("筛选写入 hash（range=today）", "range=today" in page.evaluate("location.hash"),
+              page.evaluate("location.hash"))
+        page.reload(wait_until="networkidle")
+        page.wait_for_timeout(1200)
+        check("刷新后筛选保留", page.eval_on_selector("#ddRangeVal", "el => el.textContent") == "今天",
+              page.eval_on_selector("#ddRangeVal", "el => el.textContent"))
+        check("刷新后 hash 仍是 today", "range=today" in page.evaluate("location.hash"))
+        # 恢复默认
+        page.click("#ddRange .dd-btn")
+        page.wait_for_timeout(200)
+        page.click('#ddRangeMenu button[data-k="last7"]')
+        page.wait_for_timeout(300)
+
+        # 迷你走势：纯 SVG，Chart 实例数恒定（主图 + 环形图）
+        page.wait_for_timeout(500)
+        instances = page.evaluate("Object.keys(Chart.instances).length")
+        check("Chart 实例不超过 4 个（主图+环形+余量）", instances <= 4, f"instances={instances}")
+        check("排行榜使用 SVG sparkline", page.locator(".sparkline").count() > 0,
+              f"sparklines={page.locator('.sparkline').count()}")
 
         # 设置页 + 设置分类路由
         page.click("#settingsBtn")
@@ -174,16 +215,38 @@ def main() -> None:
         page.wait_for_timeout(200)
         check("Toast 可显示", page.locator(".toast").count() > 0)
 
-        # 窄屏：底部标签栏接管
+        # 窄屏：底部标签栏接管 + 数据源筛选抽屉
         page.set_viewport_size({"width": 390, "height": 780})
         page.wait_for_timeout(400)
         check("窄屏隐藏侧栏", not page.is_visible("#sidebar"))
         check("窄屏显示底部标签栏", page.is_visible("#tabbar"))
+        check("窄屏显示数据源筛选按钮", page.is_visible("#filterBtn"))
+        page.click("#filterBtn")
+        page.wait_for_timeout(400)
+        check("抽屉打开", page.is_visible("#agentDrawer"))
+        check("抽屉里有数据源列表", page.locator("#drawerAgents .side-project").count() > 0,
+              f"items={page.locator('#drawerAgents .side-project').count()}")
+        page.screenshot(path=str(SHOTS / "smoke-mobile-drawer.png"))
+        # 从抽屉选一个数据源：筛选生效 + 抽屉关闭
+        agent_btn = page.locator("#drawerAgents .side-project").first
+        agent_name = agent_btn.get_attribute("data-agent-filter")
+        agent_btn.click()
+        page.wait_for_timeout(400)
+        check("抽屉选择数据源后关闭", page.evaluate("document.getElementById('agentDrawer').hidden"))
+        check("筛选已生效（hash 带 agent）", f"agent={agent_name}" in page.evaluate("location.hash"),
+              page.evaluate("location.hash"))
         page.screenshot(path=str(SHOTS / "smoke-mobile.png"), full_page=True)
+        # 模型表卡片化：thead 隐藏、td 带字段名
         page.click('#tabbar button[data-view="models"]')
-        page.wait_for_timeout(300)
-        check("窄屏标签栏可切视图", page.is_visible("#view-models"))
+        page.wait_for_timeout(400)
+        thead_shown = page.evaluate("getComputedStyle(document.querySelector('#modelTable thead')).display !== 'none'")
+        check("窄屏表格表头隐藏（卡片化）", not thead_shown)
+        check("单元格带 data-label 字段名", page.locator("#tbModel td[data-label]").count() > 0)
+        # 恢复筛选与视口
         page.set_viewport_size({"width": 1440, "height": 900})
+        page.wait_for_timeout(300)
+        page.evaluate("F.agent = 'all'; renderAll();")
+        page.wait_for_timeout(300)
 
         # 减少动态效果
         page.emulate_media(reduced_motion="reduce")

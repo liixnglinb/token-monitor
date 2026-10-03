@@ -19,8 +19,9 @@
 | 主导航 | 侧栏一级导航（≥761px）；窄屏改为底部标签栏（≤760px），二者共用同一套 `switchView` |
 | 二级导航 | 设置页分类（通用偏好 / 扫描与缓存 / 关于）显示在侧栏 `#setNav` |
 | 面包屑 | 顶栏 `Token Monitor › 当前页面`，始终显示当前位置 |
-| 深链接 | hash 路由：`#/overview`、`#/models`、`#/settings/{general,data,about}`；支持浏览器前进/后退 |
-| 返回 | 设置页侧栏「← 返回总览」；`Esc` 关闭弹层；浏览器后退等价于返回上一视图 |
+| 深链接 | hash 路由 + **筛选参数序列化**：`#/overview?range=last7&agent=codex&metric=tokens&grain=day&dim=total&billing=plan`；刷新/前进/后退/分享都不丢过滤视图 |
+| 窄屏筛选 | ≤760px 顶栏「筛选」按钮打开**数据源抽屉**（与侧栏共用同一份渲染，`role=dialog` + 焦点陷阱 + Esc 关闭） |
+| 返回 | 设置页侧栏「← 返回总览」；`Esc` 关闭弹层与抽屉；浏览器后退等价于返回上一视图 |
 | 内容形态 | 时间序数据→图表；跨维度对比→表格；单个实体摘要→卡片；来源清单→列表 |
 
 ## 二、布局与栅格
@@ -70,6 +71,9 @@
 - 空：图表/每日明细/表格/来源列表各有专属空态文案，并给出「查看全部时间」等下一步动作。
 - 错误：`collection-state` 明确写出原因与影响（"已有结果保留"），并提供「重新读取结果」。
 - 成功：导出、重新扫描、设置保存、主题切换都有 toast 反馈（`kind=success`）。
+- **扫描真状态绑定**：重新扫描期间按钮禁用并显示真实耗时（"扫描中 Ns"），1s 轮询 `/api/settings`
+  的 `busy` 直到完成后才恢复；已有扫描进行时不重复排队，直接等待其完成 —— 杜绝
+  "按钮 1 秒恢复但数据没变"的假反馈。
 - 断网/弱网：轮询失败时提示"暂时无法连接本地服务"，恢复后自动继续，手动重试入口常驻。
 
 ## 六、交互与动效
@@ -94,7 +98,11 @@
 
 - 主题三态：`跟随系统`（默认，不写 `data-theme`）、`浅色`、`深色`；顶栏按钮循环切换，设置页也可选；选择记入 `localStorage("tm-theme")`。
 - 首帧不闪：`index.html` 内联脚本在样式表之前落地主题。
-- 图表随主题：`charts.js` 用 `getComputedStyle` 读取 `--c1..--c9`，切主题后重绘即换色。
+- 图表随主题：`charts.js` 用 `getComputedStyle` 读取 `--c1..--c9`；主题变化（`tm:theme` 事件）触发 MAIN/DONUT
+  按新 token 重建，SVG sparkline 与表格占比条靠 `currentColor` / `var()` 自动适配；
+  专项断言脚本 `tools/check_theme_chart.py` 实测两套主题的刻度/网格/tooltip 色全部跟随。
+- 原生标题栏联动：主题变化时经 pywebview js_api（`Api.set_titlebar`）调用 DWM 同步 Windows 标题栏明暗；
+  Win10 不支持上色时静默跳过。
 - 平台差异：Windows 下滚动条自绘 10px；`aside-top` 保留 52px 原生标题栏拖拽区。
 - 高 DPI：图标用 SVG；位图徽标以 `object-fit: contain` 定尺寸，避免 125%/150% 模糊。
 
@@ -112,10 +120,14 @@
 ## 十、性能体验
 
 - 首屏：KPI 先出骨架；`/api/summary` 单请求拿全量聚合。
-- 大数据量：模型表分页（25/50/100/全部，默认 50）+ 本地搜索（180ms 防抖）+ 表头排序；
-  Agent 排行分批渲染（每批 12 条，"继续显示剩余"），迷你图用 `IntersectionObserver` 进入视口才创建。
+- **迷你走势零实例化**：排行榜与模型明细的走势图是**纯 SVG sparkline**（字符串直出、`currentColor` 取色），
+  全站 Chart.js 实例恒定为 2 个（主趋势图 + 环形图）；此前几十个迷你 Chart 实例同时驻留导致的
+  内存攀升与滚动掉帧已消除。
+- 大数据量：模型表分页（25/50/100/全部，默认 50）+ 本地搜索（180ms 防抖）+ 表头排序 +
+  **计费类型筛选**（全部 / 按量计费 / 套餐 / 未计价）；Agent 排行分批渲染（每批 12 条）。
 - 资源：品牌图 `loading="lazy" decoding="async"`；单个 vendor 依赖（Chart.js）本地内置。
-- 响应：切视图后 `requestAnimationFrame` 内重算画布尺寸，避免隐藏态测量导致的空白图。
+- 响应：切视图后 `requestAnimationFrame` 内重算画布尺寸；主题切换（`tm:theme` 事件）时
+  MAIN/DONUT 按新 token 重建，SVG 走势靠 `currentColor` 自动换色。
 
 ## 十一、边界与异常
 
@@ -133,11 +145,12 @@
 
 ## 十三、可维护性
 
-- 组件复用：按钮/输入/卡片/状态条/toast/弹窗只有一处实现（`components.css` + `TMUI`）。
-- token 集中：改一处全局生效；`tokens.css` 是唯一数值来源。
-- 层叠可控：四层结构 + `@layer` 顺序明确；`!important` 仅 3 处（设置页侧栏显示切换），且均有注释说明。
-- 历史样式：11 个旧样式表归档在 `styles/legacy-src/`，可用
-  `python tools/consolidate_legacy_css.py` 重新生成 `legacy.css` 并取消 `styles.css` 中的注释回滚。
+- 组件复用：按钮/输入/卡片/状态条/toast/弹窗/抽屉只有一处实现（`components.css` + `TMUI`）。
+- token 集中：改一处全局生效；`tokens.css` 是唯一数值来源；JS 侧图表色一律经 `cssVar()` 解析，
+  render.js/charts.js 中不允许出现界面配色字面量（品牌色字典除外）。
+- 层叠可控：四层结构 + `@layer` 顺序明确；`!important` 仅 4 处（设置页侧栏显示切换），且均有注释说明。
+- 历史样式：11 个旧样式表与合并产物 legacy.css 已从仓库移除（git 历史可回溯）；
+  `styles.css` 保留 `@layer legacy` 占位与注释掉的 import，便于临时对比时恢复。
 - 规范文档：本文件；组件属性见上文表格与 `components.css` 注释。
 
 ---

@@ -70,7 +70,9 @@ function syncFilterSummary(){
   $("filterSummary").textContent=range + " · " + (F.agent==="all"?"全部来源":agentLabel(F.agent));
   $("clearFilters").hidden=F.rangeKey==="last7" && F.agent==="all";
   document.querySelectorAll("[data-agent-filter]").forEach((button)=>button.setAttribute("aria-pressed",String(button.dataset.agentFilter===F.agent)));
-  try {sessionStorage.setItem("voyra-token-filters",JSON.stringify({rangeKey:F.rangeKey,agent:F.agent,metric:F.metric,grain:F.grain,dim:F.dim}));}catch{ /* UI state only */ }
+  try {sessionStorage.setItem("voyra-token-filters",JSON.stringify({rangeKey:F.rangeKey,agent:F.agent,metric:F.metric,grain:F.grain,dim:F.dim,billing:F.billing}));}catch{ /* UI state only */ }
+  /* 筛选即地址：把当前过滤视图序列化进 hash，刷新/后退/分享都不丢 */
+  if (typeof syncFilterHash === "function") syncFilterHash();
 }
 $("clearFilters").onclick=()=>{F.rangeKey="last7";F.agent="all";F.open.clear();renderAll();};
 void loadSummary();

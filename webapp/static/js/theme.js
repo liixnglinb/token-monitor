@@ -37,6 +37,12 @@
     window.dispatchEvent(new CustomEvent("tm:theme", {
       detail: { mode: mode, resolved: effective(mode) }
     }));
+    // Windows 原生标题栏跟随主题（pywebview js_api；浏览器/开发模式下无此接口）
+    try {
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.set_titlebar) {
+        window.pywebview.api.set_titlebar(effective(mode) === "dark");
+      }
+    } catch (e) { /* 非 pywebview 环境忽略 */ }
     syncControls(mode);
   }
 

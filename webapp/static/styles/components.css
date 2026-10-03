@@ -962,3 +962,71 @@ th.num .th-sort { justify-content: flex-end; }
 }
 .set-back:hover { background: var(--surface-2); color: var(--ink); }
 .set-back svg { width: 14px; height: 14px; }
+
+/* =============================================================================
+   15. SVG 迷你走势（替代 Chart.js 迷你实例）
+   -----------------------------------------------------------------------------
+   fill 用 currentColor，颜色由容器上的 style="color:var(--cN)" 控制 ——
+   主题切换时无需重绘，浏览器自动换色。
+   ============================================================================= */
+.sparkline {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.sparkline rect { fill: currentColor; }
+.ar-chart { height: 40px; }
+.mrow .ch { height: 30px; }
+.spark-empty { height: 100%; }
+
+/* =============================================================================
+   16. 数据源筛选抽屉（窄屏）
+   ============================================================================= */
+.drawer {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-dialog);
+}
+.drawer[hidden] { display: none; }
+.drawer-scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--overlay);
+  backdrop-filter: blur(2px);
+  animation: scrim-in var(--dur-fast) var(--ease-out);
+}
+.drawer-panel {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: min(320px, 86vw);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-right: 1px solid var(--line);
+  box-shadow: var(--shadow-lg);
+  animation: drawer-in var(--dur-base) var(--ease-out);
+}
+@keyframes drawer-in { from { opacity: 0; transform: translateX(-18px); } to { opacity: 1; transform: none; } }
+.drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--line-soft);
+}
+.drawer-head h3 { font-size: var(--fs-md); }
+.drawer-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--sp-3);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .drawer-panel { animation: none; }
+}

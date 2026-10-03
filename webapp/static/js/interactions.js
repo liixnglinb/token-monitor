@@ -41,29 +41,65 @@ function setCat(cat){
   if (window.TMUI) TMUI.syncAria();
 }
 
-/* 路由桥：hash 是唯一"地址"，TMUI.route 写 hash，hashchange 触发渲染 */
+/* 路由桥：hash 是唯一"地址"，TMUI.route 写 hash，hashchange 触发渲染。
+   筛选参数（range/agent/metric/grain/dim/billing）也序列化进 hash，
+   刷新、前进后退、分享链接都不会丢过滤视图。 */
+const FILTER_KEYS = ["range", "agent", "metric", "grain", "dim", "billing"];
 function applyRoute(route, replace){
+  /* hash 里带的筛选参数优先级最高（超过 sessionStorage 恢复值） */
+  if (route.params && Object.keys(route.params).length){
+    const p = route.params;
+    if (["today","yesterday","last7","last30","last90","thismonth","lastmonth","all"].includes(p.range)) F.rangeKey = p.range;
+    if (typeof p.agent === "string" && p.agent.length < 128) F.agent = p.agent || "all";
+    if (["cost","tokens","requests"].includes(p.metric)) F.metric = p.metric;
+    if (["day","month"].includes(p.grain)) F.grain = p.grain;
+    if (["total","agent","model"].includes(p.dim)) F.dim = p.dim;
+    if (["all","metered","plan","unpriced"].includes(p.billing)) F.billing = p.billing;
+    /* 已存在的视图已渲染过旧筛选：让数据按新筛选重算一遍 */
+    if (DATA && !DATA.building && DATA.range) renderAll();
+  }
   switchView(route.view, route.cat);
+  /* 路由切换后把当前筛选补写回 hash：保证 #/overview 始终携带完整过滤视图 */
+  if (route.view !== "settings") syncFilterHash();
   if (!replace && route.view !== "settings") window.scrollTo({ top: 0, behavior: "auto" });
+}
+/* 把当前筛选写回 hash（replaceState：不产生历史垃圾）；settings 无筛选不写 */
+function syncFilterHash(){
+  const view = (window.TMUI && TMUI.currentView) ? TMUI.currentView() : "overview";
+  if (view === "settings") return;
+  const params = new URLSearchParams();
+  params.set("range", F.rangeKey);
+  if (F.agent !== "all") params.set("agent", F.agent);
+  params.set("metric", F.metric);
+  params.set("grain", F.grain);
+  params.set("dim", F.dim);
+  if (F.billing !== "all") params.set("billing", F.billing);
+  const target = "#/" + view + "?" + params.toString();
+  if (location.hash !== target){
+    try { history.replaceState(null, "", target); } catch { /* 沙箱环境忽略 */ }
+  }
 }
 $("nav").addEventListener("click", e=>{
   const a = e.target.closest("a[data-view]"); if (!a) return;
   e.preventDefault();
   go(a.dataset.view);
 });
-/* 统一切视图入口：优先走 hash 路由（可分享、可后退），失败则直接渲染 */
+/* 统一切视图入口：优先走 hash 路由（可分享、可后退），失败则直接切换 */
 function go(view, cat){
   try {
     if (window.TMUI && TMUI.route) { TMUI.route(view, cat); return; }
   } catch (err) { /* 路由不可用时退回直接切换 */ }
   switchView(view, cat);
 }
+/* 数据源筛选：侧栏与窄屏抽屉共用 */
+function applyAgentFilter(name){
+  F.agent = name === "all" || F.agent === name ? "all" : name;
+  renderAll();
+}
 $("sideAgentBox").addEventListener("click", e => {
   const b = e.target.closest("[data-agent-filter]");
   if (!b) return;
-  const name = b.dataset.agentFilter;
-  F.agent = name === "all" || F.agent === name ? "all" : name;
-  renderAll();
+  applyAgentFilter(b.dataset.agentFilter);
 });
 document.querySelector("aside").addEventListener("click", e => {
   const toggle = e.target.closest("[data-side-toggle]");
@@ -90,19 +126,57 @@ $("setNav").addEventListener("click", e=>{
   go("settings", a.dataset.cat);
 });
 $("setBack").onclick = () => go("overview");
-bindDropdown("ddRange", "ddRangeMenu", k => { F.rangeKey = k; renderAll(); });
+bindDropdown("ddRange", "ddRangeMenu", k => { F.rangeKey = k; renderAll(); syncFilterHash(); });
 $("segDim").onclick = e => { const b=e.target.closest("button"); if(!b) return;
   F.dim=b.dataset.d;
   document.querySelectorAll("#segDim button").forEach(x=>x.classList.toggle("on",x===b));
-  renderMain(); };
+  renderMain(); syncFilterHash(); };
 $("segMetric").onclick = e => { const b=e.target.closest("button"); if(!b) return;
   F.metric=b.dataset.m;
   document.querySelectorAll("#segMetric button").forEach(x=>x.classList.toggle("on",x===b));
-  renderMain(); };
+  renderMain(); syncFilterHash(); };
 $("segGrain").onclick = e => { const b=e.target.closest("button"); if(!b) return;
   F.grain=b.dataset.g;
   document.querySelectorAll("#segGrain button").forEach(x=>x.classList.toggle("on",x===b));
-  renderMain(); };
+  renderMain(); syncFilterHash(); };
+/* 计费类型筛选：全部 / 按量计费 / 套餐 / 未计价（只影响模型表） */
+if ($("segBilling")) $("segBilling").onclick = e => {
+  const b = e.target.closest("button[data-b]"); if (!b) return;
+  F.billing = b.dataset.b;
+  document.querySelectorAll("#segBilling button").forEach(x=>{
+    const on = x === b;
+    x.classList.toggle("on", on);
+    x.setAttribute("aria-pressed", String(on));
+  });
+  PAGE.index = 0;
+  renderModelTable();
+  syncFilterHash();
+};
+
+/* ---------- 窄屏数据源筛选抽屉 ---------- */
+let drawerRelease = null;
+function openAgentDrawer(){
+  const drawer = $("agentDrawer"), btn = $("filterBtn");
+  if (!drawer || drawer.hidden === false) return;
+  drawer.hidden = false;
+  if (btn) btn.setAttribute("aria-expanded", "true");
+  if (window.TMUI){
+    drawerRelease = TMUI.trapFocus(drawer.querySelector(".drawer-panel"), { onEscape: closeAgentDrawer });
+  }
+}
+function closeAgentDrawer(){
+  const drawer = $("agentDrawer"), btn = $("filterBtn");
+  if (!drawer || drawer.hidden) return;
+  drawer.hidden = true;
+  if (btn){ btn.setAttribute("aria-expanded", "false"); btn.focus(); }
+  if (drawerRelease){ drawerRelease(); drawerRelease = null; }
+}
+if ($("filterBtn")) $("filterBtn").onclick = openAgentDrawer;
+if ($("agentDrawer")) $("agentDrawer").addEventListener("click", e => {
+  if (e.target.closest("[data-drawer-close]")){ closeAgentDrawer(); return; }
+  const b = e.target.closest("[data-agent-filter]");
+  if (b){ applyAgentFilter(b.dataset.agentFilter); closeAgentDrawer(); }
+});
 $("fExport").onclick = function(){
   if (!DATA || DATA.building) {
     collectionFeedback("error","尚不能导出","请等待第一次成功读取统计结果。");
@@ -130,24 +204,55 @@ $("fExport").onclick = function(){
   setTimeout(() => { btn.classList.remove("is-done"); btn.disabled = false; }, 900);
   if (window.TMUI) TMUI.toast("已导出 " + fmtInt(rows.length) + " 行 CSV", { kind: "success" });
 };
+/* 等待后台扫描真正完成：1s 轮询 /api/settings，直到 busy=false 且未排队。
+   期间 syncSettings 会同步顶部状态与提示条；超时则交还给 15s 全局轮询。 */
+async function waitScanDone(maxMs){
+  const deadline = Date.now() + (maxMs || 180000);
+  while (Date.now() < deadline){
+    await new Promise(r => setTimeout(r, 1000));
+    let meta = null;
+    try { meta = await (await fetch("/api/settings")).json(); }
+    catch { continue; }                        /* 网络抖动：继续等 */
+    syncSettings(meta);
+    if (meta && !meta.busy && !meta.queued) return meta;
+  }
+  return null;
+}
 async function reloadData(btn, idleText, label){
   const target = label || btn;
   const old = target.textContent;
   btn.disabled = true;
   btn.setAttribute("aria-busy", "true");
-  target.textContent = "扫描中…";
+  /* 按钮上显示真实耗时：扫描通常 20~30s，绝不能假装 1 秒完成 */
+  let seconds = 0;
+  target.textContent = "扫描中 0s";
+  const ticker = setInterval(() => { seconds += 1; target.textContent = "扫描中 " + seconds + "s"; }, 1000);
   setScanControls(true);
-  collectionFeedback("loading","正在请求扫描","结果会在后台扫描完成后更新，已有数据保留。");
+  collectionFeedback("loading","正在扫描本机数据","结果会在扫描完成后自动更新，期间可继续查看上次数据。");
   try {
-    const response = await fetch("/api/reload");
-    if (!response.ok) throw new Error("扫描请求失败（HTTP " + response.status + "）");
-    await pollMeta();
-    if (window.TMUI) TMUI.toast("已开始重新扫描本机数据源", { kind: "success" });
+    /* 已有扫描在进行时不再重复排队，直接等它完成（防连点导致重复全量扫描） */
+    let meta = null;
+    try { meta = await (await fetch("/api/settings")).json(); } catch { /* 服务暂时不可达，走正常请求路径报错 */ }
+    if (meta && (meta.busy || meta.queued)){
+      if (window.TMUI) TMUI.toast("已有扫描在进行，正在等待其完成", { kind: "info" });
+    } else {
+      const response = await fetch("/api/reload");
+      if (!response.ok) throw new Error("扫描请求失败（HTTP " + response.status + "）");
+    }
+    const done = await waitScanDone();
+    await loadSummary();
+    if (done && done.built_at) LAST_BUILT = done.built_at;
+    if (window.TMUI){
+      TMUI.toast(done ? "数据源扫描完成，统计已更新（用时 " + seconds + "s）"
+                      : "扫描仍在后台进行，完成后会自动刷新看板",
+                 { kind: done ? "success" : "info" });
+    }
   } catch (e) {
     setScanControls(false);
     collectionFeedback("error","扫描请求未完成",String(e.message) + "；请检查本地服务后重试。");
     if (window.TMUI) TMUI.toast("扫描请求失败：" + e.message, { kind: "error" });
   } finally {
+    clearInterval(ticker);
     target.textContent = idleText || old;
     btn.removeAttribute("aria-busy");
     btn.disabled = false;

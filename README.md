@@ -50,10 +50,19 @@ python main.py            # 起内嵌窗口；服务在 http://127.0.0.1:8420
   窄屏自动切换为底部标签栏。
 - **可访问性**：统一焦点环、弹窗焦点陷阱、`aria-*` 语义、对比度按 WCAG AA 校验（深浅主题各 0 处不达标）、
   快捷键 `1/2/G//R/Esc`、尊重 `prefers-reduced-motion`。
-- **大数据量**：模型表分页 + 本地搜索 + 表头排序；Agent 排行分批渲染、迷你图滚动进入视口才绘制。
+- **性能**：排行榜迷你走势是**纯 SVG sparkline**（0 额外 Chart.js 实例，全站恒定 2 个：
+  主图 + 环形图）；主题切换时图表按新 token 自动重绘；表格分页 + 本地搜索 + 表头排序 + 计费类型筛选
+  （全部 / 按量计费 / 套餐 / 未计价）；Agent 排行分批渲染。
+- **状态即地址**：筛选条件（range/agent/metric/grain/dim/billing）序列化进 hash 路由，
+  刷新、前进后退、分享链接都不丢过滤视图。
+- **窄屏**：侧栏隐藏后由底部标签栏接管导航，顶栏「筛选」按钮打开数据源抽屉（与侧栏共用同一份渲染）；
+  模型表自动降级为逐行卡片，杜绝横向破版。
+- **扫描真状态**：重新扫描期间按钮显示真实耗时并禁用，1s 轮询后端 `busy` 状态直到完成，
+  不再出现"1 秒恢复但数据没变"的假反馈；已有扫描进行时不会重复排队。
+- **原生标题栏联动**：切换主题时通过 pywebview js_api 调用 DWM 同步 Windows 标题栏明暗。
 
-历史样式（11 个旧样式表）归档在 `webapp/static/styles/legacy-src/`，
-可用 `python tools/consolidate_legacy_css.py` 重新生成 `legacy.css` 并在 `styles.css` 中取消注释回滚。
+历史样式（11 个旧样式表与合并产物 legacy.css）已从仓库移除，git 历史中可回溯；
+`styles.css` 里保留了 `@layer legacy` 占位与注释掉的 import 行，便于临时对比时恢复。
 
 前端自检脚本：
 
@@ -62,8 +71,9 @@ python tools/dev_serve.py                  # 开发期只跑 FastAPI（127.0.0.1
 python tools/ui_audit.py                   # 硬编码 / 字号阶梯 / 规范覆盖体检 → output/ui-audit.md
 python tools/contrast_check.py             # 设计 token 对比度（WCAG AA）→ output/contrast.md
 python tools/ui_verify.py                  # 浏览器体检：控制台错误 / DOM / 焦点 / 对比度 → output/ui-verify-*/
-python tools/ui_smoke.py                   # 交互回归：路由 / 主题 / 弹窗 / 键盘 / 窄屏（26 项）
-python tools/final_check.py                # 收尾综合验证：主题生效 / 组件与三态 / 无障碍 / 焦点（29 项）
+python tools/ui_smoke.py                   # 交互回归：路由/主题/弹窗/键盘/窄屏/抽屉/计费筛选（38 项）
+python tools/final_check.py                # 收尾综合验证：主题生效/组件与三态/无障碍/焦点（36 项）
+python tools/check_theme_chart.py          # 主题切换后 Chart.js 实例按新 token 重绘的专项断言
 python tools/style_snapshot.py --out x.json [--diff before.json]   # 计算样式快照对比
 ```
 

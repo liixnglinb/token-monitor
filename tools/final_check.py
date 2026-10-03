@@ -122,10 +122,37 @@ def main() -> None:
         page.wait_for_timeout(400)
         check("路由可切到模型页", page.is_visible("#view-models"))
         check("模型表有可排序表头", page.locator(".th-sort").count() >= 5)
-        page.evaluate("window.TMUI.route('overview')")
+
+        # 计费类型筛选存在且可切换（模型页内）
+        check("计费类型筛选存在", page.locator("#segBilling button").count() == 4)
+        page.locator('#segBilling button[data-b="unpriced"]').click()
         page.wait_for_timeout(300)
+        check("计费筛选写入 hash", "billing=unpriced" in page.evaluate("location.hash"),
+              page.evaluate("location.hash"))
+        page.locator('#segBilling button[data-b="all"]').click()
+        page.wait_for_timeout(200)
+
+        page.evaluate("window.TMUI.route('overview')")
+        page.wait_for_timeout(500)
+
+        # 性能改造：迷你走势必须是 SVG（0 额外 Chart 实例）
+        check("排行榜使用 SVG sparkline", page.locator(".sparkline").count() > 0,
+              f"sparklines={page.locator('.sparkline').count()}")
+        instances = page.evaluate("Object.keys(Chart.instances).length")
+        check("Chart 实例不超过 4 个（主图+环形+余量）", instances <= 4, f"instances={instances}")
+
+        # 筛选状态进 hash
+        h = page.evaluate("location.hash")
+        check("hash 携带筛选参数", "range=" in h and "metric=" in h, h)
+
+        # 抽屉（窄屏数据源筛选）容器与桌面隐藏
+        check("抽屉容器存在", page.locator("#agentDrawer").count() == 1)
+        check("桌面端隐藏筛选按钮", not page.is_visible("#filterBtn"))
 
         # 键盘焦点可见（抽查 6 个控件）
+        # Chromium 的 :focus-visible 依赖"最近输入是键盘"的启发式：
+        # 先敲一次 Tab 建立键盘模态，程序化 focus 才会命中焦点环样式
+        page.keyboard.press("Tab")
         rings = 0
         for selector in ["#themeBtn", "#fExport", "#settingsBtn", "#ddRange .dd-btn", "#nav a[data-view='models']", "#clearFilters"]:
             element = page.locator(selector).first

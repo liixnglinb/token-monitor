@@ -21,6 +21,15 @@ function renderAll(){
   }
 }
 
+/* 主题切换 → Chart.js 图表重绘：MAIN/DONUT 的颜色在构造时从 CSS 变量解析成
+   真实色值，切主题后必须按新 token 重建；SVG 走势（currentColor）与表格占比条
+   （var()）会自动适配，无需处理。 */
+window.addEventListener("tm:theme", () => {
+  if (!DATA || DATA.building || !DATA.range) return;
+  renderMain();
+  renderModelDist();
+});
+
 /* 扫描开销：命中/未命中/判定跳过，让"这次为什么慢"有处可看 */
 function renderScanInfo(){
   const el = $("scanInfo"); if (!el) return;
@@ -54,42 +63,48 @@ function renderRangeMenu(){
 }
 
 function renderSideAgents(){
-  const wrap = $("sideAgents");
-  if (!wrap || !DATA || !Array.isArray(DATA.agents)) return;
+  if (!DATA || !Array.isArray(DATA.agents)) return;
   const allBtn = document.querySelector('[data-agent-filter="all"]');
   if (allBtn) allBtn.classList.toggle("active", F.agent === "all");
-  $("sideAgentTotal").textContent = String(DATA.agents.length);
+  /* 侧栏与窄屏抽屉共用同一份列表：一处渲染、两处注入 */
+  const sideWrap = $("sideAgents"), drawerWrap = $("drawerAgents");
+  const totalEls = [$("sideAgentTotal"), $("drawerAgentTotal")];
+  totalEls.forEach(el => { if (el) el.textContent = String(DATA.agents.length); });
   if (!DATA.agents.length){
-    wrap.innerHTML = '<div class="side-empty">未发现用量数据 · 点顶部「重新扫描」</div>';
+    const empty = '<div class="side-empty">未发现用量数据 · 点顶部「重新扫描」</div>';
+    if (sideWrap) sideWrap.innerHTML = empty;
+    if (drawerWrap) drawerWrap.innerHTML = empty;
   } else {
-    wrap.innerHTML = DATA.agents.map(a => {
+    const html = DATA.agents.map(a => {
       const name = String(a.name);
       const active = F.agent === name;
-      return '<button class="side-project' + (active ? ' active' : '') + '" type="button" data-agent-filter="' + esc(name) + '" title="' + esc(agentLabel(name)) + '">'
+      return '<button class="side-project' + (active ? ' active' : '') + '" type="button" data-agent-filter="' + esc(name) + '" aria-pressed="' + active + '" title="' + esc(agentLabel(name)) + '">'
         + '<span class="side-project-icon">' + agentIcon(name) + '</span>'
         + '<span class="side-project-name">' + esc(agentLabel(name)) + '</span>'
         + '<em>' + esc(fmtTok(a.tokens)) + '</em></button>';
     }).join("");
+    if (sideWrap) sideWrap.innerHTML = html;
+    if (drawerWrap) drawerWrap.innerHTML = html;
   }
   /* 未计入分组：本机检出、但拿不到可用用量（或体量超预算）的来源 —— 让覆盖情况可见 */
-  const unc = $("sideUncounted");
-  if (unc){
-    const counted = new Set(DATA.agents.map(a => String(a.name)));
-    const norm = s => String(s).toLowerCase().replace(/[\s\-_]+/g, "");
-    const labels = DATA.agents.map(a => norm(agentLabel(a.name)));
-    const rows = (DATA.coverage || []).filter(c => {
-      const id = String(c.id), nm = norm(c.name || id);
-      if (counted.has(id)) return false;
-      /* 同一应用的旧目录别重复出现（如已计入 WorkBuddy AI，就别再列 WorkBuddy 旧库） */
-      return !labels.some(l => l === nm || l.startsWith(nm) || nm.startsWith(l));
-    });
-    unc.innerHTML = rows.length
-      ? '<div class="side-unc-head">未计入 · ' + rows.length + '</div>'
-        + rows.map(c => '<div class="side-unc" title="' + esc(c.name + '：' + (c.note || '')) + '">'
-            + '<span class="side-unc-ico">' + agentIcon(String(c.id)) + '</span>'
-            + '<span>' + esc(c.name) + '</span></div>').join('')
-      : "";
-  }
+  const unc = $("sideUncounted"), drawerUnc = $("drawerUncounted");
+  const counted = new Set(DATA.agents.map(a => String(a.name)));
+  const norm = s => String(s).toLowerCase().replace(/[\s\-_]+/g, "");
+  const labels = DATA.agents.map(a => norm(agentLabel(a.name)));
+  const rows = (DATA.coverage || []).filter(c => {
+    const id = String(c.id), nm = norm(c.name || id);
+    if (counted.has(id)) return false;
+    /* 同一应用的旧目录别重复出现（如已计入 WorkBuddy AI，就别再列 WorkBuddy 旧库） */
+    return !labels.some(l => l === nm || l.startsWith(nm) || nm.startsWith(l));
+  });
+  const uncHtml = rows.length
+    ? '<div class="side-unc-head">未计入 · ' + rows.length + '</div>'
+      + rows.map(c => '<div class="side-unc" title="' + esc(c.name + '：' + (c.note || '')) + '">'
+          + '<span class="side-unc-ico">' + agentIcon(String(c.id)) + '</span>'
+          + '<span>' + esc(c.name) + '</span></div>').join('')
+    : "";
+  if (unc) unc.innerHTML = uncHtml;
+  if (drawerUnc) drawerUnc.innerHTML = uncHtml;
 }
 function bindDropdown(ddId, menuId, onPick){
   const dd = $(ddId), menu = $(menuId);
@@ -281,7 +296,7 @@ function renderDailyDetail(rows, list, metric){
 function renderMain(){
   const rows = rowsFor(false);
   const range = rangeDates();
-  refreshChartTokens();
+  const theme = refreshChartTokens();
   refreshPalette();
   const fmt = fmtTick[F.metric];
   const suffix = F.grain === "month" ? "（按月）" : "";
@@ -378,7 +393,7 @@ function renderMain(){
         backgroundColor: context => lineGradient(context, color),
         fill: true, tension: .34, borderWidth: 2.2,
         pointRadius: labels.length <= 12 ? 2.6 : 0,
-        pointHoverRadius: 5, pointBackgroundColor: "#0A0C0F",
+        pointHoverRadius: 5, pointBackgroundColor: theme.surface,
         pointBorderColor: color, pointBorderWidth: 2,
       };
       return {
@@ -392,77 +407,35 @@ function renderMain(){
   });
 }
 
-/* ---------- Agent 用量榜（可折叠 + 会话明细） ---------- */
-function sessionLines(date, agent, model, metric){
-  /* 指定日期与维度下的对话分布（TOP 5 + 其余合计） */
-  const byS = new Map();
-  for (const r of DATA.matrix){
-    if (r.date !== date || r.agent !== agent) continue;
-    if (model && r.model !== model) continue;
-    const o = byS.get(r.session) || {t:0, c:0, q:0};
-    o.t += r.tokens; o.c += r.cost; o.q += r.requests;
-    byS.set(r.session, o);
-  }
-  const list = [...byS.entries()].sort((a,b)=>b[1].t-a[1].t);
-  if (!list.length) return [];
-  const val = o => metric==="cost" ? fmtCNY(o.c*DATA.cny_rate)
-    : metric==="tokens" ? fmtTok(o.t) : fmtInt(o.q)+" 次";
-  const out = list.slice(0,5).map(([s,o]) =>
-    "· " + (s==="unknown" ? "未知对话" : s) + "   " + val(o));
-  if (list.length > 5) out.push("… 另有 " + (list.length-5) + " 个对话");
-  return out;
-}
+/* ---------- Agent 用量榜（可折叠 + 会话明细已并入 SVG title） ---------- */
 
-function miniChart(canvas, pairs, color, tip){
-  /* 迷你柱：每日 Token 走势；hover 显示对话分布 */
-  /* 渲染前先销毁同画布上的旧实例（与 MAIN/DONUT 一致），防重复 new 造成泄漏 */
-  const ex = Chart.getChart(canvas);
-  if (ex) ex.destroy();
-  const hostWidth = (canvas.parentElement && canvas.parentElement.clientWidth) || 320;
-  return new Chart(canvas, { type: "bar",
-    data: { labels: pairs.map(d=>d[0]),
-      datasets: [{ data: pairs.map(d=>d[1]), backgroundColor: color,
-        borderRadius: 2, maxBarThickness: barW(pairs.length, hostWidth),
-        /* 只有一两天有数据时，默认类目宽度会让单根柱占满一格而其余空着；
-           收窄类目占比让柱宽稳定在 12–22px，看起来才是"柱状趋势" */
-        barPercentage: .8, categoryPercentage: .55 }] },
-    options: { responsive:true, maintainAspectRatio:false,
-      interaction: { mode: "index", intersect: false },
-      plugins: { legend:{display:false},
-        tooltip: { ...TT, displayColors:false,
-          filter: it => it.parsed.y > 0,          // 空日期不弹泡
-          callbacks: { title: it => it && it.length ? md(it[0].label) : "",
-            label: c => {
-              /* 会话明细并入 body 多行 */
-              const base = " " + fmtTok(c.parsed.y) + " tok";
-              const lines = c.label ? tip(c.label) : [];
-              return lines.length ? [base, ...lines] : base;
-            } } },
-      scales: {
-        /* ⚠️ 不用顶层 display:false —— Chart.js 深合并会把它覆盖回 true，
-           分别隐藏 ticks/grid/border 才可靠 */
-        x: { ticks:{display:false}, grid:{display:false}, border:{display:false} },
-        y: { ticks:{display:false}, grid:{display:false}, border:{display:false} }
-      }
-    }
-  } });
+/* ---------- 迷你走势：纯 SVG，不用 Chart.js ----------
+   排行榜里每个数据源、展开后每个模型都有一条走势。
+   之前用 Chart.js 实例，几十条同时驻留会吃掉大量内存并掉帧；
+   SVG 由字符串直接生成：0 实例、0 监听器，主题切换靠 currentColor 自动换色。 */
+function sparklineSVG(pairs, cssColor){
+  const values = pairs.map(p => p[1]);
+  const max = Math.max(...values, 1);
+  const H = 26, PAD = 1;
+  const bw = 100 / Math.max(pairs.length, 1);   /* viewBox 固定 100×26，宽度交给 CSS 拉伸 */
+  const rects = pairs.map(([date, value], index) => {
+    if (!(value > 0)) return "";
+    const h = Math.max(value / max * (H - PAD * 2), 1.6);   /* 有数据的柱给最小可见高度 */
+    const x = (index * bw + bw * 0.18).toFixed(2);
+    const w = Math.max(bw * 0.64, 0.8).toFixed(2);
+    const y = (H - PAD - h).toFixed(2);
+    return '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h.toFixed(2)
+      + '" rx="0.8"><title>' + esc(md(date)) + ' · ' + esc(fmtTok(value)) + ' tok</title></rect>';
+  }).join("");
+  const nonzero = values.filter(v => v > 0).length;
+  return '<svg class="sparkline" viewBox="0 0 100 ' + H + '" preserveAspectRatio="none"'
+    + ' role="img" aria-label="每日 Token 走势，' + nonzero + ' 天有数据"'
+    + (cssColor ? ' style="color:' + cssColor + '"' : "") + '>' + rects + '</svg>';
 }
-
-function addMini(id, pairs, color, tip){
-  const c = miniChart($(id), pairs, color, tip);
-  /* Chart.js 深合并对 display:false 的覆盖有怪癖，构造后强制关闭最可靠 */
-  c.options.scales.x.display = false;
-  c.options.scales.y.display = false;
-  c.update();
-  return c;
+/* 迷你走势对应的"每日 Token"序列：与旧迷你图同源（fillDays 补零日期轴） */
+function sparkPairs(rows, start){
+  return fillDays(groupSeries(rows, "tokens", "day"), start);
 }
-/* 迷你柱宽度：随点位数量自适应 —— 固定 8px 在宽卡片上会细成一根线，
-   按可用宽度反推，单根最宽 22px，太多点时才退化成细柱 */
-const barW = (n, width) => {
-  const usable = (width || 320) - 24;
-  const per = usable / Math.max(n, 1);
-  return Math.max(3, Math.min(22, Math.floor(per * 0.62)));
-};
 /* 金额为 0 但有用量时，标注"价格未知"，避免误以为算错 */
 /* 成本列文案：区分「有计价 / 套餐不计费 / 价表缺价」三态
    model       —— 模型名，用于查套餐集合（Agent 行传 null）
@@ -511,7 +484,7 @@ function renderModelDist(){
         datasets: [{
           data: items.map(i=>i.val),
           backgroundColor: items.map((_, i)=>PAL[i % PAL.length]),
-          borderColor: "#111419", borderWidth: 3, hoverOffset: 7,
+          borderColor: cssVar("--surface", "#161B22"), borderWidth: 3, hoverOffset: 7,
         }],
       },
       options: {
@@ -569,11 +542,9 @@ function renderAgentList(){
   const list = [...ag.entries()].sort((a,b)=>b[1].tokens-a[1].tokens);   // 消耗多的在上
   const wrap = $("agentList");
   if (!list.length){
-    MINIS.forEach(c=>c.destroy()); MINIS.length = 0;   // 空数据时也要清理，避免旧实例悬挂
     wrap.innerHTML = '<div class="card"><div class="empty">当前筛选下无数据</div></div>'; return;
   }
 
-  MINIS.forEach(c=>c.destroy()); MINIS.length = 0;
   wrap.innerHTML =
     '<section class="agent-panel">' +
       '<div class="agent-panel-head">' +
@@ -583,15 +554,16 @@ function renderAgentList(){
       '<div id="agCards"></div>' +
     '</section>';
   const box = $("agCards");
-  const startIndex = wrap.dataset.renderStart || 0;
-  const CHUNK = 12;   /* 每批渲染的数据源数量：避免几十条 mini chart 一次性初始化 */
+  /* 分批挂 DOM：几十条目一次性 innerHTML 会造成长任务；每批 12 条保持滚动流畅 */
+  const CHUNK = 12;
   let rendered = 0;
 
   function renderChunk(){
     const slice = list.slice(rendered, rendered + CHUNK);
     slice.forEach(([name, o], offset)=>{
       const i = rendered + offset;
-      const color = PAL[i % PAL.length];
+      /* 用 CSS 变量取色：主题切换时 sparkline 与图标随 currentColor 自动换色 */
+      const cssColor = "var(--c" + (i % 9 + 1) + ")";
       const open = F.open.has(name);
       const sec = document.createElement("div");
       sec.className = "agent-entry";
@@ -600,7 +572,7 @@ function renderAgentList(){
           '<div class="ar-head" role="button" tabindex="0" aria-expanded="' + (open ? "true" : "false") + '">' +
             '<span class="ar-fold" aria-hidden="true">▶</span>' +
             '<span class="ar-rank" aria-hidden="true">' + String(i + 1).padStart(2, "0") + '</span>' +
-            '<span class="ar-icon" style="color:' + color + '">' + agentIcon(name) + '</span>' +
+            '<span class="ar-icon" style="color:' + cssColor + '">' + agentIcon(name) + '</span>' +
             '<span class="nm">' + esc(agentLabel(name)) + '</span>' +
             '<span class="ar-metrics">' +
               '<span><small>Tokens</small><b>' + fmtInt(o.tokens) + '</b></span>' +
@@ -608,7 +580,7 @@ function renderAgentList(){
               '<span><small>金额</small><b>' + costText(o.cost, o.tokens, null, o.planTokens > 0 && o.planTokens >= o.tokens * 0.995) + '</b></span>' +
             '</span>' +
           '</div>' +
-          '<div class="ar-chart"><canvas id="ac-' + i + '" role="img" aria-label="' + esc(agentLabel(name)) + ' 每日 Token 走势"></canvas></div>' +
+          '<div class="ar-chart">' + sparklineSVG(sparkPairs(rows.filter(r=>r.agent===name), start), cssColor) + '</div>' +
           '<div class="ar-models" id="am-' + i + '"></div>' +
         '</div>';
       box.appendChild(sec);
@@ -626,18 +598,8 @@ function renderAgentList(){
         }
       };
 
-      const arows = rows.filter(r=>r.agent===name);
-      const sA = fillDays(groupSeries(arows, "tokens", "day"), start);
-      /* 迷你图只在滚动进入视口时创建：几十个 canvas 同时初始化是首屏卡顿主因 */
-      if (window.TMUI && TMUI.lazyOnVisible){
-        TMUI.lazyOnVisible(arEl, () => {
-          MINIS.push(addMini("ac-"+i, sA, color, d => sessionLines(d, name, null, "tokens")));
-        });
-      } else {
-        MINIS.push(addMini("ac-"+i, sA, color, d => sessionLines(d, name, null, "tokens")));
-      }
-
       if (open){
+        const arows = rows.filter(r=>r.agent===name);
         const mm = new Map();
         for (const r of arows){
           const o2 = mm.get(r.model) || {tokens:0, cost:0, requests:0};
@@ -647,23 +609,14 @@ function renderAgentList(){
         const mlist = [...mm.entries()].sort((a,b)=>b[1].tokens-a[1].tokens);
         const boxM = arEl.querySelector(".ar-models");
         if (!mlist.length) boxM.innerHTML = '<div class="empty">该数据源在当前筛选下没有模型明细</div>';
-        mlist.forEach(([mname, o2], j)=>{
+        mlist.forEach(([mname, o2])=>{
           const row = document.createElement("div");
           row.className = "mrow";
           row.innerHTML =
             '<span class="nm" title="' + esc(mname) + '">' + esc(mname) + '</span>' +
             '<span class="num">Tokens <b>' + fmtInt(o2.tokens) + '</b> · ' + fmtInt(o2.requests) + ' 次 · ' + costText(o2.cost, o2.tokens, mname) + '</span>' +
-            '<div class="ch"><canvas id="mc-' + i + '-' + j + '" role="img" aria-label="' + esc(mname) + ' 每日 Token 走势"></canvas></div>';
+            '<div class="ch">' + sparklineSVG(sparkPairs(arows.filter(r=>r.model===mname), start), cssColor) + '</div>';
           boxM.appendChild(row);
-          const mrows = arows.filter(r=>r.model===mname);
-          const sM = fillDays(groupSeries(mrows, "tokens", "day"), start);
-          if (window.TMUI && TMUI.lazyOnVisible){
-            TMUI.lazyOnVisible(row, () => {
-              MINIS.push(addMini("mc-"+i+"-"+j, sM, color, d => sessionLines(d, name, mname, "tokens")));
-            });
-          } else {
-            MINIS.push(addMini("mc-"+i+"-"+j, sM, color, d => sessionLines(d, name, mname, "tokens")));
-          }
         });
       }
     });
@@ -701,7 +654,7 @@ function renderModelTable(){
     agg.set(r.model, o);
   }
   let list = [...agg.entries()];
-  /* 顶部汇总始终反映"当前筛选的全部模型"，与分页/搜索无关 */
+  /* 顶部汇总始终反映"当前筛选的全部模型"，与分页/搜索/计费筛选无关 */
   const totalTokens = list.reduce((s,x)=>s+x[1].tokens,0);
   const totalCost = list.reduce((s,x)=>s+x[1].cost,0);
   $("msTokens").textContent = fmtInt(totalTokens);
@@ -712,9 +665,18 @@ function renderModelTable(){
   costEl.title = totalCost > 0 ? "按当前价表估算，仅供参考"
     : "当前模型属于套餐/订阅制（只记用量不计金额），或单价不在价格库中";
 
-  /* 本地搜索：只影响表格行，不改变 KPI 与图表口径 */
+  /* 本地搜索与计费筛选：只影响表格行，不改变 KPI 与图表口径 */
   const query = (PAGE.query || "").trim().toLowerCase();
-  const filtered = query ? list.filter(([name]) => String(name).toLowerCase().includes(query)) : list;
+  let filtered = query ? list.filter(([name]) => String(name).toLowerCase().includes(query)) : list;
+  if (F.billing && F.billing !== "all") {
+    const planSet = window.PLAN_SET || new Set();
+    filtered = filtered.filter(([name, o]) => {
+      const plan = planSet.has(String(name).toLowerCase());
+      if (F.billing === "plan") return plan;
+      if (F.billing === "unpriced") return !plan && o.tokens > 0 && o.cost <= 0;
+      return !plan && o.cost > 0;                      /* metered：按量计费 */
+    });
+  }
   filtered.sort((a, b) => {
     const av = sortValue(a, SORT.key), bv = sortValue(b, SORT.key);
     if (typeof av === "string" || typeof bv === "string") return String(av).localeCompare(String(bv), "zh-CN") * SORT.dir;
@@ -733,26 +695,32 @@ function renderModelTable(){
   const body = $("tbModel");
   if (!list.length){
     body.innerHTML = '<tr><td colspan="6" class="empty">'
-      + (query ? '没有名称包含「' + esc(query) + '」的模型' : '当前筛选下没有模型数据')
+      + (query
+          ? '没有名称包含「' + esc(query) + '」的模型'
+          : F.billing && F.billing !== "all"
+            ? '当前计费类型下没有模型（试试切回「全部」）'
+            : '当前筛选下没有模型数据')
       + '</td></tr>';
   } else {
+    /* data-label 供窄屏"卡片化"降级使用（CSS ::before 显示字段名） */
     body.innerHTML = view.map(([name,o],i)=>{
       const avg = o.tokens ? o.cost*DATA.cny_rate/o.tokens*1e6 : 0;
       const rank = start + i;
-      return `<tr><td class="mono" title="${esc(name)}"><span class="m-ico">${modelIcon(name)}</span>${esc(name)}</td>
-      <td class="num">${fmtInt(o.tokens)}</td><td class="num">${fmtInt(o.requests)}</td>
+      return `<tr><td class="mono" data-label="模型" title="${esc(name)}"><span class="m-ico">${modelIcon(name)}</span>${esc(name)}</td>
+      <td class="num" data-label="Tokens">${fmtInt(o.tokens)}</td><td class="num" data-label="请求次数">${fmtInt(o.requests)}</td>
       ${barCell(o.tokens,max,rank<3?"var(--m-token)":"var(--line-strong)")}
-      <td class="num">${costText(o.cost, o.tokens, name)}</td>
-      <td class="num">${avg ? "¥"+avg.toFixed(2) : '<span class="muted">价格未知</span>'}</td>
+      <td class="num" data-label="金额（估算）">${costText(o.cost, o.tokens, name)}</td>
+      <td class="num" data-label="均价（¥/百万 tok）">${avg ? "¥"+avg.toFixed(2) : '<span class="muted">价格未知</span>'}</td>
       </tr>`;
     }).join("");
   }
 
   const countEl = $("modelTableCount");
   if (countEl){
+    const scope = (F.billing && F.billing !== "all") ? " · 计费筛选后" : "";
     countEl.textContent = query
       ? "匹配 " + fmtInt(list.length) + " / " + fmtInt(agg.size) + " 个模型"
-      : fmtInt(agg.size) + " 个模型" + (PAGE.size > 0 && list.length > size ? " · 第 " + (PAGE.index + 1) + "/" + pages + " 页" : "");
+      : fmtInt(agg.size) + " 个模型" + scope + (PAGE.size > 0 && list.length > size ? " · 第 " + (PAGE.index + 1) + "/" + pages + " 页" : "");
   }
   renderPager(pages, list.length);
   renderTableHead();

@@ -159,6 +159,31 @@ class Api:
     def open_external(self, url: str) -> None:
         open_external(url)
 
+    def set_titlebar(self, dark: bool = True) -> None:
+        """页面切换主题时同步原生标题栏明暗（Win11 DWM；Win10 静默跳过）。
+
+        JS 端 theme.js 会在每次主题变化时调用：
+          window.pywebview.api.set_titlebar(true/false)
+        """
+        try:
+            import ctypes
+            user32 = ctypes.windll.user32
+            hwnd = user32.FindWindowW(None, WINDOW_TITLE)
+            if not hwnd:
+                return
+            dwm = ctypes.windll.dwmapi
+            def _set(attr: int, val: int) -> None:
+                v = ctypes.c_uint(val)
+                dwm.DwmSetWindowAttribute(ctypes.c_void_p(hwnd), attr,
+                                          ctypes.byref(v), ctypes.sizeof(v))
+            # 深色沿用启动时的侧栏融合色；浅色对应 tokens.css 的 --side: #FAFAFB
+            _set(20, 1 if dark else 0)                       # DWMWA_USE_IMMERSIVE_DARK_MODE
+            _set(35, _DWM_SIDEBAR if dark else _DWM_SIDEBAR_LIGHT)
+            _set(36, _DWM_TEXT if dark else _DWM_TEXT_LIGHT)
+            _set(34, _DWM_COLOR_NONE)
+        except Exception:
+            LOG.warning("set_titlebar 失败（忽略）:\n%s", traceback.format_exc())
+
 
 # ── 顶边融合：标题栏染成侧栏同色，实现 ZCode 式「无边框一体」观感 ──
 # 原理：DWM 允许给原生标题栏上色（Win11 22000+）。标题栏 = 侧栏色后，
@@ -168,6 +193,8 @@ class Api:
 _DWM_SIDEBAR = 0x00121111      # COLORREF(0x00BBGGRR) ← 侧栏 #111112
 _DWM_TEXT = 0x00777778         # 标题文字 ← #787877（弱化到近隐形）
 _DWM_COLOR_NONE = 0xFFFFFFFE   # 去掉 1px 窗口边框线
+_DWM_SIDEBAR_LIGHT = 0x00FAFAFB  # 浅色主题侧栏 #FAFAFB
+_DWM_TEXT_LIGHT = 0x006E6E76     # 浅色主题标题文字 #6E6E76
 
 
 def fuse_titlebar() -> None:

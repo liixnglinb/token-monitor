@@ -251,7 +251,23 @@
   function parseHash(hash) {
     const raw = String(hash || "").replace(/^#/, "");
     if (!raw || raw === "/") return null;
-    return ROUTES[raw] || null;
+    const qIndex = raw.indexOf("?");
+    const path = qIndex === -1 ? raw : raw.slice(0, qIndex);
+    const base = ROUTES[path] || null;
+    if (!base) return null;
+    /* 筛选参数随视图一起走：#/overview?range=last7&agent=codex */
+    const params = {};
+    if (qIndex !== -1) {
+      new URLSearchParams(raw.slice(qIndex + 1)).forEach(function (value, key) {
+        if (["range", "agent", "metric", "grain", "dim", "billing"].includes(key)) params[key] = value;
+      });
+    }
+    return Object.assign({}, base, { params: params });
+  }
+
+  function currentView() {
+    const route = parseHash(location.hash);
+    return route ? route.view : "overview";
   }
 
   function currentPath() {
@@ -448,6 +464,7 @@
     syncAria: syncAria,
     route: route,
     initRouter: initRouter,
+    currentView: currentView,
     lazyOnVisible: lazyOnVisible,
     resizeChartsIn: resizeChartsIn,
     $: $,

@@ -19,11 +19,10 @@
 @import url("./layout.css") layer(layout);
 
 /* -----------------------------------------------------------------------------
-   关于 legacy.css
+   关于 legacy 层
    -----------------------------------------------------------------------------
-   历史样式（base/sidebar/shell/overview/models/settings/responsive/canvas/
-   modern/theme/ui-polish 共 11 个文件、12 万字节、1103 处硬编码颜色）已由
-   tokens + base + components + layout 四层完整接管，legacy.css 只作归档保留，
-   不再加载。如需回滚：把下面这行取消注释即可（legacy 层优先级最低）。
+   11 个历史样式表与合并产物 legacy.css 已从仓库移除（git 历史中可回溯）。
+   `@layer legacy` 声明保留占位，万一将来需要临时叠加旧样式做对比，
+   把文件放回 styles/ 并取消下一行注释即可：
    -------------------------------------------------------------------------- */
 /* @import url("./legacy.css") layer(legacy); */
