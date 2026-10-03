@@ -17,6 +17,8 @@
 <link rel="stylesheet" href="/static/styles/modern.css?v=20260924-1846">
 <link rel="stylesheet" href="/static/styles/theme.css?v=20260927-2100">
 <link rel="stylesheet" href="/static/styles/ui-polish.css?v=20261002-1000">
+<link rel="stylesheet" href="/static/styles/voyra-ui.css?v=3cfa5ff6">
+<script defer src="/static/js/voyra-ui.js?v=3cfa5ff6"></script>
 
 
 </head>
@@ -129,9 +131,16 @@
         <div class="dd-menu" id="ddRangeMenu" hidden></div>
       </div>
       <div class="spacer"></div>
+      <span id="filterSummary" class="filter-summary" aria-live="polite"></span>
+      <button type="button" class="btn" id="clearFilters" hidden>清除筛选</button>
     </div>
 
     <div id="noteBox"></div>
+    <section id="collectionState" class="collection-state" hidden aria-label="数据状态">
+      <div><strong id="collectionStateTitle"></strong><p id="collectionStateText"></p></div>
+      <button type="button" class="btn" id="collectionRetry">重新读取结果</button>
+      <span class="sr-only" id="collectionAnnouncement" role="status" aria-live="polite"></span>
+    </section>
 
     <!-- ── 视图 1：用量总览 ── -->
     <section id="view-overview">
@@ -349,12 +358,12 @@
     </div>
   </div>
 <script src="/static/vendor/chart.umd.min.js"></script>
-<script src="/static/js/core.js?v=20261001-1300"></script>
-<script src="/static/js/data.js?v=20260924-1846"></script>
-<script src="/static/js/charts.js?v=20260924-1846"></script>
-<script src="/static/js/render.js?v=20261001-1300"></script>
-<script src="/static/js/interactions.js?v=20261001-1300"></script>
+<script src="/static/js/core.js?v=3cfa5ff6"></script>
+<script src="/static/js/data.js?v=3cfa5ff6"></script>
+<script src="/static/js/charts.js?v=3cfa5ff6"></script>
+<script src="/static/js/render.js?v=3cfa5ff6"></script>
+<script src="/static/js/interactions.js?v=3cfa5ff6"></script>
 <script src="/static/js/updater.js?v=20261002-1000"></script>
-<script src="/static/js/app.js?v=20260924-1846"></script>
+<script src="/static/js/app.js?v=3cfa5ff6"></script>
 </body>
 </html>

@@ -16,6 +16,7 @@ function switchView(view){
   $("view-overview").hidden = view !== "overview";
   $("view-models").hidden   = view !== "models";
   $("view-settings").hidden = !isSet;
+  try { sessionStorage.setItem("voyra-token-view", view); } catch { /* UI state */ }
   if (isSet){
     const cur = document.querySelector("#setNav .set-item.active");
     setCat((cur && cur.dataset.cat) || "general");
@@ -76,6 +77,7 @@ $("segGrain").onclick = e => { const b=e.target.closest("button"); if(!b) return
   document.querySelectorAll("#segGrain button").forEach(x=>x.classList.toggle("on",x===b));
   renderMain(); };
 $("fExport").onclick = function(){
+  if (!DATA || DATA.building) { collectionFeedback("error","尚不能导出","请等待第一次成功读取统计结果。"); return; }
   const btn = this;
   const rows = rowsFor(true);
   const head = "date,agent,model,session,tokens,input,output,cache_read,cache_write,requests,cost_usd,cost_cny";
@@ -93,8 +95,17 @@ async function reloadData(btn, idleText, label){
   const target = label || btn;
   const old = target.textContent;
   btn.disabled = true; target.textContent = "扫描中…";
-  try { await fetch("/api/reload"); } finally {
-    setTimeout(() => { btn.disabled = false; target.textContent = idleText || old; }, 1200);
+  setScanControls(true);
+  collectionFeedback("loading","正在请求扫描","结果会在后台扫描完成后更新，已有数据保留。");
+  try {
+    const response = await fetch("/api/reload");
+    if (!response.ok) throw new Error("扫描请求失败（HTTP " + response.status + "）");
+    await pollMeta();
+  } catch (e) {
+    setScanControls(false);
+    collectionFeedback("error","扫描请求未完成",String(e.message) + "；请检查本地服务后重试。");
+  } finally {
+    target.textContent = idleText || old;
   }
 }
 $("reload").onclick = function(){ reloadData(this, "重新扫描"); };
@@ -149,21 +160,30 @@ function syncSettings(s){
     dot.classList.toggle("busy", !!(s.busy || s.queued));
     dot.classList.toggle("error", !!s.error);
   }
+  updateCollectionFeedback(s);
 }
+let metaRequest = null;
 async function pollMeta(){
+  if (metaRequest) return metaRequest;
+  metaRequest = (async () => {
   try {
-    const r = await (await fetch("/api/settings")).json();
+    const response = await fetch("/api/settings");
+    if (!response.ok) throw new Error("本地服务返回 HTTP " + response.status);
+    const r = await response.json();
     syncSettings(r);
-    if (r.built_at && r.built_at !== LAST_BUILT){
-      LAST_BUILT = r.built_at;
-      DATA = await (await fetch("/api/summary")).json();
-      renderAll();
-      const b = $("reload");
-      if (b){ b.disabled = false; b.textContent = "重新扫描数据源"; }
+    if (r.built_at && r.built_at !== LAST_BUILT && !r.busy){
+      const ok = await loadSummary();
+      if (ok) LAST_BUILT = r.built_at;
     }
-  } catch(e){ /* 后端重启中，下一轮再试 */ }
+  } catch(e){
+    collectionFeedback("error","暂时无法连接本地服务",DATA ? "上次有效结果已保留。服务恢复后自动重试，也可重新读取。" : "请确认本地服务已启动后重新读取。");
+    setScanControls(false);
+  }
+  })().finally(()=>{metaRequest=null;});
+  return metaRequest;
 }
-setInterval(pollMeta, POLL_MS);
+setInterval(()=>{if(!document.hidden)void pollMeta();}, POLL_MS);
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)void pollMeta();});
 $("autoMin").onchange = async function(){
   const m = parseInt(this.value, 10) || 0;
   try {

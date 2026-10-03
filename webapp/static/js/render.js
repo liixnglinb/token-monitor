@@ -2,7 +2,7 @@
 function renderAll(){
   /* 首扫期间 /api/summary 返回 building 占位（无 range/matrix），此时不渲染也不报错，
      等后台扫描完成后 pollMeta 会拉到真数据再走一遍这里 */
-  if (!DATA || DATA.building || !(DATA.range && DATA.range.max)) return;
+  if (!DATA || DATA.building || !DATA.range) return;
   /* 套餐模型集合先行设置：renderAgentList / renderModelDist 都要用它区分「套餐」与「缺价」 */
   window.PLAN_SET = new Set(((DATA.kpi_all && DATA.kpi_all.plan_models) || [])
     .map(x => String(x).toLowerCase()));
@@ -10,6 +10,7 @@ function renderAll(){
   renderRangeMenu();
   renderKPI(); renderMain(); renderAgentList();
   renderModelDist(); renderModelTable(); renderNote(); renderScanInfo();
+  syncFilterSummary();
 }
 
 /* 扫描开销：命中/未命中/判定跳过，让"这次为什么慢"有处可看 */
@@ -133,12 +134,16 @@ function renderKPI(){
   const base = rows.reduce((s,r)=>s+r.inp+r.cw+r.cr,0);
   const planTokens = rows.reduce((s,r)=>s+((window.PLAN_SET||new Set()).has(String(r.model).toLowerCase()) ? r.tokens : 0),0);
 
-  $("kCost").textContent = fmtCNY(cost * DATA.cny_rate);
-  if (cost === 0 && tokens > 0){
+  const unknownRequests = rows.reduce((sum,row)=>sum+((window.PLAN_SET||new Set()).has(String(row.model).toLowerCase()) ? 0 : (row.unpriced || 0)),0);
+  const pricedRequests = rows.reduce((sum,row)=>sum+(row.priced || 0),0);
+  const planOnly = tokens > 0 && planTokens >= tokens * 0.995;
+  $("kCost").textContent = unknownRequests > 0 && !pricedRequests ? "未定价" : planOnly ? "套餐" : fmtCNY(cost * DATA.cny_rate);
+  $("kCost").title = unknownRequests > 0 ? "未知价格不等于免费；金额仅包含已定价用量。" : planOnly ? "套餐模型只统计用量，不计金额。" : "按模型价格估算，不代表实际账单。";
+  if (planOnly || unknownRequests > 0){
     const costSub = $("kCostSub");
-    costSub.textContent = planTokens >= tokens * 0.995
+    costSub.textContent = planOnly
       ? "套餐用量"
-      : (planTokens > 0 ? "套餐 + 未知价格" : "价格未知");
+      : (pricedRequests > 0 ? "仅已定价部分 · " + fmtInt(unknownRequests) + " 次未定价" : "价格未知，不记为免费");
     costSub.title = planTokens >= tokens * 0.995
       ? "套餐/订阅制模型只统计用量，不计金额"
       : (planTokens > 0 ? "套餐模型不计费，部分模型价格未知" : "模型单价不在价格库，未计入金额");
@@ -155,7 +160,7 @@ function renderKPI(){
     : "全部时间";
   $("kTok").textContent = fmtInt(tokens);           // 对齐 DeepSeek：完整千分位
   $("kTokSub").textContent = fmtTok(tokens);
-  $("kCache").textContent = "缓存命中 " + (cr/Math.max(base,1)*100).toFixed(1) + "%";
+  $("kCache").textContent = base > 0 ? "缓存命中 " + (cr/base*100).toFixed(1) + "%" : "缓存命中 —";
   /* 平均单次请求（参考百炼的「平均单次请求Token」） */
   $("kAvg").textContent = req ? fmtInt(Math.round(tokens / req)) : "—";
   $("kAvgSub").textContent = req ? fmtInt(req) + " 次请求" : "无记录";

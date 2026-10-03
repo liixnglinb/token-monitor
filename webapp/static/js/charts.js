@@ -1,6 +1,6 @@
 /* ---------- 图表公共样式 ---------- */
 const TT = { backgroundColor:"#161B22", borderColor:"rgba(255,255,255,.14)", borderWidth:1,
-  titleColor:"#E9EBEF", bodyColor:"#99A1AC", padding:13, cornerRadius:8,
+  titleColor:"#EEEEE7", bodyColor:"#CBCCC2", padding:13, cornerRadius:8,
   displayColors:true, usePointStyle:true, boxWidth:8, boxHeight:8, boxPadding:4,
   bodySpacing:6, titleSpacing:6, titleMarginBottom:8 };
 /* hover 竖直参考线（对齐 DeepSeek） */
@@ -17,15 +17,15 @@ const crosshair = { id: "crosshair",
   } };
 function baseOpts(fmt, legend){
   return { responsive:true, maintainAspectRatio:false,
-    animation:{ duration:360, easing:"easeOutQuart" },
+    animation:matchMedia('(prefers-reduced-motion: reduce)').matches ? false : { duration:200, easing:"easeOutQuart" },
     interaction:{ mode:"index", intersect:false },
     plugins:{ legend:{display:false},
       tooltip:{ ...TT, filter: i => i.parsed.y !== 0,
         callbacks:{ label:c => " " + fmt(c.parsed.y) } } },
     scales:{
-      x:{ stacked:true, ticks:{ color:"#7C8794", font:{family:"Inter, Segoe UI, system-ui", size:10.5, weight:"500"}, maxRotation:0, autoSkip:true, maxTicksLimit:10 },
+      x:{ stacked:true, ticks:{ color:"#A7A99E", font:{family:"Segoe UI, Microsoft YaHei UI, system-ui", size:12, weight:"500"}, maxRotation:0, autoSkip:true, maxTicksLimit:10 },
           grid:{ display:false }, border:{ color:"rgba(255,255,255,.12)" } },
-      y:{ stacked:true, beginAtZero:true, ticks:{ color:"#7C8794", font:{family:"Inter, Segoe UI, system-ui", size:10.5, weight:"500"}, maxTicksLimit:6, callback:fmt },
+      y:{ stacked:true, beginAtZero:true, ticks:{ color:"#A7A99E", font:{family:"Segoe UI, Microsoft YaHei UI, system-ui", size:12, weight:"500"}, maxTicksLimit:6, callback:fmt },
           grid:{ color:"rgba(255,255,255,.06)" }, border:{ display:false } } } };
 }
 const fmtTick = {
