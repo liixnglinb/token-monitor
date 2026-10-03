@@ -19,7 +19,6 @@ EXPECT_PRESENT = [
     "tools/ui_smoke.py",
     "tools/final_check.py",
     "tools/style_snapshot.py",
-    "tools/consolidate_legacy_css.py",
     "tests/test_version_file.py",
     "webapp/static/styles/styles.css",
     "webapp/static/styles/tokens.css",
