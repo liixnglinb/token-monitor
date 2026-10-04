@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import pathlib
 import subprocess
 import sys
@@ -14,7 +15,12 @@ import urllib.request
 
 REPO = "liixnglinb/token-monitor"
 TAG = sys.argv[1] if len(sys.argv) > 1 else "v1.9.13"
-INSTALLED = pathlib.Path(r"C:\Users\李星历\Desktop\token 统计\TokenMonitor\TokenMonitor.exe")
+# 本机安装路径：优先读环境变量 TOKEN_MONITOR_EXE，否则回退到仓库上级的默认位置。
+# 公开仓库不得写死本机绝对路径（含用户名）。
+INSTALLED = pathlib.Path(
+    os.environ.get("TOKEN_MONITOR_EXE")
+    or (pathlib.Path(__file__).resolve().parent.parent / "TokenMonitor" / "TokenMonitor.exe")
+)
 
 
 def gh(*args: str) -> str:
