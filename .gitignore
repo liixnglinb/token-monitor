@@ -10,3 +10,10 @@ version.txt.bak
 output/ui-verify-*/
 *.log
 .mimosa/
+
+# ---- AI 工具与本地探测产物（2026-10-04 实测）----
+.playwright-cli/
+build_diag/
+output/
+.workbuddy/
+.workbuddy-ai/
