@@ -1555,11 +1555,15 @@ def build_extra_sources():
 EXTRA_SOURCES = build_extra_sources()
 
 
-def run_all_sources(workers=8, use_cache=True):
+def run_all_sources(workers=8, use_cache=True, on_progress=None):
     """并行执行全部并入总量的扫描器，返回 (recs, errors)。
 
     各源绝大多数是 I/O 等待（遍历目录 / stat / 读日志），线程池收益明显。
     单源异常只记进 errors，绝不拖垮整次构建。
+
+    on_progress(done, total, name, new_recs, error)：每完成一个源回调一次，
+    供上层发布"已经扫到的那部分"结果。回调内的异常一律吞掉——渐进展示
+    属于锦上添花，绝不能把正式扫描带崩。
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -1568,16 +1572,24 @@ def run_all_sources(workers=8, use_cache=True):
     if not jobs:
         return recs, errors
     workers = max(1, min(int(workers or 1), len(jobs)))
+    total = len(jobs)
     with ThreadPoolExecutor(max_workers=workers) as ex:
         futs = {ex.submit(fn): name for name, fn in jobs}
-        for fu in as_completed(futs):
+        for idx, fu in enumerate(as_completed(futs), start=1):
             name = futs[fu]
+            err = None
             try:
                 r = fu.result()
             except Exception as e:                      # 单源失败不影响整体
-                errors.append({"agent": name, "error": str(e)[:120]})
-                continue
-            recs += r[0] if isinstance(r, tuple) else r
+                r, err = [], str(e)[:120]
+                errors.append({"agent": name, "error": err})
+            got = r[0] if isinstance(r, tuple) else r
+            recs += got
+            if on_progress is not None:
+                try:
+                    on_progress(idx, total, name, got, err)
+                except Exception:
+                    pass
     return recs, errors
 
 

@@ -14,6 +14,7 @@
 import os
 import sys
 import threading
+import time
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 if ROOT not in sys.path:
@@ -141,23 +142,8 @@ def _version_probe():
     return info
 
 
-def _build() -> dict:
-    """扫描全部数据源 → 计价 → 聚合矩阵。
-
-    实测耗时（本机 62 个源、8 线程并行）：
-      · 磁盘缓存全空的首次扫描  约 110s
-      · 有 scan-cache 的常规重建 约 20~30s（未变动的源直接复用上次解析结果）
-    本函数只在后台线程里跑；/api/summary 始终立即返回上一次的好数据，界面不会被扫描阻塞。
-    """
-    import probe_v3_allsources as V3
-
-    pricing._STATS["hit"] = 0
-    pricing._STATS["total"] = 0
-    pricing._STATS["miss"] = {}
-
-    # 并行扫描：绝大多数源是 I/O 等待，线程池能把冷扫从 ~110s 压到 ~30s 量级
-    recs, scan_errors = V3.run_all_sources(workers=SCAN_WORKERS)
-
+def _aggregate(recs, scan_errors, V3) -> dict:
+    """把原始用量记录聚合成面板要用的矩阵 + KPI。纯函数，可重复调用。"""
     cells = {}
     unpriced_tokens = 0
     unpriced_requests = 0    # 价表缺价（API 但没匹配到价格）的请求数
@@ -229,9 +215,53 @@ def _build() -> dict:
         },
         "source_notes": dict(getattr(V3, "SKIP_NOTES", {})),
         "coverage": _coverage(V3),
-        "cache_stats": V3.flush_cache(),
         "scan_errors": scan_errors,
     }
+
+
+def _build(progress_cb=None) -> dict:
+    """扫描全部数据源 → 计价 → 聚合矩阵。
+
+    实测耗时（本机 62 个源、8 线程并行）：
+      · 磁盘缓存全空的首次扫描  约 110s
+      · 有 scan-cache 的常规重建 约 20~30s（未变动的源直接复用上次解析结果）
+    本函数只在后台线程里跑；/api/summary 始终立即返回上一次的好数据，界面不会被扫描阻塞。
+
+    progress_cb(payload)：扫描过程中每完成若干源就回抛一份「部分结果」，
+    让首扫期间的界面不再是一片空白。只读不改，正式返回值不受影响。
+    """
+    import probe_v3_allsources as V3
+
+    pricing._STATS["hit"] = 0
+    pricing._STATS["total"] = 0
+    pricing._STATS["miss"] = {}
+
+    # 并行扫描：绝大多数源是 I/O 等待，线程池能把冷扫从 ~110s 压到 ~30s 量级
+    acc, errs = [], []
+    last_pub = [0.0]
+
+    def on_progress(done, total, name, new_recs, error):
+        acc.extend(new_recs)
+        if error:
+            errs.append({"agent": name, "error": error})
+        if progress_cb is None:
+            return
+        now = time.monotonic()
+        # 节流：聚合是 O(已扫记录数)，逐源发布会变成 O(n²)；2s 一跳足够跟手
+        if done < total and now - last_pub[0] < 2.0:
+            return
+        last_pub[0] = now
+        payload = _aggregate(list(acc), list(errs), V3)
+        payload["partial"] = True
+        payload["progress"] = {"done": done, "total": total}
+        progress_cb(payload)
+
+    recs, scan_errors = V3.run_all_sources(workers=SCAN_WORKERS,
+                                           on_progress=on_progress if progress_cb else None)
+
+    payload = _aggregate(recs, scan_errors, V3)
+    payload["cache_stats"] = V3.flush_cache()
+    return payload
 
 
 _R = RF.Refresher(_build, version_fn=_version_probe)   # 必须在 _build 之后
@@ -263,7 +293,7 @@ def _coverage(V3):
 
 @app.get("/api/summary")
 def api_summary():
-    """立即返回上一次的好数据；没有结果时后台发起首扫并返回 building 占位"""
+    """立即返回上一次的好数据；首扫进行中退回部分结果（partial=true）；什么都没有才返回 building 占位"""
     d, built_at, err, busy = _R.snapshot()
     d = dict(d)
     meta = dict(_R.status())
@@ -271,7 +301,7 @@ def api_summary():
     if err:
         meta["error"] = err
     d["_meta"] = meta
-    if busy:
+    if busy and not d.get("partial"):
         d.setdefault("building", True)
     return JSONResponse(d, headers={"Cache-Control": "no-store"})
 

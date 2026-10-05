@@ -1,5 +1,8 @@
 "use strict";
 let DATA = null, MAIN = null;
+/* 后端是否正在扫描：唯一写入点是 interactions.js 的 syncSettings，
+   渲染侧只读它，避免"部分结果已到位但扫描指示条还挂着"这类时序错乱。 */
+let SCANNING = false;
 const F = { rangeKey: "last7", agent: "all", metric: "tokens", grain: "day", dim: "total",
             billing: "all", lens: "entity", open: new Set() };
 try {
@@ -40,6 +43,33 @@ function barGradient(context, index){
   gradient.addColorStop(1, hexA(color, .68));
   return gradient;
 }
+/* 堆叠柱专用：渐变按「这一段自己的像素区间」算，而不是整根坐标轴。
+   按整轴算会让靠下的段整体发灰，段与段之间看着就像隔了一层空隙。 */
+function segGradient(context, color){
+  const { chart, datasetIndex, dataIndex } = context;
+  const c = color || PAL[datasetIndex % PAL.length];
+  const el = chart.chartArea && chart.getDatasetMeta(datasetIndex).data[dataIndex];
+  /* 未布局或零高度时 base === y，createLinearGradient 两点重合会画出退化渐变
+     —— 那是不透明的空，整根柱子直接消失。这种情况一律退回实色。 */
+  if (!el || !Number.isFinite(el.y) || !Number.isFinite(el.base) || el.base <= el.y) return c;
+  const gradient = chart.ctx.createLinearGradient(0, el.y, 0, el.base);
+  gradient.addColorStop(0, c);
+  gradient.addColorStop(1, hexA(c, .8));
+  return gradient;
+}
+/* 只有"该列最上面的非零段"该有圆角：每段都圆角会在段间接出缝。 */
+function topSegmentMask(series){
+  if (!series.length) return [];
+  return series[0].data.map((_, i) => {
+    for (let d = series.length - 1; d >= 0; d--) if (series[d].data[i] > 0) return d;
+    return -1;
+  });
+}
+function topRadius(mask){
+  return context => context.datasetIndex === mask[context.dataIndex]
+    ? { topLeft: 6, topRight: 6, bottomLeft: 0, bottomRight: 0 } : 0;
+}
+
 function lineGradient(context, color){
   const { chart } = context;
   const area = chart.chartArea;
@@ -107,7 +137,7 @@ const AGENT_NAME = {
   "unknown":"未知来源",
 };
 const AGENT_LOGOS = {
-  "codex":"openai.svg", "claude-code":"claude.svg",
+  "codex":"codex.png", "claude-code":"claude.svg",
   "opencode":"opencode.svg", "cline":"cline.svg",
   /* 2026-09-27：以下均为从本机各应用安装目录提取的真实品牌图（256px 归一） */
   "zcode":"zcode.png", "hermes":"hermes.png", "workbuddy":"workbuddy.png",
@@ -115,15 +145,25 @@ const AGENT_LOGOS = {
   "kimi":"kimi.png",
   /* 2026-09-29：MHAgent 官方应用图标（从 %APPDATA%/MHAgent 的 ico 提取 256px） */
   "mhagent":"mhagent.png",
+  /* 2026-10-05：从本机各应用安装体（icon.ico / 安装包 PE 资源 / MSIX app.asar）
+     提取的官方图。此前 Codex 错误地复用 OpenAI 的 knot 标志，现已换成 Codex 自己的。 */
+  "doubao":"doubao.png", "qwen-cli":"qianwen.png", "yumbo":"yuanbao.png",
 };
+/* 需要浅色底衬的 logo：这几张官方素材是纯深色单色实心路径（#111827 / #0F172A），
+   直接落在深色面板上等于隐形。按同一标准登记，别顺手给彩色 logo 也加瓷砖。 */
+const LOGO_ON_PLATE = new Set(["openai.svg", "opencode.svg"]);
+function brandImg(file){
+  return '<img class="agent-brand-img' + (LOGO_ON_PLATE.has(file) ? " plate" : "")
+    + '" src="/static/logos/' + file + '" alt="" loading="lazy" decoding="async">';
+}
 /* 本机确实拿不到品牌图的应用 → 字母徽标（比通用图形更像"它们自己"） */
 const AGENT_MONO = {
   "box-agent": ["B", "#7C8CF8"], "mhagent": ["MH", "#4AC08A"],
   "mavis": ["M", "#E8B45B"], "agnes": ["A", "#A78BFA"],
   "agnes-ledger": ["AL", "#A78BFA"],
   "qoder": ["Q", "#5CC8DE"], "trae-solo": ["TS", "#F0737A"], "trae": ["T", "#F0737A"],
-  "cursor": ["C", "#9AA1AC"], "doubao": ["D", "#5C8AF5"], "qwen-cli": ["Q", "#7C8CF8"],
-  "cherrystudio": ["CH", "#E8834B"], "yumbo": ["元", "#4FC3A1"],
+  "cursor": ["C", "#9AA1AC"],
+  "cherrystudio": ["CH", "#E8834B"],
   "copilot-chat": ["GH", "#9AA1AC"], "copilot-cli": ["GH", "#9AA1AC"],
   "goofish-cli": ["闲", "#E8B45B"], "mimosa": ["M", "#E0607A"],
   "openviking": ["OV", "#5CC8DE"], "raccoonwork": ["R", "#4AC08A"],
@@ -169,10 +209,7 @@ function monoFor(name){
 }
 function agentIcon(name){
   const logo = AGENT_LOGOS[name];
-  if (logo){
-    return '<img class="agent-brand-img" src="/static/logos/' + logo
-      + '" alt="" loading="lazy" decoding="async">';
-  }
+  if (logo) return brandImg(logo);
   const mono = AGENT_MONO[name] || monoFor(name);
   return '<span class="agent-mono" style="--mc:' + mono[1] + '">' + esc(mono[0]) + '</span>';
 }
@@ -204,10 +241,7 @@ function modelIcon(name){
   const n = String(name || "").toLowerCase();
   for (const [re, v] of MODEL_VENDOR){
     if (re.test(n)){
-      if (typeof v[1] === "string"){
-        return '<img class="agent-brand-img" src="/static/logos/' + v[1]
-          + '" alt="" loading="lazy" decoding="async">';
-      }
+      if (typeof v[1] === "string") return brandImg(v[1]);
       return '<span class="agent-mono" style="--mc:' + v[1][1] + '">' + v[1][0] + '</span>';
     }
   }

@@ -83,7 +83,11 @@ def save_settings(s):
 
 
 class Refresher:
-    """后台刷新调度器。build_fn() 返回可序列化的 dict。"""
+    """后台刷新调度器。build_fn(publish_partial) 返回可序列化的 dict。
+
+    build_fn 可以在扫描进行中回调 publish_partial(payload) 发布"部分结果"，
+    让首次扫描期间的界面不再是一片空白；正式结果落地后部分结果自动作废。
+    """
 
     def __init__(self, build_fn, version_fn=None):
         self._build = build_fn
@@ -91,6 +95,7 @@ class Refresher:
         self._lock = threading.Lock()
         self._cv = threading.Condition(self._lock)
         self._data = None
+        self._partial = None
         self._built_at = None
         self._error = None
         self._busy = False
@@ -137,13 +142,21 @@ class Refresher:
 
     # ---------- 对外 ----------
     def snapshot(self):
-        """立即返回上次结果；没有结果时在后台发起首扫并返回 building 占位"""
+        """立即返回上次结果；没有结果时退回扫描中的部分结果，最后才是 building 占位"""
         with self._lock:
             if self._data is not None:
                 return self._data, self._built_at, self._error, self._busy
+            if self._partial is not None:
+                return self._partial, None, self._error, True
             self._dirty = True
         return ({"building": True, "refresh_minutes": self.settings["refresh_minutes"]},
                 None, self._error, True)
+
+    def publish_partial(self, payload):
+        """扫描中途回抛的部分结果；正式结果已就绪时直接丢弃"""
+        with self._lock:
+            if self._data is None:
+                self._partial = payload
 
     def refresh(self, force=True):
         """非阻塞：有扫描在跑就只标脏，跑完自动再扫一次"""
@@ -183,10 +196,11 @@ class Refresher:
             self._busy = True
         err = None
         try:
-            data = self._build()
+            data = self._build(self.publish_partial)
         except Exception as e:                          # 扫描失败要保留旧数据
             data, err = None, str(e)[:200]
         with self._lock:
+            self._partial = None                        # 收尾：部分结果不再对外可见
             if data is not None:
                 self._data = data
                 self._built_at = datetime.now(CST).isoformat(timespec="seconds")
@@ -218,4 +232,5 @@ class Refresher:
                 "error": self._error,
                 "settings": dict(self.settings),
                 "has_data": self._data is not None,
+                "has_partial": self._data is None and self._partial is not None,
             }

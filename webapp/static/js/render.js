@@ -11,6 +11,7 @@ function renderAll(){
     .map(x => String(x).toLowerCase()));
   renderAgentFilter();
   renderRangeMenu();
+  renderChartChoosers();
   renderHero();
   renderMain();
   renderAgentList();
@@ -18,8 +19,10 @@ function renderAll(){
   renderModelTable();
   renderNote();
   renderScanInfo();
+  renderScanProgress();
   syncFilterSummary();
-  replayEntrance();
+  /* 扫描中的部分结果每 3s 就来一次，重放入场动画会变成持续闪动 */
+  if (!DATA.partial) replayEntrance();
   if (window.TMUI){
     TMUI.clearKpiSkeleton();
     ["heroValAbbr", "heroReq", "heroAvg", "heroCost", "heroEquiv"].forEach(id => { const el = $(id); if (el) el.dataset.loaded = "1"; });
@@ -73,6 +76,39 @@ function renderRangeMenu(){
     `<button data-k="${k}" class="${F.rangeKey===k ? "on" : ""}"><span>${label}</span><span class="ck">✓</span></button>`).join("");
   $("ddRangeVal").textContent = RANGE_LABEL[F.rangeKey];
 }
+
+/* 图表工具栏的三个选择器：维度 / 指标 / 粒度。
+   原先是三组纯图标分段按钮，8 个图标要靠悬停提示才认得出来，一律改成带前缀标签的文字下拉。 */
+const CHOICE = {
+  ddDim:    { menu: "ddDimMenu",    val: "ddDimVal",    key: "dim",
+              opts: [["total","总量"], ["agent","按数据源"], ["model","按模型"]] },
+  ddMetric: { menu: "ddMetricMenu", val: "ddMetricVal", key: "metric",
+              opts: [["tokens","Tokens"], ["cost","消耗金额"], ["requests","请求次数"]] },
+  ddGrain:  { menu: "ddGrainMenu",  val: "ddGrainVal",  key: "grain",
+              opts: [["day","按日"], ["month","按月"]] },
+};
+function renderChartChoosers(){
+  Object.values(CHOICE).forEach(c => {
+    const menu = $(c.menu), val = $(c.val);
+    if (!menu || !val) return;
+    menu.innerHTML = c.opts.map(([k, label]) =>
+      `<button data-k="${k}" class="${F[c.key]===k ? "on" : ""}"><span>${label}</span><span class="ck">✓</span></button>`).join("");
+    const hit = c.opts.find(o => o[0] === F[c.key]);
+    val.textContent = hit ? hit[1] : String(F[c.key]);
+  });
+}
+function bindChartChoosers(){
+  Object.entries(CHOICE).forEach(([ddId, c]) => {
+    bindDropdown(ddId, c.menu, k => {
+      F[c.key] = k;
+      renderChartChoosers();
+      renderMain();
+      syncFilterHash();
+    });
+  });
+}
+renderChartChoosers();
+
 function bindDropdown(ddId, menuId, onPick){
   const dd = $(ddId), menu = $(menuId);
   if (!dd || !menu) return;
@@ -87,7 +123,7 @@ function bindDropdown(ddId, menuId, onPick){
     }
   };
   menu.onclick = e => {
-    const b = e.target.closest("button[data-k]"); if (!b) return;
+    const b = e.target.closest("button[data-k]"); if (!b || !onPick) return;
     onPick(b.dataset.k);
     closeAllDropdowns();
   };
@@ -170,9 +206,9 @@ function renderAgentFilter(){
 }
 
 function renderNote(){
-  /* 说明性内容移到设置页「扫描与缓存」，主区只保留扫描错误 —— 顶部不再有大段说明 */
-  const main = $("noteBox"), side = $("sideNotes");
-  if (!main || !side) return;
+  /* 扫描失败不再压在页面顶部（改由顶栏芯片承载），说明性内容留在设置页「扫描与缓存」 */
+  const side = $("sideNotes");
+  if (!side) return;
   const k = DATA.kpi_all;
   window.PLAN_SET = new Set((k.plan_models || []).map(x => String(x).toLowerCase()));
   let side_html = "";
@@ -185,10 +221,39 @@ function renderNote(){
     const t = DATA.matrix.filter(r=>r.date==="unknown").reduce((s,r)=>s+r.tokens,0);
     if (t > 0) side_html += `<div class="note time">时间筛选生效中：另有 ${fmtTok(t)} tokens 因日志缺失日期戳，仅在「全部」时计入</div>`;
   }
-  main.innerHTML = (DATA.scan_errors && DATA.scan_errors.length)
-    ? `<div class="note err">部分数据源扫描失败：${esc(DATA.scan_errors.map(e=>e.agent).join("、"))}</div>` : "";
+  const errs = DATA.scan_errors || [];
+  if (errs.length)
+    side_html += `<div class="note err">扫描失败 ${errs.length} 个来源，未计入统计：`
+      + errs.map(e => `<b>${esc(agentLabel(e.agent))}</b>（${esc(e.error || "未知错误")}）`).join("；") + "</div>";
   side.innerHTML = side_html;
+  renderScanChip();
 }
+
+/* 顶栏「扫描异常」芯片：把原来压在页面顶部的两条失败横幅收成一颗可点开的胶囊 */
+function renderScanChip(){
+  const wrap = $("ddScan"), menu = $("scanChipMenu"), label = $("scanChipLabel");
+  if (!wrap || !menu || !label) return;
+  const errs = (DATA && DATA.scan_errors) || [];
+  if (!errs.length){ wrap.hidden = true; menu.hidden = true; return; }
+  wrap.hidden = false;
+  label.textContent = errs.length + " 个来源扫描失败";
+  menu.innerHTML = '<div class="scan-pop-head">扫描失败 · ' + errs.length
+    + '<span class="scan-pop-cap-note">失败来源不计入本次统计，其余来源照常汇总</span></div>'
+    + errs.map(e => '<div class="scan-pop-row"><b>' + esc(agentLabel(e.agent)) + '</b>'
+        + '<span>' + esc(e.error || "未知错误") + '</span></div>').join("");
+}
+
+/* 扫描进度：顶栏直给「已并入 N / M 个来源」——这是真实源数，不是估出来的百分比 */
+function renderScanProgress(){
+  const el = $("scanProgress");
+  if (!el) return;
+  const p = DATA && DATA.progress;
+  const on = !!(SCANNING && DATA && DATA.partial && p && p.total);
+  el.hidden = !on;
+  document.body.classList.toggle("is-scanning", on);
+  if (on) el.textContent = "已并入 " + p.done + " / " + p.total + " 个来源";
+}
+
 
 /* =============================================================================
    Hero：4 联 Bento KPI 网格
@@ -558,12 +623,16 @@ function renderMain(){
     members = topNames.map(name=>({ name, rows: rows.filter(r=>r[F.dim]===name) }));
     if (others.length) members.push({ name: "其他", rows: others });
   }
+  /* 图例与 tooltip 里显示可读名（数据源拆分时原始 id 是 workbuddy-ai 这种） */
+  const seriesLabel = m => m.name === "其他" ? m.name
+    : (F.dim === "agent" ? agentLabel(m.name) : m.name);
   const series = members.map(m=>{
     const mm = new Map(groupSeries(m.rows, F.metric, F.grain));
-    return { name: m.name, data: labels.map(l=>mm.get(l)||0) };
+    return { name: seriesLabel(m), data: labels.map(l=>mm.get(l)||0) };
   });
 
   const lineMode = F.metric === "tokens" && F.dim === "total";
+  const radiusMask = topSegmentMask(series);
   const opts = baseOpts(fmt, F.metric==="cost"?"¥":"");
   opts.scales.x.stacked = !lineMode;
   opts.scales.y.stacked = !lineMode;
@@ -580,6 +649,7 @@ function renderMain(){
   };
 
   if (MAIN) MAIN.destroy();
+  const multiSeries = members.length > 1;
   MAIN = new Chart($("mainChart"), {
     type: lineMode ? "line" : "bar",
     data: { labels, datasets: series.map((s,i)=>{
@@ -593,14 +663,31 @@ function renderMain(){
         pointBorderColor: color, pointBorderWidth: 2,
       };
       return {
-        label: s.name, data: s.data, backgroundColor: context => barGradient(context, i),
-        stack: "s", maxBarThickness: 28, barPercentage: .66, categoryPercentage: .78,
-        borderRadius: 5, borderSkipped: false,
+        label: s.name, data: s.data,
+        /* 多系列堆叠用「逐段渐变」，单系列用整轴渐变：前者要块块实心相接，后者要一条走势 */
+        backgroundColor: context => multiSeries ? segGradient(context, color)
+                                               : barGradient(context, i),
+        stack: "s", maxBarThickness: 46, barPercentage: .92, categoryPercentage: .84,
+        borderRadius: topRadius(radiusMask), borderSkipped: false,
       };
     }) },
     options: opts,
     plugins: [crosshair]
   });
+  renderChartLegend(!lineMode && series.length > 1
+    ? series.map((s, i) => ({ name: s.name, color: PAL[i % PAL.length],
+        val: metricText(s.data.reduce((a, b) => a + b, 0), F.metric) }))
+    : null);
+}
+
+/* 堆叠柱图例：只在真正多系列时出现，并带上该系列的合计，省得再去心算占比 */
+function renderChartLegend(items){
+  const box = $("chartLegend");
+  if (!box) return;
+  box.hidden = !items || !items.length;
+  box.innerHTML = items ? items.map(it =>
+    '<span><i style="background:' + it.color + '"></i>' + esc(it.name)
+    + '<b>' + esc(it.val) + '</b></span>').join("") : "";
 }
 
 /* ---------- 视角：实体 / 物理构成 / 缓存杠杆 ----------
@@ -608,18 +695,20 @@ function renderMain(){
    cache：缓存杠杆效益双轨（上轨=全量等效输入，下轨=真实付费输入）。
    两个视角都是 Token 口径，故自动停用「指标/维度」切换。 */
 const COMP_META = [
-  ["cr",  "缓存读取", "--tok-cr"],
-  ["cw",  "缓存写入", "--tok-cw"],
-  ["inp", "基础输入", "--tok-inp"],
-  ["out", "输出生成", "--tok-out"],
+  ["cr",  "缓存读取", "--tok-cr",  "#10B981"],
+  ["cw",  "缓存写入", "--tok-cw",  "#A78BFA"],
+  ["inp", "基础输入", "--tok-inp", "#60A5FA"],
+  ["out", "输出生成", "--tok-out", "#F97316"],
 ];
 function syncSegAvailability(){
+  /* 物理构成 / 缓存杠杆都是 Token 口径，「指标」「维度」两个切换器无意义 → 直接停用 */
   const structured = F.lens !== "entity";
-  ["segMetric", "segDim"].forEach(id => {
-    const seg = $(id);
-    if (!seg) return;
-    seg.classList.toggle("seg-disabled", structured);
-    seg.querySelectorAll("button").forEach(b => { b.disabled = structured; });
+  ["ddMetric", "ddDim"].forEach(id => {
+    const dd = $(id);
+    if (!dd) return;
+    dd.classList.toggle("dd-disabled", structured);
+    const btn = dd.querySelector(".dd-btn");
+    if (btn) btn.disabled = structured;
   });
 }
 function seriesAxis(raw, range){
@@ -637,6 +726,8 @@ function axisTickCallback(opts, labels){
   else opts.scales.x.ticks.callback = (v, i) => fmtMonth(labels[i] || v);
 }
 function rebuildMain(labels, datasets, opts, type){
+  /* 结构视角的色块归属写在下方摘要里（带 ts-dot），不需要再挂一条图例 */
+  renderChartLegend(null);
   if (MAIN) MAIN.destroy();
   MAIN = new Chart($("mainChart"), {
     type, data: { labels, datasets }, options: opts, plugins: [crosshair]
@@ -644,9 +735,12 @@ function rebuildMain(labels, datasets, opts, type){
 }
 function renderComposition(rows, range, theme){
   const labels = seriesAxis([], range).map(d => d[0]);
-  const series = COMP_META.map(([key, label]) => {
+  /* 颜色按「五态语义」锁定，不随哪一段缺席而移位 —— 与缓存杠杆卡的
+     迷你环形图、图例同一套色，避免同一个"缓存读取"在两处显示成两种颜色 */
+  const series = COMP_META.map(([key, label, varName, fallback]) => {
     const map = new Map(groupSeries(rows, key, F.grain));
-    return { key, label, data: labels.map(l => map.get(l) || 0) };
+    return { key, label, color: cssVar(varName, fallback),
+             data: labels.map(l => map.get(l) || 0) };
   }).filter(s => s.data.some(v => v > 0));
   const totalTok = series.reduce((acc, s) => acc + s.data.reduce((a, b) => a + b, 0), 0);
 
@@ -660,19 +754,22 @@ function renderComposition(rows, range, theme){
       + fmtTok(items.reduce((s, i) => s + (i.parsed.y || 0), 0)) + " tok" : "";
   opts.plugins.tooltip.callbacks.label = c => " " + c.dataset.label + "   " + fmtTok(c.parsed.y) + " tok";
   axisTickCallback(opts, labels);
-  rebuildMain(labels, series.map((s, i) => ({
+  const compMask = topSegmentMask(series);
+  rebuildMain(labels, series.map(s => ({
     label: s.label, data: s.data,
-    backgroundColor: context => barGradient(context, i),
-    stack: "comp", maxBarThickness: 28, barPercentage: .66, categoryPercentage: .78,
-    borderRadius: 4, borderSkipped: false,
+    backgroundColor: context => segGradient(context, s.color),
+    stack: "comp", maxBarThickness: 46, barPercentage: .92, categoryPercentage: .84,
+    borderRadius: topRadius(compMask), borderSkipped: false,
   })), opts, "bar");
 
   /* 构成摘要与明细都按"图表同一口径"（补零日期轴内的构成量）统计，
      避免把区间外的 unknown 日期计入而出现 >100% 的占比 */
   const totals = new Map(series.map(s => [s.key, s.data.reduce((a, b) => a + b, 0)]));
-  $("trendSummary").innerHTML = COMP_META.map(([key, label]) => {
+  $("trendSummary").innerHTML = COMP_META.map(([key, label, varName, fallback]) => {
     const total = totals.get(key) || 0;
-    return '<div class="trend-stat"><span>' + label + '</span><b>' + esc(fmtTok(total))
+    const color = cssVar(varName, fallback);
+    return '<div class="trend-stat"><span><i class="ts-dot" style="background:' + color + '"></i>'
+      + label + '</span><b>' + esc(fmtTok(total))
       + '</b><small>' + (totalTok > 0 ? (total / totalTok * 100).toFixed(1) + "%" : "—") + '</small></div>';
   }).join("");
   renderDailyDetail(rows, seriesAxis(groupSeries(rows, "tokens", F.grain), range)
@@ -728,9 +825,9 @@ function renderCacheLeverage(rows, range, theme){
   ], opts, "line");
 
   $("trendSummary").innerHTML =
-    '<div class="trend-stat"><span>全量等效输入</span><b>' + esc(fmtTok(totFull)) + '</b><small>输入 + 缓存读取 + 写入</small></div>'
-    + '<div class="trend-stat"><span>真实付费输入</span><b>' + esc(fmtTok(totPaid)) + '</b><small>含读取 10% · 写入 125%</small></div>'
-    + '<div class="trend-stat"><span>缓存吸收</span><b>' + esc(fmtTok(saved)) + '</b><small>阴影区面积</small></div>'
+    '<div class="trend-stat"><span><i class="ts-dot" style="background:' + theme.muted + '"></i>全量等效输入</span><b>' + esc(fmtTok(totFull)) + '</b><small>输入 + 缓存读取 + 写入</small></div>'
+    + '<div class="trend-stat"><span><i class="ts-dot" style="background:' + solid + '"></i>真实付费输入</span><b>' + esc(fmtTok(totPaid)) + '</b><small>含读取 10% · 写入 125%</small></div>'
+    + '<div class="trend-stat"><span><i class="ts-dot" style="background:' + hexA(green.startsWith("#") ? green : "#10B981", .4) + '"></i>缓存吸收</span><b>' + esc(fmtTok(saved)) + '</b><small>两线之间的阴影区</small></div>'
     + '<div class="trend-stat"><span>节省率</span><b>' + (totFull > 0 ? (saved / totFull * 100).toFixed(1) + "%" : "—") + '</b><small>估算口径</small></div>';
   renderDailyDetail(rows, seriesAxis(groupSeries(rows, "tokens", F.grain), range)
     .map(([label, value]) => ({ label, value })), "tokens");

@@ -1,37 +1,82 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
   <defs>
-    <radialGradient id="background" cx="0.3" cy="0.15" r="1.15">
-      <stop offset="0" stop-color="#27313F"/>
-      <stop offset=".45" stop-color="#131A24"/>
-      <stop offset="1" stop-color="#070A0F"/>
+    <!-- 底板：曜石渐变（与软件深色仪表舱同色系） -->
+    <radialGradient id="plate" cx=".3" cy=".14" r="1.16">
+      <stop offset="0" stop-color="#28323F"/>
+      <stop offset=".45" stop-color="#121924"/>
+      <stop offset="1" stop-color="#06090E"/>
     </radialGradient>
-    <linearGradient id="value" x1="72" y1="180" x2="150" y2="52" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#4D6BFE"/>
-      <stop offset=".55" stop-color="#6FA0FF"/>
-      <stop offset="1" stop-color="#9BE8FF"/>
-    </linearGradient>
-    <linearGradient id="gloss" x1="40" y1="20" x2="180" y2="150" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#FFFFFF" stop-opacity=".10"/>
-      <stop offset=".4" stop-color="#FFFFFF" stop-opacity=".02"/>
+    <linearGradient id="gloss" x1="40" y1="18" x2="182" y2="150" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity=".11"/>
+      <stop offset=".42" stop-color="#FFFFFF" stop-opacity=".02"/>
       <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
     </linearGradient>
-    <filter id="tip" x="-120%" y="-120%" width="340%" height="340%">
-      <feDropShadow dx="0" dy="0" stdDeviation="6" flood-color="#7CB8FF" flood-opacity=".55"/>
+    <!-- 顶面：受光最强，冷白偏蓝，右缘带一点青（色散） -->
+    <linearGradient id="faceTop" x1="76" y1="58" x2="180" y2="110" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#EEF6FF" stop-opacity=".96"/>
+      <stop offset=".5" stop-color="#A8CDF7" stop-opacity=".84"/>
+      <stop offset="1" stop-color="#6FE6E4" stop-opacity=".74"/>
+    </linearGradient>
+    <!-- 右前面：主色蓝，向下渐深 -->
+    <linearGradient id="faceRight" x1="128" y1="108" x2="182" y2="198" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8CBAFF" stop-opacity=".82"/>
+      <stop offset=".55" stop-color="#4E7FD6" stop-opacity=".55"/>
+      <stop offset="1" stop-color="#2A4A87" stop-opacity=".4"/>
+    </linearGradient>
+    <!-- 左前面：背光面，偏靛 -->
+    <linearGradient id="faceLeft" x1="128" y1="108" x2="72" y2="198" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6A78E8" stop-opacity=".62"/>
+      <stop offset=".55" stop-color="#3A46A0" stop-opacity=".44"/>
+      <stop offset="1" stop-color="#1E2258" stop-opacity=".34"/>
+    </linearGradient>
+    <!-- 前棱：整枚图标最亮的一条线 -->
+    <linearGradient id="edge" x1="128" y1="108" x2="128" y2="204" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset=".5" stop-color="#D6EEFF"/>
+      <stop offset="1" stop-color="#8AD9FF" stop-opacity=".5"/>
+    </linearGradient>
+    <radialGradient id="ember" cx=".5" cy=".5" r=".5">
+      <stop offset="0" stop-color="#FFF4E6"/>
+      <stop offset=".36" stop-color="#FFC389"/>
+      <stop offset="1" stop-color="#FF8A3D" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="halo" x="-70%" y="-70%" width="240%" height="240%">
+      <feGaussianBlur stdDeviation="9"/>
+    </filter>
+    <filter id="tip" x="-160%" y="-160%" width="420%" height="420%">
+      <feDropShadow dx="0" dy="0" stdDeviation="7" flood-color="#FFA65C" flood-opacity=".62"/>
     </filter>
   </defs>
 
-  <!-- 底板：曜石渐变 + 玻璃高光（与软件界面同色系） -->
-  <rect x="4" y="4" width="248" height="248" rx="58" fill="url(#background)"/>
+  <rect x="4" y="4" width="248" height="248" rx="58" fill="url(#plate)"/>
   <rect x="4.75" y="4.75" width="246.5" height="246.5" rx="57.25" fill="none"
-        stroke="#ffffff" stroke-opacity=".09" stroke-width="1.5"/>
+        stroke="#FFFFFF" stroke-opacity=".09" stroke-width="1.5"/>
   <rect x="4" y="4" width="248" height="248" rx="58" fill="url(#gloss)"/>
 
-  <!-- 量表：底弧 + 蓝→青值弧 + 白芯光点 -->
-  <path d="M78 174 A62 62 0 1 1 178 174" fill="none" stroke="#1A2331"
-        stroke-width="21" stroke-linecap="round"/>
-  <path d="M78 174 A62 62 0 0 1 109 60.5" fill="none" stroke="url(#value)"
-        stroke-width="21" stroke-linecap="round"/>
-  <circle cx="109" cy="60.5" r="17" fill="#0E1420" opacity=".9"/>
-  <circle cx="109" cy="60.5" r="13" fill="#BFEBFF" filter="url(#tip)"/>
-  <circle cx="106" cy="57.5" r="5" fill="#FFFFFF"/>
+  <g transform="rotate(-8 128 130)">
+    <!-- 晶体在底板上的弥散冷光 -->
+    <ellipse cx="128" cy="134" rx="74" ry="66" fill="#5FA8FF" opacity=".16" filter="url(#halo)"/>
+
+    <path d="M128 110 L76 97 L76 189 L128 202 Z" fill="url(#faceLeft)"/>
+    <path d="M128 110 L180 97 L180 189 L128 202 Z" fill="url(#faceRight)"/>
+    <path d="M128 58 L180 71 L180 97 L128 110 L76 97 L76 71 Z" fill="url(#faceTop)"/>
+
+    <!-- 轮廓与顶脊 -->
+    <path d="M128 58 L180 71 L180 189 L128 202 L76 189 L76 71 Z" fill="none"
+          stroke="#DCEFFF" stroke-opacity=".34" stroke-width="2.2" stroke-linejoin="round"/>
+    <path d="M76 71 L128 58 L180 71" fill="none" stroke="#FFFFFF" stroke-opacity=".6"
+          stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <!-- 色散：右缘偏青、左缘偏靛 -->
+    <path d="M180 76 L180 184" stroke="#7BF0E4" stroke-opacity=".5" stroke-width="2.4" stroke-linecap="round"/>
+    <path d="M76 76 L76 184" stroke="#93A0FF" stroke-opacity=".38" stroke-width="2.4" stroke-linecap="round"/>
+
+    <!-- 前棱高光 -->
+    <path d="M128 110 L128 202" stroke="url(#edge)" stroke-width="4.4" stroke-linecap="round" fill="none"/>
+
+    <!-- 棱上的一粒暖光：全图唯一的暖色焦点 -->
+    <circle cx="128" cy="158" r="26" fill="url(#ember)" opacity=".5"/>
+    <circle cx="128" cy="158" r="10.5" fill="#FFC389" filter="url(#tip)"/>
+    <circle cx="125.2" cy="155" r="4" fill="#FFFFFF"/>
+  </g>
 </svg>

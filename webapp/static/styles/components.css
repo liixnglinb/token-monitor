@@ -258,8 +258,6 @@ select {
 }
 .seg button:disabled { opacity: 0.45; cursor: not-allowed; }
 .seg-text button { width: auto; padding: 0 var(--sp-3); font-size: var(--fs-xs); }
-/* 结构视角下停用指标/维度切换 */
-.seg-disabled { opacity: 0.45; pointer-events: none; }
 
 /* 毛玻璃分段选择器：浮动在主图表右上角 */
 .glass-seg {
@@ -370,6 +368,68 @@ select {
 .dd-menu-wide .side-project.active { background: var(--brand-soft); color: var(--ink); }
 .dd-agent-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dd-menu-wide em { font-size: var(--fs-2xs); font-style: normal; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* 图表工具栏的紧凑文字下拉：前缀标签 + 当前值。
+   替代原先 8 个纯图标分段按钮——那些图标必须逐个悬停才知道是什么。 */
+.dd-sm .dd-btn {
+  min-height: var(--ctl-sm);
+  padding: 0 var(--sp-2);
+  gap: 6px;
+  background: var(--inset);
+  border-color: var(--line-soft);
+}
+.dd-sm .dd-btn:hover { background: var(--surface-3); border-color: var(--line); }
+.dd-sm .dd-btn b { font-size: var(--fs-xs); }
+.dd-sm .dd-menu { min-width: 152px; }
+.dd-tag { font-size: var(--fs-2xs); color: var(--m-dim); letter-spacing: var(--ls-wide); }
+.dd-btn:disabled { opacity: .45; cursor: not-allowed; }
+.dd-btn:disabled:hover { background: var(--inset); border-color: var(--line-soft); }
+/* 靠右锚定：顶栏最右侧的芯片菜单不能溢出视口 */
+.dd-menu-right { left: auto; right: 0; }
+
+/* 顶栏「扫描异常」芯片：取代原先压在页面顶部的那条红色横幅 */
+.dd-chip {
+  min-height: var(--ctl-sm);
+  padding: 0 var(--sp-2);
+  gap: 6px;
+  background: var(--warn-soft);
+  border-color: color-mix(in srgb, var(--warn) 34%, transparent);
+  border-radius: var(--r-pill);
+}
+.dd-chip:hover { background: color-mix(in srgb, var(--warn) 20%, transparent); border-color: var(--warn); }
+.dd-chip b { font-size: var(--fs-xs); font-weight: var(--fw-medium); color: var(--warn); }
+.dd-chip .dd-caret { color: var(--warn); opacity: .75; }
+.chip-warn {
+  display: inline-grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--warn);
+  color: var(--canvas);
+  font-size: 10px;
+  font-weight: var(--fw-semibold);
+}
+/* 芯片里的名单是只读说明，不是可选项，所以用 div 而非 button（避开 menuitemradio 语义） */
+.scan-pop-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--sp-2) var(--sp-2) var(--sp-1);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--warn);
+}
+.scan-pop-cap-note { font-size: var(--fs-2xs); font-weight: var(--fw-regular); color: var(--muted); }
+.scan-pop-row {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: var(--sp-2);
+  border-top: 1px solid var(--hairline);
+}
+.scan-pop-row b { font-size: var(--fs-xs); font-weight: var(--fw-medium); color: var(--ink); }
+.scan-pop-row span { font-size: var(--fs-2xs); color: var(--muted); overflow-wrap: anywhere; }
 
 /* =============================================================================
    5. 卡片 / 面板
@@ -633,6 +693,15 @@ select {
 .trend-stat { padding: 0 var(--sp-4); border-left: 1px solid var(--line-soft); }
 .trend-stat:first-child { border-left: 0; }
 .trend-stat > span { font-size: var(--fs-2xs); color: var(--muted); }
+/* 构成摘要里的色块：让"哪段是什么颜色"不用去猜堆叠顺序 */
+.ts-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 5px;
+  border-radius: 2px;
+  vertical-align: 1px;
+}
 .trend-stat > b {
   display: block;
   margin: 2px 0 1px;
@@ -772,6 +841,19 @@ select {
 .donut-legend { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-4); margin-top: var(--sp-4); padding-top: var(--sp-3); border-top: 1px solid var(--hairline); }
 .donut-legend span { display: inline-flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-2xs); color: var(--text-2); }
 .donut-legend i { width: 9px; height: 9px; border-radius: 3px; }
+
+/* 主图堆叠柱图例：按数据源 / 按模型拆分时，颜色是唯一线索 */
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-4);
+  margin: var(--sp-3) 0 var(--sp-2) var(--sp-1);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--hairline);
+}
+.chart-legend span { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-2xs); color: var(--text-2); }
+.chart-legend i { width: 9px; height: 9px; border-radius: 3px; flex: none; }
+.chart-legend b { font-weight: var(--fw-medium); color: var(--muted); font-variant-numeric: tabular-nums; }
 
 .dist-side { min-width: 0; }
 .dist-side-head {
@@ -983,6 +1065,14 @@ th.num .th-sort { justify-content: flex-end; }
 .chip-info { background: var(--info-soft); color: var(--info); border-color: transparent; }
 
 .agent-brand-img { width: 18px; height: 18px; object-fit: contain; border-radius: var(--r-xs); }
+/* 深色单色官方 logo（openai / opencode 那种 #111827 实心路径）在深色面板上
+   会整块看不见 —— 给它一块中性浅瓷砖托住，比把 logo 反色更贴近官方深色用法。 */
+.agent-brand-img.plate {
+  padding: 1.5px;
+  background: var(--logo-plate);
+  border-radius: var(--r-sm);
+  box-shadow: inset 0 0 0 1px var(--logo-plate-line);
+}
 .agent-mono {
   display: inline-flex;
   align-items: center;
@@ -1036,8 +1126,6 @@ th.num .th-sort { justify-content: flex-end; }
 .note.plan { border-left-color: var(--pos); }
 .note.unpriced { border-left-color: var(--warn); }
 .note.time { border-left-color: var(--info); }
-#noteBox:empty { display: none; }
-#noteBox:has(> .note:only-child:empty) { display: none; }
 
 /* 数据状态条：加载 / 部分失败 / 失败 / 空 */
 .collection-state {
@@ -1068,8 +1156,6 @@ th.num .th-sort { justify-content: flex-end; }
 .collection-state[data-kind="error"] .cs-icon::after { content: "!"; position: absolute; inset: 0; display: grid; place-items: center; font-size: var(--fs-2xs); font-weight: var(--fw-semibold); color: var(--neg); }
 .collection-state[data-kind="empty"] { border-color: var(--line-strong); }
 .collection-state[data-kind="empty"] .cs-icon { border: 2px dashed var(--line-strong); border-top-color: var(--line-strong); animation: none; }
-.collection-state[data-kind="partial"] { border-color: var(--warn); }
-.collection-state[data-kind="partial"] .cs-icon { border-color: var(--warn); border-top-color: var(--warn); animation: none; }
 
 /* 空态：图标 + 文案 + 行动按钮 */
 .empty,
@@ -1435,6 +1521,8 @@ th.num .th-sort { justify-content: flex-end; }
 /* 6. 无障碍偏好：所有过渡与动画归零 */
 @media (prefers-reduced-motion: reduce) {
   .btn[aria-busy="true"]::before { animation: none; }
+  .scan-progress::before { animation: none; }
+  body.is-scanning .context-bar::after { animation: none; opacity: .5; }
   .kpi-card,
   .kpi-card::before,
   .ar-spark,

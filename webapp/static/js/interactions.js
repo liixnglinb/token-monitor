@@ -114,18 +114,11 @@ $("setNav").addEventListener("click", e=>{
   go("settings", a.dataset.cat);
 });
 $("setBack").onclick = () => go("overview");
-bindDropdown("ddRange", "ddRangeMenu", k => { F.rangeKey = k; renderAll(); syncFilterHash(); });$("segDim").onclick = e => { const b=e.target.closest("button"); if(!b) return;
-  F.dim=b.dataset.d;
-  document.querySelectorAll("#segDim button").forEach(x=>x.classList.toggle("on",x===b));
-  renderMain(); syncFilterHash(); };
-$("segMetric").onclick = e => { const b=e.target.closest("button"); if(!b) return;
-  F.metric=b.dataset.m;
-  document.querySelectorAll("#segMetric button").forEach(x=>x.classList.toggle("on",x===b));
-  renderMain(); syncFilterHash(); };
-$("segGrain").onclick = e => { const b=e.target.closest("button"); if(!b) return;
-  F.grain=b.dataset.g;
-  document.querySelectorAll("#segGrain button").forEach(x=>x.classList.toggle("on",x===b));
-  renderMain(); syncFilterHash(); };
+bindDropdown("ddRange", "ddRangeMenu", k => { F.rangeKey = k; renderAll(); syncFilterHash(); });
+bindChartChoosers();
+/* 顶栏扫描异常芯片：纯展示，无选中动作 */
+bindDropdown("ddScan", "scanChipMenu");
+
 /* 主图视角：实体堆叠 / 物理构成 / 缓存杠杆（结构视角自动停用指标与维度切换） */
 if ($("segLens")) $("segLens").onclick = e => {
   const b = e.target.closest("button[data-lens]"); if (!b) return;
@@ -310,7 +303,19 @@ function syncSettings(s){
     dot.classList.toggle("busy", !!(s.busy || s.queued));
     dot.classList.toggle("error", !!s.error);
   }
+  SCANNING = !!(s.busy || s.queued);
+  renderScanProgress();
   updateCollectionFeedback(s);
+}
+/* 首扫期间用 3s 节奏追「部分结果」，完整数据到手后交回 15s 全局轮询 */
+let scanProgressTimer = null;
+function followScanProgress(on){
+  if (on && !scanProgressTimer){
+    scanProgressTimer = setInterval(() => { if (!document.hidden) void loadSummary(); }, 3000);
+  } else if (!on && scanProgressTimer){
+    clearInterval(scanProgressTimer);
+    scanProgressTimer = null;
+  }
 }
 let metaRequest = null;
 async function pollMeta(){
@@ -321,6 +326,7 @@ async function pollMeta(){
     if (!response.ok) throw new Error("本地服务返回 HTTP " + response.status);
     const r = await response.json();
     syncSettings(r);
+    followScanProgress(!!(r.busy && (!DATA || DATA.building || DATA.partial)));
     if (r.built_at && r.built_at !== LAST_BUILT && !r.busy){
       const ok = await loadSummary();
       if (ok) LAST_BUILT = r.built_at;
