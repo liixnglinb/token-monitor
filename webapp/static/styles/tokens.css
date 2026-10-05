@@ -213,7 +213,6 @@
   --shadow-lg: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 22px 48px rgba(0, 0, 0, 0.46);
   --shadow-focus: 0 0 0 3px rgba(122, 164, 255, 0.38);
   --card-bg: linear-gradient(180deg, #171A1F 0%, #121418 100%);
-  --card-bg-raised: linear-gradient(180deg, #1B1F26 0%, #14161B 100%);
   --card-hover-bg: linear-gradient(180deg, #1C2027 0%, #15181D 100%);
   /* 悬停边缘光泽 + 底层弥散阴影：替代单纯的背景色变化 */
   --edge-glow: 0 0 0 1px rgba(255, 255, 255, 0.045),
@@ -304,7 +303,6 @@
   --shadow-lg: 0 2px 4px rgba(20, 23, 28, 0.07), 0 20px 44px rgba(20, 23, 28, 0.14);
   --shadow-focus: 0 0 0 3px rgba(47, 99, 214, 0.28);
   --card-bg: linear-gradient(180deg, #FFFFFF 0%, #FCFCFD 100%);
-  --card-bg-raised: linear-gradient(180deg, #FFFFFF 0%, #F6F8FC 100%);
   --card-hover-bg: linear-gradient(180deg, #FFFFFF 0%, #F7F9FD 100%);
   --edge-glow: 0 0 0 1px rgba(20, 23, 28, 0.05),
                inset 0 1px 0 rgba(255, 255, 255, 0.9),
@@ -392,7 +390,6 @@
     --shadow-lg: 0 2px 4px rgba(20, 23, 28, 0.07), 0 20px 44px rgba(20, 23, 28, 0.14);
     --shadow-focus: 0 0 0 3px rgba(47, 99, 214, 0.28);
     --card-bg: linear-gradient(180deg, #FFFFFF 0%, #FCFCFD 100%);
-    --card-bg-raised: linear-gradient(180deg, #FFFFFF 0%, #F6F8FC 100%);
     --card-hover-bg: linear-gradient(180deg, #FFFFFF 0%, #F7F9FD 100%);
     --edge-glow: 0 0 0 1px rgba(20, 23, 28, 0.05),
                  inset 0 1px 0 rgba(255, 255, 255, 0.9),
@@ -423,38 +420,20 @@
 }
 
 /* ---------------------------------------------------------------------------
-   5. 兼容别名：历史样式（legacy 层）仍在用这些旧变量名
+   5. 兼容别名：仍被引用的旧变量名
    -----------------------------------------------------------------------------
-   11 个历史文件里有 400+ 处 var(--bg)/var(--txt)/var(--card2)/var(--radius-lg)…
-   直接删旧名会让它们整片褪色。下面把旧名映射到新 token，只做兼容，不再新增使用；
-   新代码请直接用上面的语义 token。
+   legacy 层已删除，这里只剩 7 个仍有引用的旧名；其余 17 个零引用的映射已清掉。
+   新代码不要用这层，直接用上面的语义 token。
    --------------------------------------------------------------------------- */
 :root {
   --bg: var(--canvas);
   --card: var(--surface);
-  --card-soft: var(--surface-2);
   --card-hover: var(--surface-hover);
   --card2: var(--surface-3);
   --txt: var(--ink);
-  --sub: var(--text-2);
-  --dim: var(--muted);
-  --blue: var(--brand);
-  --blue-bright: var(--brand-strong);
-  --cyan: var(--m-cache);
-  --green: var(--pos);
-  --amber: var(--warn);
-  --red: var(--neg);
-  --purple: var(--m-avg);
   --radius: var(--r-md);
-  --radius-sm: var(--r-sm);
   --radius-lg: var(--r-xl);
-  --shadow-inset: var(--shadow-sm);
-  --sidebar-width: var(--sidebar-w);
-  --topbar-height: var(--topbar-h);
   --ease: var(--dur-base) var(--ease-standard);
-  --glow: var(--shadow-md);
-  --glow-soft: var(--shadow-sm);
-  --mono: var(--font-mono);   /* theme.css 引用了 --mono，但历史上从未定义 */
 }
 
 /* ---------------------------------------------------------------------------

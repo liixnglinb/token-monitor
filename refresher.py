@@ -7,7 +7,7 @@
   · 自动刷新间隔可配置并持久化；0 = 关闭自动刷新
   · 软件更新检查走同样的缓存化套路，/api/version 不再被网络阻塞
 
-被 server.py（打包版）与 webapp/app.py（开发版）共用，避免两份逻辑漂移。
+只有 server.py 用它（开发期 tools/dev_serve.py 起的也是同一个 server，不存在第二份逻辑）。
 """
 import json
 import os

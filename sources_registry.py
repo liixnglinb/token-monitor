@@ -25,7 +25,8 @@ Token Monitor — 全量数据源注册表
               absent    本机未安装
   note      备注 / 关键字段
 
-本表为"数据"，逻辑在 detect_engine.py。新增源只需在此追加一条。
+本表为"数据"，解析逻辑在 probe_v3_allsources.py（scan_reg_jsonl_one / scan_reg_sqlite_one）。
+新增源只需在此追加一条。
 """
 
 # ---------------------------------------------------------------- 格式常量

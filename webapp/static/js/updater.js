@@ -49,25 +49,12 @@ function fmtReleaseBody(t){
 }
 
 function setUpdUI(){
-  const dot = $("updBadge"), mini = $("updMini"), pctEl = $("updPct");
+  const dot = $("updBadge");
   const st = UPD.state;
   const pctNow = Math.max(0, Math.min(100, Math.round(UPD.percent || 0)));
   if (dot){
     dot.hidden = !(st === "update" || st === "ready" || st === "done");
     dot.className = "dot " + (st === "update" ? "update" : st === "ready" ? "ready" : "done");
-  }
-  /* 下载中：小框本身是进度环 + 百分比数字（无箭头）；就绪：绿点亮起 */
-  if (mini){
-    mini.classList.toggle("is-dl", st === "dl");
-    mini.style.setProperty("--p", String(pctNow));
-    mini.title = st === "update" ? "发现新版本 v" + (UPD.latest || "") + "，悬停查看更新内容"
-      : st === "dl" ? ((UPD.source ? "正在从 " + UPD.source + " 下载 " : "正在测速并选择最快下载源 ") + pctNow + "%")
-      : st === "ready" ? "v" + (UPD.latest || "") + " 已下载完成，点击安装"
-      : st === "done" ? "更新完成，正在重启" : "检查更新";
-  }
-  if (pctEl){
-    pctEl.hidden = st !== "dl";
-    if (st === "dl") pctEl.textContent = String(pctNow);
   }
 
   const pct = pctNow;
@@ -77,10 +64,16 @@ function setUpdUI(){
   if (bar) bar.style.width = pct + "%";
   if (txt) txt.textContent = (UPD.source ? "正在从 " + UPD.source + " 下载 " : "正在测速并选择最快下载源 ")
     + pct + "%";
-  /* 有新版本时把更新日志内联展示在卡片里（原侧栏悬停浮层的替代） */
+  /* 有新版本时把更新日志内联展示在卡片里（原侧栏悬停浮层的替代）；
+     下载/安装失败时同一块区域改报原因 —— 以前 UPD.message 只写进状态机，
+     界面上只剩一句"下载失败 · 重试"，用户不知道败在哪一步。 */
   const notes = $("updNotes");
   if (notes){
-    if (st === "update" && UPD.latest){
+    if (st === "error" && UPD.message){
+      notes.hidden = false;
+      notes.innerHTML = '<div class="un-t is-err">' + esc(UPD.message) + '</div>'
+        + '<div class="un-date">可点「重试」再试一次；失败不影响当前版本的使用。</div>';
+    } else if (st === "update" && UPD.latest){
       notes.hidden = false;
       notes.innerHTML = '<div class="un-t">v' + esc(UPD.latest) + ' 更新日志</div>'
         + (UPD.date ? '<div class="un-date">' + esc(UPD.date) + '</div>' : "")

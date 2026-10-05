@@ -440,9 +440,6 @@ function renderHero(){
 }
 
 /* ---------- 主图与每日统计 ---------- */
-function metricNumber(rows, metric){
-  return rows.reduce((sum, row) => sum + cellVal(row, metric), 0);
-}
 function metricText(value, metric){
   if (metric === "cost") return fmtCNY(value * DATA.cny_rate);
   if (metric === "tokens") return fmtTok(value) + " tok";
@@ -478,16 +475,29 @@ function renderTrendSummary(list, metric){
     '<div class="trend-stat"><span>' + esc(item[0]) + '</span>'
     + '<b>' + item[1] + '</b><small>' + esc(item[2]) + '</small></div>').join("");
 }
-/* 空态图标：与文案一起出现，避免"只有一行灰字"的干瘪空态 */
-const EMPTY_ICON = '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" '
-  + 'stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
-  + '<rect x="3.5" y="5" width="17" height="13" rx="2.5"/><path d="M7 12.5h4M7 9h7M7 15.5h2.5"/></svg>';
-function emptyBlock(title, hint, action){
-  return '<div class="empty">' + EMPTY_ICON
-    + '<div class="t1">' + esc(title) + '</div>'
-    + (hint ? '<div class="t2">' + esc(hint) + '</div>' : '')
-    + (action ? '<button type="button" class="btn btn-sm" data-empty-action>' + esc(action) + '</button>' : '')
-    + '</div>';
+/* 空态的"下一步"按钮：三处（主图 / 构成 / 排行）共用同一套挂接，文案各自给 */
+function emptyActions(...defs){
+  return defs.map(([label, act]) =>
+    '<button type="button" class="btn btn-sm" data-empty-act="' + act + '">' + esc(label) + '</button>').join("");
+}
+function bindEmptyActions(box){
+  if (!box) return;
+  const map = {
+    "range-all":     () => { F.rangeKey = "all"; renderAll(); },
+    "range-last7":   () => { F.rangeKey = "last7"; renderAll(); },
+    "clear-filters": () => { F.rangeKey = "last7"; F.agent = "all"; renderAll(); },
+    "lens-entity":   () => { F.lens = "entity";
+      document.querySelectorAll("#segLens button").forEach(x => {
+        const on = x.dataset.lens === "entity";
+        x.classList.toggle("on", on);
+        x.setAttribute("aria-pressed", String(on));
+      });
+      renderMain(); syncFilterHash(); },
+  };
+  box.querySelectorAll("[data-empty-act]").forEach(btn => {
+    const act = map[btn.dataset.emptyAct];
+    if (act) btn.onclick = act;
+  });
 }
 function renderDailyDetail(rows, list, metric){
   const box = $("dailyList");
@@ -506,10 +516,9 @@ function renderDailyDetail(rows, list, metric){
       + '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.4" '
       + 'stroke-linecap="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 9.5h17M8 3.5v3M16 3.5v3M8.5 14h7"/></svg>'
       + '<span>当前筛选下没有可展示的' + (isMonth ? "月份" : "日期") + '数据</span>'
-      + '<button type="button" class="btn btn-sm" data-empty-action="range-all">查看全部时间</button>'
+      + emptyActions(["查看全部时间", "range-all"])
       + '</div>';
-    const action = box.querySelector("[data-empty-action]");
-    if (action) action.onclick = () => { F.rangeKey = "all"; renderAll(); };
+    bindEmptyActions(box);
     return;
   }
   const byPeriod = new Map();
@@ -606,7 +615,9 @@ function renderMain(){
       t1 = "当前筛选下无" + (F.metric === "tokens" ? " Token" : "请求") + "记录";
       t2 = "试试切换时间范围或指标";
     }
-    emp.innerHTML = '<div class="t1">' + t1 + '</div><div class="t2">' + t2 + '</div>';
+    emp.innerHTML = '<div class="t1">' + t1 + '</div><div class="t2">' + t2 + '</div>'
+      + '<div class="empty-acts">' + emptyActions(["切回近 7 天", "range-last7"], ["查看全部", "range-all"]) + '</div>';
+    bindEmptyActions(emp);
     emp.hidden = false;
   } else {
     emp.hidden = true;
@@ -777,7 +788,9 @@ function renderComposition(rows, range, theme){
   const emp = $("mainEmpty");
   emp.hidden = totalTok > 0;
   if (totalTok === 0) emp.innerHTML = '<div class="t1">当前筛选下无 Token 记录</div>'
-    + '<div class="t2">试试把时间范围切换到近 7 天或全部</div>';
+    + '<div class="t2">试试把时间范围切换到近 7 天或全部</div>'
+    + '<div class="empty-acts">' + emptyActions(["切回近 7 天", "range-last7"], ["查看全部", "range-all"]) + '</div>';
+  bindEmptyActions(emp);
 }
 function renderCacheLeverage(rows, range, theme){
   const perDay = new Map();
@@ -834,7 +847,9 @@ function renderCacheLeverage(rows, range, theme){
   const emp = $("mainEmpty");
   emp.hidden = totFull > 0;
   if (totFull === 0) emp.innerHTML = '<div class="t1">当前筛选下无缓存数据</div>'
-    + '<div class="t2">该口径需要来源记录缓存读取/写入明细（Codex、Claude 等已支持）</div>';
+    + '<div class="t2">该口径需要来源记录缓存读取/写入明细（Codex、Claude 等已支持）</div>'
+    + '<div class="empty-acts">' + emptyActions(["切回实体堆叠", "lens-entity"]) + '</div>';
+  bindEmptyActions(emp);
 }
 
 /* =============================================================================
@@ -916,7 +931,13 @@ function renderAgentList(){
   const countEl = $("agentRailCount");
   if (countEl) countEl.textContent = list.length ? fmtInt(list.length) + " 个数据源" : "";
   if (!list.length){
-    wrap.innerHTML = '<div class="empty">当前筛选下无数据</div>';
+    /* 空态要给出"下一步怎么办"，不能只有一行灰字 */
+    wrap.innerHTML = '<div class="empty ar-empty">'
+      + '<div class="t1">当前筛选下没有数据源</div>'
+      + '<div class="t2">放宽时间范围，或清除数据源筛选后再看</div>'
+      + '<div class="empty-acts">' + emptyActions(["清除筛选", "clear-filters"]) + '</div>'
+      + '</div>';
+    bindEmptyActions(wrap);
     return;
   }
   const totalTok = list.reduce((s, x) => s + x[1].tokens, 0) || 1;

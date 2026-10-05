@@ -382,6 +382,11 @@ select {
 .dd-sm .dd-btn b { font-size: var(--fs-xs); }
 .dd-sm .dd-menu { min-width: 152px; }
 .dd-tag { font-size: var(--fs-2xs); color: var(--m-dim); letter-spacing: var(--ls-wide); }
+/* 结构视角（物理构成/缓存杠杆）下停用的两个切换器：只压透明度在深底上几乎看不出来，
+   再去饱和并锁住 hover，让"这个控件现在用不了"一眼可辨 */
+.dd-disabled { filter: saturate(.4); }
+.dd-disabled .dd-btn { cursor: not-allowed; }
+.dd-disabled .dd-btn:hover { background: var(--inset); border-color: var(--line-soft); }
 .dd-btn:disabled { opacity: .45; cursor: not-allowed; }
 .dd-btn:disabled:hover { background: var(--inset); border-color: var(--line-soft); }
 /* 靠右锚定：顶栏最右侧的芯片菜单不能溢出视口 */
@@ -1063,10 +1068,7 @@ th.num .th-sort { justify-content: flex-end; }
   color: var(--text-2);
   white-space: nowrap;
 }
-.chip-pos { background: var(--pos-soft); color: var(--pos); border-color: transparent; }
 .chip-warn { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
-.chip-neg { background: var(--neg-soft); color: var(--neg); border-color: transparent; }
-.chip-info { background: var(--info-soft); color: var(--info); border-color: transparent; }
 
 .agent-brand-img { width: 18px; height: 18px; object-fit: contain; border-radius: var(--r-xs); }
 /* 深色单色官方 logo（openai / opencode 那种 #111827 实心路径）在深色面板上
@@ -1181,11 +1183,11 @@ th.num .th-sort { justify-content: flex-end; }
 .empty .t1 { font-size: var(--fs-md); font-weight: var(--fw-semibold); color: var(--ink); }
 .empty .t2 { font-size: var(--fs-xs); color: var(--muted); max-width: 380px; }
 .empty .btn { margin-top: var(--sp-1); }
+/* 空态的"下一步"按钮组：可多颗，居中换行 */
+.empty-acts { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--sp-2); margin-top: var(--sp-2); }
 
-/* 骨架屏行 */
+/* 骨架屏行（ui.js 只会生成 .skeleton.skeleton-line 与 .skeleton 本体） */
 .skeleton-line { height: 10px; width: var(--w, 80%); margin: 6px 0; }
-.skeleton-text { min-height: 1em; }
-.skeleton-block { min-height: 96px; }
 
 /* Toast */
 .toast-stack {
@@ -1294,6 +1296,7 @@ th.num .th-sort { justify-content: flex-end; }
   box-shadow: inset 0 1px 0 rgba(0, 0, 0, 0.22), inset 0 0 0 1px rgba(255, 255, 255, 0.02);
 }
 .upd-notes .un-t { font-size: var(--fs-sm); font-weight: var(--fw-semibold); color: var(--ink); }
+.upd-notes .un-t.is-err { color: var(--neg); overflow-wrap: anywhere; }
 .upd-notes .un-date { margin: 2px 0 var(--sp-2); font-size: var(--fs-2xs); color: var(--muted); }
 .upd-notes .un-body { max-height: 300px; overflow-y: auto; }
 .upd-notes .sec { margin: var(--sp-3) 0 3px; font-size: var(--fs-xs); font-weight: var(--fw-semibold); color: var(--brand-strong); }
