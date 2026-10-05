@@ -386,6 +386,10 @@ select {
 .dd-btn:disabled:hover { background: var(--inset); border-color: var(--line-soft); }
 /* 靠右锚定：顶栏最右侧的芯片菜单不能溢出视口 */
 .dd-menu-right { left: auto; right: 0; }
+/* ≤760px 顶栏换行后芯片落在左侧，再右锚定会把 268px 面板甩出屏幕外（实测 left:-80） */
+@media (max-width: 760px) {
+  .dd-menu-right { left: 0; right: auto; }
+}
 
 /* 顶栏「扫描异常」芯片：取代原先压在页面顶部的那条红色横幅 */
 .dd-chip {

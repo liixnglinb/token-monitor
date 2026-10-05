@@ -82,6 +82,51 @@ def save_settings(s):
     return s
 
 
+# ── 上次扫描结果的落盘 ─────────────────────────────────────────────
+# 没有这一层时，进软件必然触发一次全量扫描（本机热缓存下也要 ~50s），
+# 用户每开一次就等一次。把上一次的成功结果存下来，开机先拿它上屏，
+# 之后按 refresh_minutes 的节奏或用户手动再扫。
+SNAPSHOT_FMT = 1
+
+
+def _snapfile():
+    return os.path.join(settings_dir(), "last-build.json")
+
+
+def save_snapshot(data, built_at):
+    payload = {"fmt": SNAPSHOT_FMT, "built_at": built_at, "data": data}
+    d = settings_dir()
+    try:
+        fd, part = tempfile.mkstemp(prefix="snap-", suffix=".tmp", dir=d)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, separators=(",", ":"))
+        os.replace(part, _snapfile())
+    except OSError:
+        try:
+            os.remove(part)
+        except OSError:
+            pass
+
+
+def load_snapshot():
+    """读回上一次的结果；格式或字段不对就一律当没有 —— 宁可重扫，不可显示错的数。"""
+    try:
+        with open(_snapfile(), "r", encoding="utf-8") as f:
+            raw = json.load(f)
+    except (OSError, ValueError):
+        return None, None
+    if not isinstance(raw, dict) or raw.get("fmt") != SNAPSHOT_FMT:
+        return None, None
+    data, built_at = raw.get("data"), raw.get("built_at")
+    if not isinstance(data, dict) or not isinstance(built_at, str):
+        return None, None
+    if not isinstance(data.get("matrix"), list) or not isinstance(data.get("agents"), list):
+        return None, None
+    if not isinstance(data.get("range"), dict):
+        return None, None
+    return data, built_at
+
+
 class Refresher:
     """后台刷新调度器。build_fn(publish_partial) 返回可序列化的 dict。
 
@@ -94,17 +139,24 @@ class Refresher:
         self._version_fn = version_fn
         self._lock = threading.Lock()
         self._cv = threading.Condition(self._lock)
-        self._data = None
+        self._data, self._built_at = load_snapshot()   # 上次扫描的结果直接复用，开机不重扫
         self._partial = None
-        self._built_at = None
         self._error = None
         self._busy = False
         self._dirty = False
         self._version = None
         self._version_at = None
+        self._ts = self._built_ts()
         self.settings = load_settings()
         self._stop = threading.Event()
         self._thread = None
+
+    def _built_ts(self):
+        """上次成功构建的时刻（epoch）。解析不了就返回 0，让循环判定为"该扫了"。"""
+        try:
+            return datetime.fromisoformat(self._built_at).timestamp()
+        except (TypeError, ValueError):
+            return 0.0
 
     # ---------- 生命周期 ----------
     def start(self):
@@ -119,8 +171,8 @@ class Refresher:
             with self._lock:
                 rm = self.settings["refresh_minutes"]
                 dirty = self._dirty
-            # 进入软件必须自动扫描一次（_built_at 为空），不受自动刷新开关影响；
-            # 开关只控制后续的周期性重扫与脏标记重扫
+            # _built_at 只有在"本机从没成功扫过"时才是空 —— 有落盘快照就不在开机时重扫，
+            # 到点、被标脏、或用户手动刷新才扫（自动刷新关掉就完全不扫）
             due_data = self._built_at is None or (
                 rm > 0 and (dirty
                 or (time.time() - self._last_build_ts()) >= rm * 60))
@@ -138,7 +190,7 @@ class Refresher:
             self._stop.wait(2.0)
 
     def _last_build_ts(self):
-        return getattr(self, "_ts", 0.0)
+        return self._ts
 
     # ---------- 对外 ----------
     def snapshot(self):
@@ -211,6 +263,9 @@ class Refresher:
             self._busy = False
             if self._dirty:                             # 期间有人要过新数据
                 self._dirty = False
+        if data is not None:
+            # 落盘放在锁外：上百 KB 的写盘不该把 /api/summary 一起堵住
+            save_snapshot(data, self._built_at)
 
     def _do_version(self):
         if not self._version_fn:
@@ -232,5 +287,4 @@ class Refresher:
                 "error": self._error,
                 "settings": dict(self.settings),
                 "has_data": self._data is not None,
-                "has_partial": self._data is None and self._partial is not None,
             }
