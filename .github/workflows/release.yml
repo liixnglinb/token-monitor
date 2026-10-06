@@ -11,6 +11,10 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
+    env:
+      # 标签名不进命令行：所有步骤统一读 $env:APP_VERSION。
+      # 直接 ${{ github.ref_name }} 拼进 pwsh 语句里，等于把外部输入当代码执行。
+      APP_VERSION: ${{ github.ref_name }}
     steps:
       - uses: actions/checkout@v4
 
@@ -23,10 +27,33 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt pyinstaller
 
+      # 发版门禁：绿了才允许继续打包上传。以前 CI 只装依赖直接打包，
+      # 单测和前端语法都只在本地跑过，等于"标签一推就发版"没有拦网。
+      - name: 验收门禁（单元测试 + 前端语法）
+        shell: bash
+        run: |
+          pip install pytest
+          python -m pytest tests -q
+          # 逐文件 + 按 index.html 的真实加载顺序拼起来再查一遍：
+          # 九个脚本共用一个全局作用域，跨文件重名的 let/const 会让整块脚本
+          # 静默中止（症状是"某个函数怎么就 undefined 了"），单文件查不出来。
+          for f in webapp/static/js/*.js; do node --check "$f"; done
+          ORDER=$(grep -o 'js/[a-z_]*\.js' webapp/static/index.html | sed 's#^#webapp/static/#')
+          cat $ORDER > "$RUNNER_TEMP/tm-all.js"
+          node --check "$RUNNER_TEMP/tm-all.js"
+          echo "门禁通过：单测 + $(echo "$ORDER" | wc -w) 个前端脚本（拼接 $(wc -l < "$RUNNER_TEMP/tm-all.js") 行）"
+
+      - name: 依赖漏洞扫描
+        shell: bash
+        run: |
+          pip install pip-audit
+          # requirements.txt 里不能写非 ASCII 注释：pip-audit 用本地编码读文件
+          pip-audit -r requirements.txt --strict
+
       - name: 写入版本号
         shell: pwsh
         run: |
-          $tag = "${{ github.ref_name }}"
+          $tag = $env:APP_VERSION
           # 明确写"无 BOM"的 UTF-8：PowerShell 5.1 的 Set-Content -Encoding utf8 会写 BOM，
           # 而 BOM 会让 updater._parse 抛错，导致"已是最新还提示更新"
           [System.IO.File]::WriteAllText("$PWD/version.txt", $tag, (New-Object System.Text.UTF8Encoding($false)))
@@ -56,14 +83,14 @@ jobs:
         run: |
           choco install innosetup -y --no-progress
           $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
-          & $iscc /DAppVersion="${{ github.ref_name }}" installer.iss
+          & $iscc /DAppVersion="$env:APP_VERSION" installer.iss
 
       - name: 校验产物
         shell: pwsh
         run: |
           Get-ChildItem dist | ForEach-Object { "{0}  {1:N1} MB" -f $_.Name, ($_.Length/1MB) }
           if (-not (Test-Path "dist\TokenMonitor.exe")) { throw "exe 缺失" }
-          if (-not (Test-Path "dist\TokenMonitor-setup-${{ github.ref_name }}.exe")) { throw "安装包缺失" }
+          if (-not (Test-Path "dist\TokenMonitor-setup-$env:APP_VERSION.exe")) { throw "安装包缺失" }
 
       # 为每个发布产物生成对应的 .sha256 校验文件，供客户端自更新时校验下载
       # 完整性，防止镜像返回截断/被篡改的包导致替换后变砖。

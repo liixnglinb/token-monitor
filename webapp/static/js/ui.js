@@ -16,59 +16,6 @@
     return Array.prototype.slice.call((scope || document).querySelectorAll(selector));
   };
 
-  /* ── 1. 文案与格式 ───────────────────────────────────────────────────── */
-  const nfInt = new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 0 });
-  const nf1 = new Intl.NumberFormat("zh-CN", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-  const nf2 = new Intl.NumberFormat("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const nf4 = new Intl.NumberFormat("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 4 });
-
-  const fmt = {
-    int: function (value) { return nfInt.format(Math.round(Number(value) || 0)); },
-    tokens: function (value) {
-      const n = Number(value) || 0;
-      if (n >= 1e9) return nf2.format(n / 1e9) + " B";
-      if (n >= 1e6) return nf1.format(n / 1e6) + " M";
-      if (n >= 1e3) return nf1.format(n / 1e3) + " k";
-      return fmt.int(n);
-    },
-    cny: function (value, digits) {
-      const n = Number(value) || 0;
-      const formatter = digits === 4 ? nf4 : nf2;
-      return "¥" + formatter.format(n);
-    },
-    usd: function (value) { return "$" + nf2.format(Number(value) || 0) + " USD"; },
-    percent: function (value, digits) {
-      const n = Number(value) || 0;
-      return (digits === 0 ? nfInt.format(n) : (digits === 1 ? nf1.format(n) : nf2.format(n))) + "%";
-    },
-    date: function (value, withTime) {
-      const date = value instanceof Date ? value : new Date(value);
-      if (isNaN(date)) return String(value == null ? "—" : value);
-      const options = withTime
-        ? { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }
-        : { year: "numeric", month: "2-digit", day: "2-digit" };
-      return date.toLocaleString("zh-CN", options);
-    },
-    shortDateTime: function (value) {
-      const date = value instanceof Date ? value : new Date(value);
-      if (isNaN(date)) return String(value == null ? "—" : value).slice(11, 16);
-      return date.toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
-    },
-    duration: function (ms) {
-      const seconds = Math.max(0, Math.round((Number(ms) || 0) / 1000));
-      if (seconds < 60) return seconds + " 秒";
-      const minutes = Math.floor(seconds / 60);
-      if (minutes < 60) return minutes + " 分 " + (seconds % 60) + " 秒";
-      return Math.floor(minutes / 60) + " 小时 " + (minutes % 60) + " 分";
-    },
-    // 大数字紧凑显示；表格里用完整千分位，KPI 用紧凑
-    compact: function (value) {
-      const n = Math.abs(Number(value) || 0);
-      if (n >= 1e8) return nf1.format(n / 1e8) + " 亿";
-      if (n >= 1e4) return nf1.format(n / 1e4) + " 万";
-      return fmt.int(n);
-    }
-  };
 
   /* ── 2. 轻提示（toast） ─────────────────────────────────────────────── */
   const TOAST_ICON = {
@@ -191,22 +138,6 @@
   }
 
   /* ── 5. 骨架屏：加载态占位 ─────────────────────────────────────────── */
-  function showSkeleton(id, lines) {
-    const node = $(id);
-    if (!node) return;
-    const count = Math.max(1, lines || 1);
-    const widths = ["92%", "78%", "86%", "64%", "72%", "58%", "80%", "68%"];
-    node.innerHTML = Array.from({ length: count }, function (_, index) {
-      return '<div class="skeleton skeleton-line" style="--w:' + widths[index % widths.length] + '"></div>';
-    }).join("");
-    node.setAttribute("aria-busy", "true");
-  }
-
-  function clearSkeleton(id) {
-    const node = $(id);
-    if (node) node.removeAttribute("aria-busy");
-  }
-
   /* 首屏 Hero 占位：数据到达前显示骨架而不是"—" */
   function skeletonKpis() {
     ["heroValAbbr", "heroReq", "heroAvg", "heroCost", "heroEquiv"].forEach(function (id) {
@@ -381,20 +312,6 @@
     });
   }
 
-  /* ── 9. 滚动进入视图时才渲染的懒加载（性能） ─────────────────────── */
-  function lazyOnVisible(node, callback, options) {
-    if (!node) return;
-    if (!("IntersectionObserver" in window)) { callback(); return; }
-    const observer = new IntersectionObserver(function (entries) {
-      entries.forEach(function (entry) {
-        if (entry.isIntersecting) {
-          observer.disconnect();
-          callback();
-        }
-      });
-    }, Object.assign({ rootMargin: "200px 0px" }, options || {}));
-    observer.observe(node);
-  }
 
   /* 视图从隐藏切回可见时，画布需要重新量尺寸（Chart.js 在 display:none 下算不出尺寸） */
   function resizeChartsIn(root) {
@@ -445,19 +362,15 @@
   else init();
 
   window.TMUI = {
-    fmt: fmt,
     toast: toast,
     confirm: confirmAction,
     trapFocus: trapFocus,
-    showSkeleton: showSkeleton,
-    clearSkeleton: clearSkeleton,
     skeletonKpis: skeletonKpis,
     clearKpiSkeleton: clearKpiSkeleton,
     syncAria: syncAria,
     route: route,
     initRouter: initRouter,
     currentView: currentView,
-    lazyOnVisible: lazyOnVisible,
     resizeChartsIn: resizeChartsIn,
     $: $,
     qsa: qsa

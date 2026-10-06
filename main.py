@@ -303,12 +303,26 @@ def _setup_tray(window, port: int) -> None:
             except Exception:
                 pass
 
+        def _check_update_show(*_a):
+            """托盘「检查更新」：以前只打一次 /api/version 就把响应丢掉，
+            用户点了什么也不会发生。改成把窗口唤到前台、跳到设置 › 软件更新，
+            再触发界面那颗按钮 —— 检查、进度、确认弹窗全部复用界面已有的那条链路。"""
+            try:
+                window.show()
+            except Exception:
+                pass
+            try:
+                window.evaluate_js(
+                    "try{document.getElementById('settingsBtn').click();"
+                    "document.getElementById('updBtn').click();}catch(e){}")
+            except Exception:
+                pass
+
         menu = pystray.Menu(
             pystray.MenuItem("显示面板", _show, default=True),
             pystray.MenuItem("重新扫描数据源",
                              lambda *_a: _api_get(port, "/api/reload")),
-            pystray.MenuItem("检查更新",
-                             lambda *_a: _api_get(port, "/api/version")),
+            pystray.MenuItem("检查更新", _check_update_show),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("退出（结束全部后台）", _quit_all),
         )

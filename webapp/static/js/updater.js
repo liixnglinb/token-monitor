@@ -60,8 +60,15 @@ function setUpdUI(){
   const pct = pctNow;
   /* 设置页「软件更新」卡片里的下载进度行 */
   const row = $("updProgressRow"), bar = $("updProgressBar"), txt = $("updProgressText");
+  const wrap = $("updProgressBarWrap");
   if (row) row.hidden = st !== "dl";
   if (bar) bar.style.width = pct + "%";
+  /* role="progressbar" 的容器在 HTML 里，但百分比一直只写在宽度上：
+     读屏拿不到数值。进度既已算出，就把 aria-valuenow 一起更新。 */
+  if (wrap){
+    wrap.setAttribute("aria-valuenow", String(pctNow));
+    wrap.setAttribute("aria-valuetext", pctNow + "%");
+  }
   if (txt) txt.textContent = (UPD.source ? "正在从 " + UPD.source + " 下载 " : "正在测速并选择最快下载源 ")
     + pct + "%";
   /* 有新版本时把更新日志内联展示在卡片里（原侧栏悬停浮层的替代）；

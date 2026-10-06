@@ -108,6 +108,22 @@ function bindChartChoosers(){
   });
 }
 renderChartChoosers();
+/* 时间范围下拉同样是"选项写死、不依赖数据"，也得在加载时就把菜单填好：
+   以前只有 renderAll() 里那一次 renderRangeMenu()，首扫期间点开时间下拉是个空壳。 */
+renderRangeMenu();
+
+/* 缩写/全值切换的绑定与数据无关，却曾写在 renderTotalTokenCard 里 ——
+   于是首屏（数据未到）那段窗口里，那颗写着"点击切换"的按钮点了没反应。 */
+(function bindHeroNum(){
+  const numBtn = $("heroNum");
+  if (!numBtn) return;
+  numBtn.onclick = () => {
+    const mode = numBtn.dataset.mode === "abbr" ? "full" : "abbr";
+    numBtn.dataset.mode = mode;
+    $("heroValFull").hidden = mode !== "full";
+    $("heroValAbbr").hidden = mode === "full";
+  };
+})();
 
 function bindDropdown(ddId, menuId, onPick){
   const dd = $(ddId), menu = $(menuId);
@@ -322,16 +338,7 @@ function renderTotalTokenCard(t){
   const compTotal = t.compTotal;
   $("heroValAbbr").textContent = fmtTok(compTotal);
   $("heroValFull").textContent = fmtInt(compTotal);
-  const numBtn = $("heroNum");
-  if (numBtn && !numBtn.dataset.bound){
-    numBtn.dataset.bound = "1";
-    numBtn.onclick = () => {
-      const mode = numBtn.dataset.mode === "abbr" ? "full" : "abbr";
-      numBtn.dataset.mode = mode;
-      $("heroValFull").hidden = mode !== "full";
-      $("heroValAbbr").hidden = mode === "full";
-    };
-  }
+  /* 点击切换的绑定在文件加载时就做好了（bindHeroNum），这里不再重复绑 */
   /* 计费拆分 pill（按 Token 占比） */
   const pillM = $("heroPillMetered"), pillP = $("heroPillPlan");
   const meteredTokens = Math.max(compTotal - t.planTokens, 0);
@@ -1091,10 +1098,22 @@ function renderModelDist(){
     + '<span class="val">' + fmtInt(o.req) + '<em>次</em></span>'
     + '</div>').join("");
 
-  /* 点击某行 → 跳到「模型用量」视图看明细 */
+  /* 点击某行 → 跳到「模型用量」并按这个模型筛明细。
+     行上早就写了 data-model、title 也写着"查看 X 的明细"，但以前的处理器只调
+     switchView("models") —— 那函数只改标题/高亮，不切可见性也不写 hash，
+     所以点了之后界面根本没动。切视图必须走 go()（hash 路由，可后退可分享），
+     并且要先写好筛选再切，免得路由重渲一次、筛选再渲一次闪一下。 */
   box.querySelectorAll(".t10-row").forEach(el=>{
     el.onclick = () => {
-      switchView("models");
+      const name = el.dataset.model || "";
+      PAGE.query = name;
+      PAGE.index = 0;
+      const search = $("modelSearch");
+      if (search) search.value = name;
+      go("models");
+      /* go() 走 hash 路由；路由回调只在"地址带筛选参数"时才重渲一次，
+         刚切视图这一跳地址是干净的 #/models，不补一刀表格就还是全量。 */
+      renderModelTable();
       window.scrollTo({ top: 0, behavior: "smooth" });
     };
   });

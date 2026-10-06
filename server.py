@@ -5,11 +5,16 @@
 （含全部去重 / 语义修正 / 超预算整源丢弃），
 经 pricing.py 计价后，聚合成 (date, agent, model) 矩阵交给前端自由筛选。
 
-接口：  GET  /api/summary   全量聚合矩阵 + KPI
-        GET  /api/reload    重新扫描数据源
-        GET  /api/version   本地版本 / 最新版本 / 是否有更新
-        POST /api/update    下载新版并自替换重启
-        GET  /              前端页面
+接口（与前端 js 的调用点一一对应，加删路由请同时改这份清单）：
+        GET  /api/summary           全量聚合矩阵 + KPI（首扫期间是 partial 部分结果）
+        GET  /api/reload            重新扫描数据源
+        GET  /api/settings          后端状态 + 设置（busy/queued/error/built_at）
+        POST /api/settings          改设置（只认 DEFAULTS 白名单键，越界钳制）
+        GET  /api/version           本地版本 / 最新版本 / 是否有更新
+        POST /api/update            下载新版（并发测速挑最快源）
+        GET  /api/update/progress   下载进度（percent/state/source/message）
+        POST /api/update/apply      替换 exe 并重启
+        GET  /                      前端页面
 """
 import os
 import sys

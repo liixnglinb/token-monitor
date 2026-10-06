@@ -6,7 +6,7 @@
 <meta name="color-scheme" content="dark light">
 <title>用量总览 · Token Monitor</title>
 <meta name="description" content="本机 AI 编程工具与 Agent 的 Token 用量、请求次数与成本估算面板">
-<link rel="icon" href="/static/favicon.svg?v=20261005" type="image/svg+xml">
+<link rel="icon" href="/static/favicon.svg?v=20261006" type="image/svg+xml">
 <!-- 主题：在样式表之前落地，避免首帧闪白/闪黑 -->
 <script>
 (function () {
@@ -18,7 +18,7 @@
   } catch (e) { /* 主题偏好读取失败就用系统默认 */ }
 })();
 </script>
-<link rel="stylesheet" href="/static/styles/styles.css?v=20261005">
+<link rel="stylesheet" href="/static/styles/styles.css?v=20261006">
 </head>
 <body>
 <a class="skip-link" href="#main">跳到主要内容</a>
@@ -89,7 +89,7 @@
           <div class="dd-menu dd-menu-wide" id="ddAgentMenu" role="menu" hidden>
             <button data-agent-filter="all" class="active" type="button" role="menuitemradio" aria-checked="true">
               <span class="dd-agent-name">全部数据源</span>
-              <em id="ddAgentTotal" aria-label="数据源数量">0</em>
+              <em id="ddAgentTotal" aria-label="数据源数量">—</em>
             </button>
             <div id="ddAgents"></div>
             <div id="ddUncounted" class="side-unc-wrap"></div>
@@ -115,8 +115,9 @@
           </button>
           <div class="dd-menu dd-menu-wide dd-menu-right" id="scanChipMenu" role="menu" hidden></div>
         </div>
-        <button class="update-progress" id="updateProgress" type="button" hidden
-                aria-live="polite" title="正在下载更新">0%</button>
+        <!-- 下载进度：状态显示，不是按钮（以前是 <button>，可 Tab 聚焦、回车无反应） -->
+        <span class="update-progress" id="updateProgress" hidden
+              role="status" aria-live="polite" title="正在下载更新">0%</span>
         <!-- 窄屏专用：顶栏筛选折叠后从这里打开数据源抽屉（桌面端隐藏） -->
         <button class="btn btn-ghost icon-btn filter-btn" id="filterBtn" type="button"
                 title="筛选数据源" aria-label="筛选数据源" aria-haspopup="dialog" aria-expanded="false" aria-controls="agentDrawer">
@@ -560,7 +561,7 @@
       <button class="side-project active" type="button" data-agent-filter="all" aria-pressed="true">
         <span class="side-project-icon"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><ellipse cx="8" cy="4" rx="5" ry="2.2"/><path d="M3 4v4c0 1.2 2.2 2.2 5 2.2s5-1 5-2.2V4M3 8v4c0 1.2 2.2 2.2 5 2.2s5-1 5-2.2V8"/></svg></span>
         <span class="side-project-name">全部数据源</span>
-        <em id="drawerAgentTotal" aria-label="数据源数量">0</em>
+        <em id="drawerAgentTotal" aria-label="数据源数量">—</em>
       </button>
       <div id="drawerAgents"></div>
       <div id="drawerUncounted" class="side-unc-wrap"></div>
@@ -599,14 +600,14 @@
 <div class="toast-stack" id="toastStack" role="region" aria-label="通知" aria-live="polite"></div>
 
 <script src="/static/vendor/chart.umd.min.js"></script>
-<script src="/static/js/core.js?v=20261005"></script>
-<script src="/static/js/theme.js?v=20261005"></script>
-<script src="/static/js/ui.js?v=20261005"></script>
-<script src="/static/js/data.js?v=20261005"></script>
-<script src="/static/js/charts.js?v=20261005"></script>
-<script src="/static/js/render.js?v=20261005"></script>
-<script src="/static/js/interactions.js?v=20261005"></script>
-<script src="/static/js/updater.js?v=20261005"></script>
-<script src="/static/js/app.js?v=20261005"></script>
+<script src="/static/js/core.js?v=20261006"></script>
+<script src="/static/js/theme.js?v=20261006"></script>
+<script src="/static/js/ui.js?v=20261006"></script>
+<script src="/static/js/data.js?v=20261006"></script>
+<script src="/static/js/charts.js?v=20261006"></script>
+<script src="/static/js/render.js?v=20261006"></script>
+<script src="/static/js/interactions.js?v=20261006"></script>
+<script src="/static/js/updater.js?v=20261006"></script>
+<script src="/static/js/app.js?v=20261006"></script>
 </body>
 </html>

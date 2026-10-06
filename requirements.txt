@@ -1,6 +1,20 @@
-fastapi
-uvicorn
-zstandard
-pywebview
-pystray
-Pillow
+# Runtime dependencies. Kept ASCII-only on purpose: pip-audit reads this file
+# with the locale codec (cp936 on Windows), so non-ASCII comments make the
+# security scan crash. Chinese notes belong in README.md / docs/ui-spec.md.
+#
+# These pins clear `python -m pip_audit -r requirements.txt` (0 findings).
+# The previous set (fastapi 0.115.0 -> starlette 0.38.6, Pillow 12.2.0) carried
+# 13 Pillow advisories + 7 Starlette advisories. Verified in a clean 3.12 venv:
+# pytest 23/23 plus a live server probe of /, /api/summary, /api/settings (GET+POST),
+# /api/version and /static/*.
+#
+# Bump flow: pip install -U -> pytest + tools/ui_smoke.py + tools/final_check.py
+# green -> update these pins -> pip-audit -> tag a release.
+fastapi==0.142.2
+uvicorn==0.54.0
+pywebview==6.2.1
+pystray==0.19.5
+Pillow==12.3.0
+# Dev machines may not have zstandard (the DSH source skips itself gracefully),
+# so this one stays a range instead of a fake pin.
+zstandard>=0.22,<1.0

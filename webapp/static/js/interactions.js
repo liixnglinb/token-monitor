@@ -100,7 +100,6 @@ function applyAgentFilter(name){
 }
 /* 数据源筛选：顶栏下拉（bindAgentDropdown 定义在 render.js）与窄屏抽屉共用 applyAgentFilter */
 bindAgentDropdown();
-if ($("sideReload")) $("sideReload").onclick = () => $("reloadTop").click();
 /* 窄屏底部标签栏：复用同一套视图切换逻辑；"设置"与 #settingsBtn 共用入口 */
 $("tabbar").addEventListener("click", e=>{
   const b = e.target.closest("button"); if (!b) return;
@@ -291,7 +290,6 @@ function syncSettings(s){
       : d.toLocaleString("zh-CN", {month:"2-digit", day:"2-digit",
         hour:"2-digit", minute:"2-digit", hour12:false});
     ba.textContent = short;
-    if ($("sideBuiltAt")) $("sideBuiltAt").textContent = short;
   }
   const st = $("scanState");
   if (st) st.textContent = s.busy ? "正在后台扫描…"
@@ -302,6 +300,14 @@ function syncSettings(s){
   if (dot){
     dot.classList.toggle("busy", !!(s.busy || s.queued));
     dot.classList.toggle("error", !!s.error);
+  }
+  /* 侧栏那盏灯以前是写死的绿色常量，后端失败也照样"在线"；现在与顶栏同一份状态 */
+  const rail = $("railOnline");
+  if (rail){
+    rail.classList.toggle("busy", !!(s.busy || s.queued));
+    rail.classList.toggle("error", !!s.error);
+    rail.title = s.error ? "上次扫描失败：" + s.error
+      : (s.busy || s.queued) ? "正在扫描本机数据源" : "本机只读模式 · 数据已同步";
   }
   SCANNING = !!(s.busy || s.queued);
   renderScanProgress();

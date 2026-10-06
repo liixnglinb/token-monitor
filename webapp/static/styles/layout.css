@@ -160,6 +160,17 @@ body::after {
   background: var(--dot-ok);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--dot-ok) 14%, transparent);
 }
+/* 侧栏状态灯必须跟真实后端状态走（interactions.js syncSettings 打这两个类）。
+   以前它写死绿色：后端在扫、上次失败，它一样亮"ok"，是一盏假灯。 */
+.side-online.busy {
+  background: var(--dot-busy);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dot-busy) 14%, transparent);
+  animation: dot-pulse 1.6s ease-in-out infinite;
+}
+.side-online.error {
+  background: var(--dot-err);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dot-err) 14%, transparent);
+}
 @keyframes dot-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 
 /* ── 主区 ── */

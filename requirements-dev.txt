@@ -1,0 +1,7 @@
+# Dev / verification dependencies (NOT shipped in the exe). ASCII-only comments
+# for the same pip-audit locale reason explained in requirements.txt.
+#   pip install -r requirements.txt -r requirements-dev.txt
+#   playwright install chromium        # the UI suites need a real browser
+pytest==9.1.1            # runner for tests/ (cases themselves are unittest)
+playwright==1.61.0       # tools/ui_smoke.py, final_check.py, ui_verify.py, check_theme_chart.py
+pyinstaller==6.22.2      # packaging only; CI installs it explicitly too

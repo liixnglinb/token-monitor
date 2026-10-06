@@ -1424,7 +1424,10 @@ def scan_reg_sqlite_one(src, agent, seen_real, pre=None):
                     try:
                         # 表名来自 sqlite_master 自省：列清单走参数绑定，
                         # 表名在拼进查询前过 _qident 白名单（防恶意库文件逃逸）
-                        cols = [r[1] for r in con.execute(
+                        # 注意是 `SELECT name`（单列）→ 只能取 r[0]。这里曾写成 r[1]，
+                        # 于是所有走这条路的 sqlite 源逐个抛 IndexError、被上层记成
+                        # "扫描失败"（Kimi / Qoder 两源静默丢了整份用量）。
+                        cols = [r[0] for r in con.execute(
                             "SELECT name FROM pragma_table_info(?)", (tn,))]
                         if not any(_has_tok(c) for c in cols):
                             continue
