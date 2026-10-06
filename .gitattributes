@@ -1,0 +1,12 @@
+# 统一换行：源码一律 LF 入库，检出也不改成 CRLF
+# （此前 core.autocrlf=true 让同一份 js/css 在工作区一会儿 LF 一会儿 CRLF：
+#   打包版与源码逐字节比对时会因 1261 个  报"不一致"，白查一轮。）
+* text=auto eol=lf
+
+*.png  -text
+*.jpg  -text
+*.webp -text
+*.ico  -text
+*.gz   -text
+*.woff binary
+*.woff2 binary
