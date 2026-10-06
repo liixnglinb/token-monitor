@@ -28,7 +28,7 @@ function switchView(view, cat){
   Object.keys(views).forEach(key => { if (views[key]) views[key].hidden = key !== view; });
   /* 从隐藏切回可见时画布尺寸会失效，这里补一次重算 */
   if (window.TMUI && TMUI.resizeChartsIn) requestAnimationFrame(() => TMUI.resizeChartsIn(views[view]));
-  try { sessionStorage.setItem("voyra-token-view", view); } catch { /* UI state */ }
+  try { localStorage.setItem("voyra-token-view", view); } catch { /* UI state */ }
   if (isSet) setCat(cat || "general");
   if (window.TMUI) TMUI.syncAria();
 }
@@ -46,7 +46,7 @@ function setCat(cat){
    刷新、前进后退、分享链接都不会丢过滤视图。 */
 const FILTER_KEYS = ["range", "agent", "metric", "grain", "dim", "billing"];
 function applyRoute(route, replace){
-  /* hash 里带的筛选参数优先级最高（超过 sessionStorage 恢复值） */
+  /* hash 里带的筛选参数优先级最高（超过上次记住的 localStorage 值） */
   if (route.params && Object.keys(route.params).length){
     const p = route.params;
     if (["today","yesterday","last7","last30","last90","thismonth","lastmonth","all"].includes(p.range)) F.rangeKey = p.range;
@@ -422,4 +422,16 @@ if ($("modelPageSize")) $("modelPageSize").onchange = function(){
 };
 
 /* ---------- 页面路由：hash 是唯一地址（可分享、可前进后退） ---------- */
+/* 上次所在的视图：以前是"只写不读" —— 每切一次视图都存一份，却没有任何地方读回来，
+   于是重启永远停在总览。必须在 initRouter 之前把地址补上：路由第一次 apply 时就会
+   调 syncFilterHash() 往地址里写 #/overview?…，事后再判断"地址里有没有路由"已经晚了
+   （上一版我就栽在这里，测出来的一直是"restore 没生效"）。 */
+(function seedLastView(){
+  try {
+    if (location.hash && location.hash.length > 1) return;      // 深链接 / 后退优先，不覆盖
+    const v = localStorage.getItem("voyra-token-view");
+    if (v === "overview" || v === "models" || v === "settings")
+      history.replaceState(null, "", "#/" + v);                 // replaceState：不留历史垃圾
+  } catch (_) { /* 读不到就停在默认视图 */ }
+})();
 window.TMUI && TMUI.initRouter((route /*, initial */) => applyRoute(route, false));

@@ -47,8 +47,22 @@ let SCANNING = false;
 
 const F = { rangeKey: "last7", agent: "all", metric: "tokens", grain: "day", dim: "total",
             billing: "all", lens: "entity", open: new Set() };
+/* 视图与筛选记在 localStorage 而不是 sessionStorage：
+   session 存储只在"同一次标签会话"内有效，程序整个退出重开（或崩溃后被拉起来）
+   就清空 —— 界面于是回到默认视图，等于没记住用户在哪。主题一直用的是 localStorage，
+   两者本来就该同一个持久度。 */
+const UI_FILTER_KEY = "voyra-token-filters", UI_VIEW_KEY = "voyra-token-view";
+function persistFilters(){
+  try {
+    localStorage.setItem(UI_FILTER_KEY, JSON.stringify({
+      rangeKey: F.rangeKey, agent: F.agent, metric: F.metric, grain: F.grain,
+      dim: F.dim, billing: F.billing, lens: F.lens,
+      open: [...F.open].slice(0, 40)          /* 展开态也记住；上限防极端情况撑大 */
+    }));
+  } catch (_) { /* 纯 UI 状态，存不下就算了 */ }
+}
 try {
-  const saved = JSON.parse(sessionStorage.getItem("voyra-token-filters") || "null");
+  const saved = JSON.parse(localStorage.getItem(UI_FILTER_KEY) || "null");
   if (saved) {
     if (["today","yesterday","last7","last30","last90","thismonth","lastmonth","all"].includes(saved.rangeKey)) F.rangeKey=saved.rangeKey;
     if (typeof saved.agent==="string" && saved.agent.length<128) F.agent=saved.agent;
@@ -57,6 +71,7 @@ try {
     if (["total","agent","model"].includes(saved.dim)) F.dim=saved.dim;
     if (["all","metered","plan","unpriced"].includes(saved.billing)) F.billing=saved.billing;
     if (["entity","composition","cache"].includes(saved.lens)) F.lens=saved.lens;
+    if (Array.isArray(saved.open)) saved.open.forEach(k => { if (typeof k === "string") F.open.add(k); });
   }
 } catch { /* corrupt storage never blocks the dashboard */ }
 /* 图表调色板：PAL_FALLBACK / palette() 定义在 charts.js（先加载），

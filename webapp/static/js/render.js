@@ -1020,6 +1020,7 @@ function renderAgentList(){
     const row = entry.querySelector(".ar-row");
     if (row) row.setAttribute("aria-expanded", String(open));
     if (open) F.open.add(name); else F.open.delete(name);
+    if (typeof persistFilters === "function") persistFilters();
     const box = entry.querySelector(".ar-models");
     if (open && box && !box.dataset.filled) fillModels(box, name);
   }
