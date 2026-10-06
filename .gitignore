@@ -17,3 +17,10 @@ build_diag/
 output/
 .workbuddy/
 .workbuddy-ai/
+
+# ---- 下载页生成器 dist-page/ 的中间产物（全部可再生；页面存档看 site/）----
+dist-page/_shots/
+dist-page/data.json
+dist-page/index.html
+dist-page/app-1.js
+dist-page/_script_check.js

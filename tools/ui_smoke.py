@@ -43,6 +43,11 @@ def main() -> None:
         errors: list[str] = []
         page.on("pageerror", lambda e: errors.append(str(e)))
         page.goto(args.base, wait_until="networkidle")
+        # 等服务端把数据交出来再开始点：首扫期间 DATA 仍是 null，此时直接
+        # evaluate renderModelTable() 会读到 null.range 抛异常（实测偶发）。
+        page.wait_for_function(
+            "typeof DATA !== 'undefined' && DATA && (DATA.matrix || []).length > 0",
+            timeout=300000)
         page.wait_for_timeout(1200)
 
         check("初始无 JS 异常", not errors, "; ".join(errors)[:300])

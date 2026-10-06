@@ -1,4 +1,257 @@
-<!doctype html>
+# -*- coding: utf-8 -*-
+"""生成 Token Monitor 下载页（单文件 HTML）。
+
+数据来源：dist-page/data.json（export_data.py 走产品同一管道导出，真实扫描数据）。
+静态资产：dist-page/build_assets.py（品牌图来自软件 webapp/static/logos，截图来自真实服务）
+输出（SYNC_TARGETS）：
+  1. dist-page/index.html                      —— 本地预览
+  2. site/index.html                           —— 随软件仓库存档
+  3. D:/Voyra 个人网站/public/token-monitor/index.html —— 线上页面（push 后自动部署）
+
+页面特性（2026-09-28 v4，转浅色）：
+  - 材质与站点其余产品页一致：浅底 + 白卡 + 发丝边 + 大模糊轻阴影；深色的只有产品截图本身
+  - 数据源图标 = 软件同一套真实品牌图（agent-icons/），无品牌图的同样走字母徽标
+  - 内容分节：01 界面 / 02 下载 / 03 原理 / 04 覆盖 / 05 隐私 / 06 口径 / 07 常见问题
+  - 下载源自动测速（gh-proxy / ghfast / GitHub 直连 并行实测 2MB 持续速率），逐源画出实测值
+  - 安装包 SHA-256 由 Functions 代取后展示，可一键复制
+
+用法：python token-monitor/dist-page/build.py   （先跑 export_data.py 和 build_assets.py）
+"""
+import io
+import json
+import os
+import re
+import subprocess
+import sys
+
+BASE = os.path.dirname(os.path.abspath(__file__))
+APP = os.path.dirname(BASE)
+
+SYNC_TARGETS = [
+    os.path.join(APP, "site", "index.html"),
+    r"D:\Voyra 个人网站\public\token-monitor\index.html",
+]
+
+NREG = 81          # 兜底值：注册表 SOURCES 条目数（paths 另算，见下）
+NPATHS = 153       # 兜底值：所有 SOURCES 的 paths 合计
+# 页面上一切"登记了多少"的口径都从软件自己的注册表实测，不手填 —— 2026-10-06 发现
+# 「81 条路径」这句是错的（81 是条目数、路径有 153 条），手抄数字必然和产品漂移。
+try:
+    sys.path.insert(0, APP)
+    import sources_registry as _SR
+    NREG = len(_SR.SOURCES)
+    NPATHS = sum(len(s.get("paths") or []) for s in _SR.SOURCES)
+    print("注册表实测: %d 个数据源 / %d 条路径" % (NREG, NPATHS))
+except Exception as e:
+    print("!! 读不到 sources_registry，用兜底值 %d/%d：%s" % (NREG, NPATHS, e))
+FALLBACK_VER = "v2.1.1"
+FALLBACK_SIZE = "约 29 MB"
+CNY_RATE = 7.1     # server.py: CNY_RATE，页面与面板同一汇率
+
+# 源 id → 显示名（与 App 内 AGENT_NAME 保持一致）
+DISPLAY = {
+    "claude-code": "Claude Code", "codex": "Codex", "zcode": "ZCode",
+    "opencode": "OpenCode", "hermes": "Hermes", "mhagent": "MHAgent",
+    "openclaw-autoclaw": "OpenClaw", "agnes": "Agnes", "dsh": "DSH",
+    "cline": "Cline", "box-agent": "Box Agent", "mavis": "Mavis",
+    "workbuddy": "WorkBuddy", "workbuddy-ai": "WorkBuddy AI",
+}
+# 图标映射/字母徽标：与 webapp/static/js/core.js 的 AGENT_LOGOS / AGENT_MONO 一一对应
+ICON_FILES = {
+    "codex": "codex.png", "claude-code": "claude-code.svg", "opencode": "opencode.svg",
+    "cline": "cline.svg", "zcode": "zcode.png", "hermes": "hermes.png",
+    "workbuddy": "workbuddy.png", "workbuddy-ai": "workbuddy-ai.png", "dsh": "dsh.png",
+}
+MONO = {
+    "box-agent": ("B", "#7C8CF8"), "mhagent": ("MH", "#4AC08A"),
+    "mavis": ("M", "#E8B45B"), "agnes": ("A", "#A78BFA"),
+}
+
+data = json.load(io.open(os.path.join(BASE, "data.json"), encoding="utf-8"))
+kpi = data["kpi"]
+agents = sorted(data["agents"], key=lambda a: -a["tokens"])
+cache_stats = data.get("cache_stats") or {}
+coverage = data.get("coverage") or []
+
+
+def esc(s):
+    return (str(s).replace("&", "&amp;").replace("<", "&lt;")
+            .replace(">", "&gt;").replace('"', "&quot;"))
+
+
+def hum_tok(n):
+    if n >= 1e9:
+        return "%.2f B" % (n / 1e9)
+    if n >= 1e6:
+        return "%.1f M" % (n / 1e6)
+    if n >= 1e3:
+        return "%.0f k" % (n / 1e3)
+    return str(int(n))
+
+
+def comma(n):
+    return format(int(n), ",")
+
+
+def cny(usd):
+    v = usd * CNY_RATE
+    return "¥" + (comma(round(v)) if v >= 100 else "%.2f" % v)
+
+
+# ── 日活序列：折线、区间、指标副行共用 ──
+per_day = {}
+for a in agents:
+    for d, v in a["days"].items():
+        if d != "unknown":
+            per_day[d] = per_day.get(d, 0) + v
+series = sorted(per_day.items())[-30:]
+days_all = sorted(per_day.keys())
+SPAN = "%s → %s" % (days_all[0], days_all[-1]) if days_all else ""
+
+# ── 指标条（金额主显 CNY，副行给 USD 与汇率 —— 与面板同口径） ──
+tokens_txt = hum_tok(kpi["tokens"])
+cost_cny_txt = cny(kpi["cost_usd"])
+cost_usd_txt = "$" + comma(round(kpi["cost_usd"]))
+req_txt = comma(kpi["requests"])
+cache_txt = "%.1f%%" % (kpi["cache_rate"] * 100)
+
+
+def metric(cls, lab, val, to, dec, sub, pre="", suf=""):
+    a = ""
+    if pre:
+        a += ' data-pre="%s"' % pre
+    if suf:
+        a += ' data-suf="%s"' % suf
+    return ('<div class="mt %s"><span class="lab">%s</span>'
+            '<span class="v" data-to="%s" data-dec="%d"%s>%s</span>'
+            '<span class="msub">%s</span></div>') % (cls, lab, to, dec, a, val, sub)
+
+
+METRICS = "".join([
+    metric("t-token", "Tokens", tokens_txt, "%.4f" % (kpi["tokens"] / 1e9), 2,
+           "其中套餐内 %s" % hum_tok(kpi["plan_tokens"]), suf=" B"),
+    metric("t-cost", "消耗金额", cost_cny_txt, "%.2f" % (kpi["cost_usd"] * CNY_RATE), 0,
+           "%s · 汇率 %s" % (cost_usd_txt, CNY_RATE), pre="&#165;"),
+    metric("t-req", "API 请求次数", req_txt, kpi["requests"], 0,
+           "本机 %d 个数据源" % len(agents)),
+    metric("t-cache", "缓存命中率", cache_txt, "%.2f" % (kpi["cache_rate"] * 100), 1,
+           "命中读取 / 输入与写入合计", suf="%"),
+])
+
+
+def agent_icon(name):
+    f = ICON_FILES.get(name)
+    if f:
+        return '<img class="ico-img" src="/token-monitor/agent-icons/%s" width="18" height="18" alt="" loading="lazy">' % f
+    m = MONO.get(name)
+    if m:
+        return '<span class="ico-mono" style="--mc:%s">%s</span>' % (m[1], esc(m[0]))
+    return '<span class="ico-mono" style="--mc:#9AA1AC">?</span>'
+
+
+# ── 数据源排行（条形 = 相对榜首的 Tokens 占比） ──
+top = agents[0]["tokens"] or 1
+rows = []
+for a in agents:
+    w = max(1.6, 100.0 * a["tokens"] / top)
+    # 与 App 一致：套餐内不计费 / 有价未计出 → 「未计价」，不写 ¥0.00
+    if a["cost"] > 0:
+        right = cny(a["cost"])
+    elif a["plan_tokens"] > 0:
+        right = "套餐不计费"
+    else:
+        right = "未计价"
+    rows.append(
+        '<li class="src"><span class="nm">%s<span>%s</span></span>'
+        '<span class="track"><i style="width:%.1f%%"></i></span>'
+        '<span class="tk">%s</span><span class="cq">%s</span></li>'
+        % (agent_icon(a["name"]), esc(DISPLAY.get(a["name"], a["name"])), w,
+           hum_tok(a["tokens"]), esc(right)))
+SRC_ROWS = "".join(rows)
+
+# ── 未计入清单：按 App 给的原因分组，不静默丢弃 ──
+groups = {}
+for c in coverage:
+    groups.setdefault(c["note"], []).append(c["name"])
+cov_rows = []
+for note, names in sorted(groups.items(), key=lambda kv: -len(kv[1])):
+    cov_rows.append(
+        '<li class="cov"><span class="cs">%d 个</span><span class="cn">%s</span>'
+        '<span class="cd">%s</span></li>' % (len(names), esc("、".join(names)), esc(note)))
+COV_ROWS = "".join(cov_rows)
+N_UNCOUNTED = len(coverage)
+
+# ── 趋势折线（浅色版） ──
+def spark_svg(items, w=620, h=88, pad=10):
+    if len(items) < 2:
+        return "", "", ""
+    peak = max(v for _, v in items) or 1
+    pts = []
+    for i, (d, v) in enumerate(items):
+        pts.append((pad + (w - 2 * pad) * i / (len(items) - 1),
+                    h - pad - (h - 2 * pad) * (v / peak), d, v))
+    line = "M" + " L".join("%.1f,%.1f" % (p[0], p[1]) for p in pts)
+    area = line + " L%.1f,%.1f L%.1f,%.1f Z" % (pts[-1][0], h - pad, pts[0][0], h - pad)
+    last = pts[-1]
+    hi = max(pts, key=lambda p: p[3])
+    svg = (
+        '<svg class="spark" viewBox="0 0 %d %d" width="%d" height="%d" aria-hidden="true">'
+        '<defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">'
+        '<stop offset="0" stop-color="#3B6FE0" stop-opacity=".22"/>'
+        '<stop offset="1" stop-color="#3B6FE0" stop-opacity="0"/></linearGradient></defs>'
+        '<path d="%s" fill="url(#sg)"/>'
+        '<path d="%s" fill="none" stroke="#3B6FE0" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>'
+        '<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%d" stroke="rgba(194,102,31,.35)" stroke-width="1" stroke-dasharray="2 3"/>'
+        '<circle cx="%.1f" cy="%.1f" r="6.5" fill="#C2661F" opacity=".14"/>'
+        '<circle cx="%.1f" cy="%.1f" r="2.9" fill="#C2661F"/>'
+        '<circle cx="%.1f" cy="%.1f" r="2.9" fill="#3B6FE0"/>'
+        '</svg>') % (w, h, w, h, area, line, hi[0], hi[1], hi[0], h - pad,
+                     hi[0], hi[1], hi[0], hi[1], last[0], last[1])
+    return svg, hum_tok(hi[3]), hi[2][5:]
+
+
+SPARK, PEAK_TOK, PEAK_DAY = spark_svg(series)
+
+# ── 命中率量表环（呼应软件图标） ──
+RING_R, RING_C = 52.0, 2 * 3.141592653589793 * 52.0
+RING_OFF = RING_C * (1 - kpi["cache_rate"])
+RING = ('<svg class="ring" viewBox="0 0 120 120" aria-hidden="true">'
+        '<circle cx="60" cy="60" r="%d" fill="none" stroke="rgba(16,24,40,.07)" stroke-width="9"/>'
+        '<circle class="val" cx="60" cy="60" r="%d" fill="none" stroke="#1B8FA8" stroke-width="9"'
+        ' stroke-linecap="round" stroke-dasharray="%.1f" stroke-dashoffset="%.1f"'
+        ' style="--off:%.1f" transform="rotate(-90 60 60)"/></svg>'
+        ) % (RING_R, RING_R, RING_C, RING_C, RING_OFF)
+
+FAQ = [
+    ("首次运行被 SmartScreen 拦下",
+     "安装包没买代码签名证书，Windows 会提示「Windows 已保护你的电脑」。"
+     "点「更多信息 → 仍要运行」即可；安装包与更新包的 SHA-256 都随发布一起公开，可自行核对。"),
+    ("统计不到我常用的工具",
+     "面板侧栏有「未计入」分组，会写清每个工具为什么没进来："
+     "本地日志加密（如 Cursor、TRAE）或用量只存在服务端。只要该工具在本机落了可解析的日志，就会自动计入。"),
+    ("软件要联网吗",
+     "面板本身离线可用：所有数字都来自本机日志。只有「检查更新」会联网，且走镜像测速择优。"),
+    ("会不会拖慢电脑",
+     "扫描是增量的：命中缓存的目录只比对时间戳，只重扫变化的文件。面板读的是缓存快照，切页不触发重扫。"),
+    ("怎么卸载",
+     "设置 → 应用 → 已安装的应用 → Token Monitor → 卸载；装的时候没有写系统目录，也没有常驻服务。"),
+]
+
+STEPS = [
+    ("发现", "按注册表登记的 %d 个已知工具（共 %d 条候选路径）逐个探测本机日志目录，认不出的文件不猜、不计。" % (NREG, NPATHS)),
+    ("解析", "只取用量字段：模型、输入 / 输出 / 缓存读取与写入、时间。不保存对话原文。"),
+    ("计价", "内置模型价目表（可用 custom-pricing.json 覆盖），按每条记录自己的模型单价折算金额。"),
+    ("呈现", "增量缓存（本次命中 %s / 重扫 %s / 零结果判定 %s），面板只读快照，滚动筛选不动磁盘。" % (
+        cache_stats.get("hit", "-"), cache_stats.get("miss", "-"), cache_stats.get("verdict", "-"))),
+]
+STEPS_HTML = "".join(
+    '<li class="step"><span class="sn">%02d</span><div><b>%s</b><p>%s</p></div></li>'
+    % (i + 1, esc(t), esc(d)) for i, (t, d) in enumerate(STEPS))
+FAQ_HTML = "".join(
+    '<details class="qa"><summary>%s</summary><p>%s</p></details>' % (esc(q), esc(a))
+    for q, a in FAQ)
+
+TPL = r"""<!doctype html>
 <html lang="zh-CN">
 <head>
 <link rel="stylesheet" href="/design-system/landing-cards.css?v=1">
@@ -347,7 +600,7 @@ footer .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
   <a class="lk sec" href="#cover">覆盖</a>
   <a class="lk sec" href="#faq">常见问题</a>
   <span class="sp"></span>
-  <span class="pill" id="verPill">v2.1.1</span>
+  <span class="pill" id="verPill">$FALLBACK_VER</span>
   <a class="lk" href="https://github.com/liixnglinb/token-monitor" target="_blank" rel="noopener">GitHub</a>
   <a class="btn-sm" href="#download">获取安装版</a>
 </div></nav>
@@ -360,12 +613,12 @@ footer .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
     <div class="cta rv">
       <a class="btn-main" id="dlMain" data-dl href="#download">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5v11.5M7 10l5 5 5-5M5 20.5h14"/></svg>
-        下载安装版<b id="verBtn">v2.1.1</b></a>
+        下载安装版<b id="verBtn">$FALLBACK_VER</b></a>
       <a class="btn-ghost" href="#shots">先看看界面</a>
     </div>
     <div class="chips rv">
       <span class="chip">64 位</span>
-      <span class="chip" id="chipSize">约 29 MB</span>
+      <span class="chip" id="chipSize">$FALLBACK_SIZE</span>
       <span class="chip">免管理员权限</span>
       <span class="chip">安装版 · 自动更新</span>
     </div>
@@ -378,29 +631,29 @@ footer .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
     </div>
     <div class="card bcell">
       <span class="bl">最近 30 个活跃日 · 日 Tokens</span>
-      <span class="bv num" id="sparkTot">7.22 B</span>
-      <svg class="spark" viewBox="0 0 620 88" width="620" height="88" aria-hidden="true"><defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3B6FE0" stop-opacity=".22"/><stop offset="1" stop-color="#3B6FE0" stop-opacity="0"/></linearGradient></defs><path d="M10.0,75.8 L30.7,78.0 L51.4,78.0 L72.1,67.1 L92.8,74.3 L113.4,72.4 L134.1,78.0 L154.8,35.3 L175.5,10.0 L196.2,57.0 L216.9,42.9 L237.6,70.9 L258.3,75.5 L279.0,71.2 L299.7,42.3 L320.3,64.4 L341.0,78.0 L361.7,73.7 L382.4,51.2 L403.1,78.0 L423.8,78.0 L444.5,74.3 L465.2,35.4 L485.9,76.7 L506.6,68.6 L527.2,45.8 L547.9,52.8 L568.6,54.5 L589.3,68.0 L610.0,73.9 L610.0,78.0 L10.0,78.0 Z" fill="url(#sg)"/><path d="M10.0,75.8 L30.7,78.0 L51.4,78.0 L72.1,67.1 L92.8,74.3 L113.4,72.4 L134.1,78.0 L154.8,35.3 L175.5,10.0 L196.2,57.0 L216.9,42.9 L237.6,70.9 L258.3,75.5 L279.0,71.2 L299.7,42.3 L320.3,64.4 L341.0,78.0 L361.7,73.7 L382.4,51.2 L403.1,78.0 L423.8,78.0 L444.5,74.3 L465.2,35.4 L485.9,76.7 L506.6,68.6 L527.2,45.8 L547.9,52.8 L568.6,54.5 L589.3,68.0 L610.0,73.9" fill="none" stroke="#3B6FE0" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/><line x1="175.5" y1="10.0" x2="175.5" y2="78" stroke="rgba(194,102,31,.35)" stroke-width="1" stroke-dasharray="2 3"/><circle cx="175.5" cy="10.0" r="6.5" fill="#C2661F" opacity=".14"/><circle cx="175.5" cy="10.0" r="2.9" fill="#C2661F"/><circle cx="610.0" cy="73.9" r="2.9" fill="#3B6FE0"/></svg>
-      <div class="bfoot"><em>峰值 860.9 M · 09-01</em><span class="ln"></span><span>2026-06-02 → 2026-10-05</span></div>
+      <span class="bv num" id="sparkTot">$TOTAL_TOKENS</span>
+      $SPARK
+      <div class="bfoot"><em>峰值 $PEAK_TOK · $PEAK_DAY</em><span class="ln"></span><span>$SPAN</span></div>
     </div>
     <div class="card bcell">
       <span class="bl">缓存命中率</span>
-      <svg class="ring" viewBox="0 0 120 120" aria-hidden="true"><circle cx="60" cy="60" r="52" fill="none" stroke="rgba(16,24,40,.07)" stroke-width="9"/><circle class="val" cx="60" cy="60" r="52" fill="none" stroke="#1B8FA8" stroke-width="9" stroke-linecap="round" stroke-dasharray="326.7" stroke-dashoffset="326.7" style="--off:92.9" transform="rotate(-90 60 60)"/></svg>
+      $RING
       <div class="blist">
-        <div><span>覆盖数据源</span><b>12 / 81</b></div>
-        <div><span>计价模型</span><b>44</b></div>
-        <div><span>活跃天数</span><b>65</b></div>
+        <div><span>覆盖数据源</span><b>$N_AGENTS / $NREG</b></div>
+        <div><span>计价模型</span><b>$N_MODELS</b></div>
+        <div><span>活跃天数</span><b>$ACTIVE_DAYS</b></div>
       </div>
     </div>
   </div>
 </div></header>
 
 <section class="mrow"><div class="wrap" style="padding:0 36px">
-  <div class="mt t-token"><span class="lab">Tokens</span><span class="v" data-to="7.2195" data-dec="2" data-suf=" B">7.22 B</span><span class="msub">其中套餐内 2.77 B</span></div><div class="mt t-cost"><span class="lab">消耗金额</span><span class="v" data-to="13349.72" data-dec="0" data-pre="&#165;">¥13,350</span><span class="msub">$1,880 · 汇率 7.1</span></div><div class="mt t-req"><span class="lab">API 请求次数</span><span class="v" data-to="19953" data-dec="0">19,953</span><span class="msub">本机 12 个数据源</span></div><div class="mt t-cache"><span class="lab">缓存命中率</span><span class="v" data-to="71.56" data-dec="1" data-suf="%">71.6%</span><span class="msub">命中读取 / 输入与写入合计</span></div>
-</div><div class="wrap"><p class="mcap"><span>作者本机日志实测 · 2026-06-02 → 2026-10-05</span><span class="ln"></span><span>与软件面板同一导出管道（export_data.py）</span></p></div></section>
+  $METRICS
+</div><div class="wrap"><p class="mcap"><span>作者本机日志实测 · $SPAN</span><span class="ln"></span><span>与软件面板同一导出管道（export_data.py）</span></p></div></section>
 
 <section id="shots" class="rv"><div class="wrap">
   <div class="shead"><span class="no">01</span><h2>界面</h2><span class="sp"></span>
-    <span class="note">真实窗口截图 · v2.1.1</span></div>
+    <span class="note">真实窗口截图 · $FALLBACK_VER</span></div>
   <p class="sec-sub">三块视图覆盖「花了多少」「花在哪」「为什么这么算」：总览看趋势与逐日明细，模型成本看每个模型的均价与占比，扫描与缓存页把套餐、未计价和过滤掉的部分单独交代。</p>
   <div class="gal">
     <div class="card gcard">
@@ -422,14 +675,14 @@ footer .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
 
 <section id="download" class="rv"><div class="wrap">
   <div class="shead"><span class="no">02</span><h2>下载</h2><span class="sp"></span>
-    <span class="note" id="dlVer">v2.1.1</span></div>
+    <span class="note" id="dlVer">$FALLBACK_VER</span></div>
   <div class="card dlcard">
     <div class="dl-row" data-dl id="dlRow">
       <span class="nm">Token Monitor 安装版<i class="tag">推荐</i></span>
       <span class="ext">.exe</span>
-      <span class="fn" id="fileName">TokenMonitor-setup-v2.1.1.exe</span>
+      <span class="fn" id="fileName">TokenMonitor-setup-$FALLBACK_VER.exe</span>
       <span class="sp"></span>
-      <span class="meta" id="dlMeta">约 29 MB · v2.1.1</span>
+      <span class="meta" id="dlMeta">$FALLBACK_SIZE · $FALLBACK_VER</span>
       <span class="go"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5.5l6.5 6.5L9 18.5"/></svg></span>
     </div>
 
@@ -469,18 +722,18 @@ footer .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
 <section id="how" class="rv"><div class="wrap">
   <div class="shead"><span class="no">03</span><h2>工作原理</h2><span class="sp"></span>
     <span class="note">四步 · 全程只读</span></div>
-  <ul class="steps"><li class="step"><span class="sn">01</span><div><b>发现</b><p>按注册表登记的 81 个已知工具（共 153 条候选路径）逐个探测本机日志目录，认不出的文件不猜、不计。</p></div></li><li class="step"><span class="sn">02</span><div><b>解析</b><p>只取用量字段：模型、输入 / 输出 / 缓存读取与写入、时间。不保存对话原文。</p></div></li><li class="step"><span class="sn">03</span><div><b>计价</b><p>内置模型价目表（可用 custom-pricing.json 覆盖），按每条记录自己的模型单价折算金额。</p></div></li><li class="step"><span class="sn">04</span><div><b>呈现</b><p>增量缓存（本次命中 11 / 重扫 5 / 零结果判定 12），面板只读快照，滚动筛选不动磁盘。</p></div></li></ul>
+  <ul class="steps">$STEPS</ul>
 </div></section>
 
 <section id="cover" class="rv"><div class="wrap">
   <div class="shead"><span class="no">04</span><h2>数据源覆盖</h2><span class="sp"></span>
-    <span class="note">本机实测：12 个已计入 / 14 个未计入</span></div>
+    <span class="note">本机实测：$N_AGENTS 个已计入 / $N_UNCOUNTED 个未计入</span></div>
   <p class="sec-sub">能读到本地用量日志的工具会被计入并显示真实用量；读不到的不静默丢弃——按原因列在下面，也会出现在面板侧栏的「未计入」分组里。</p>
   <div class="card panel">
     <div class="srchead"><span class="a">已计入的数据源</span><span class="a">Tokens 占比</span><span class="b">Tokens</span><span class="c">金额（CNY）</span></div>
-    <ul><li class="src"><span class="nm"><img class="ico-img" src="/token-monitor/agent-icons/codex.png" width="18" height="18" alt="" loading="lazy"><span>Codex</span></span><span class="track"><i style="width:100.0%"></i></span><span class="tk">1.85 B</span><span class="cq">¥2,942</span></li><li class="src"><span class="nm"><span class="ico-mono" style="--mc:#7C8CF8">B</span><span>Box Agent</span></span><span class="track"><i style="width:87.4%"></i></span><span class="tk">1.62 B</span><span class="cq">套餐不计费</span></li><li class="src"><span class="nm"><img class="ico-img" src="/token-monitor/agent-icons/zcode.png" width="18" height="18" alt="" loading="lazy"><span>ZCode</span></span><span class="track"><i style="width:62.6%"></i></span><span class="tk">1.16 B</span><span class="cq">¥235</span></li><li class="src"><span class="nm"><img class="ico-img" src="/token-monitor/agent-icons/workbuddy-ai.png" width="18" height="18" alt="" loading="lazy"><span>WorkBuddy AI</span></span><span class="track"><i style="width:54.6%"></i></span><span class="tk">1.01 B</span><span class="cq">¥3,976</span></li><li class="src"><span class="nm"><img class="ico-img" src="/token-monitor/agent-icons/claude-code.svg" width="18" height="18" alt="" loading="lazy"><span>Claude Code</span></span><span class="track"><i style="width:37.7%"></i></span><span class="tk">696.9 M</span><span class="cq">¥4,703</span></li><li class="src"><span class="nm"><img class="ico-img" src="/token-monitor/agent-icons/hermes.png" width="18" height="18" alt="" loading="lazy"><span>Hermes</span></span><span class="track"><i style="width:22.6%"></i></span><span class="tk">418.2 M</span><span class="cq">未计价</span></li><li class="src"><span class="nm"><img class="ico-img" src="/token-monitor/agent-icons/opencode.svg" width="18" height="18" alt="" loading="lazy"><span>OpenCode</span></span><span class="track"><i style="width:16.6%"></i></span><span class="tk">307.2 M</span><span class="cq">¥1,380</span></li><li class="src"><span class="nm"><span class="ico-mono" style="--mc:#4AC08A">MH</span><span>MHAgent</span></span><span class="track"><i style="width:4.3%"></i></span><span class="tk">79.3 M</span><span class="cq">¥111</span></li><li class="src"><span class="nm"><img class="ico-img" src="/token-monitor/agent-icons/cline.svg" width="18" height="18" alt="" loading="lazy"><span>Cline</span></span><span class="track"><i style="width:2.6%"></i></span><span class="tk">47.2 M</span><span class="cq">套餐不计费</span></li><li class="src"><span class="nm"><img class="ico-img" src="/token-monitor/agent-icons/dsh.png" width="18" height="18" alt="" loading="lazy"><span>DSH</span></span><span class="track"><i style="width:1.6%"></i></span><span class="tk">28.7 M</span><span class="cq">未计价</span></li><li class="src"><span class="nm"><span class="ico-mono" style="--mc:#A78BFA">A</span><span>Agnes</span></span><span class="track"><i style="width:1.6%"></i></span><span class="tk">6.7 M</span><span class="cq">套餐不计费</span></li><li class="src"><span class="nm"><span class="ico-mono" style="--mc:#E8B45B">M</span><span>Mavis</span></span><span class="track"><i style="width:1.6%"></i></span><span class="tk">896 k</span><span class="cq">¥2.60</span></li></ul>
-    <div class="srchead" style="margin-top:16px"><span class="a">未计入（14）</span><span class="a">原因</span></div>
-    <ul class="covlist"><li class="cov"><span class="cs">13 个</span><span class="cn">WorkBuddy、美团 CatPaw、Cherry Studio、GitHub Copilot Chat、GitHub Copilot CLI、字节 豆包、闲鱼 CLI、Mimosa、OpenViking、阿里 通义千问 CLI、RaccoonWork、字节 TRAE SOLO（可读）、腾讯元宝</span><span class="cd">本机无可用用量</span></li><li class="cov"><span class="cs">1 个</span><span class="cn">字节 TRAE</span><span class="cd">本地不记录用量（已加密或需官方 API）</span></li></ul>
+    <ul>$SRC_ROWS</ul>
+    <div class="srchead" style="margin-top:16px"><span class="a">未计入（$N_UNCOUNTED）</span><span class="a">原因</span></div>
+    <ul class="covlist">$COV_ROWS</ul>
   </div>
 </div></section>
 
@@ -491,7 +744,7 @@ footer .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
     <div class="card plist yes">
       <h3><i></i>它会读</h3>
       <ul>
-        <li><em>路径</em>注册表登记的 81 个已知工具、153 条候选路径，逐条探测是否存在日志目录</li>
+        <li><em>路径</em>注册表登记的 $NREG 个已知工具、$NPATHS 条候选路径，逐条探测是否存在日志目录</li>
         <li><em>字段</em>用量字段：模型名、输入 / 输出 / 缓存读写 token 数、时间戳</li>
         <li><em>缓存</em>本机缓存目录里的扫描快照，用于下次增量比对</li>
       </ul>
@@ -511,16 +764,16 @@ footer .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
   <div class="shead"><span class="no">06</span><h2>口径说明</h2><span class="sp"></span>
     <span class="note">页面数字与面板一致</span></div>
   <div class="specs">
-    <div class="spec"><b>金额主显人民币</b><p>按 <code>cost_usd × 7.1</code> 折算，副行给出美元与汇率，与面板 KPI 完全一致。</p></div>
-    <div class="spec"><b>套餐不计费</b><p>订阅制模型只记用量不计金额，本机为 2.77 B tokens；面板里同样标注「套餐不计费」。</p></div>
-    <div class="spec"><b>未计价</b><p>模型不在价目表内时，用量照记、金额留空——本机 658.2 M tokens（占 9.1%），实际成本会更高。</p></div>
-    <div class="spec"><b>缓存命中率</b><p>命中读取 ÷（输入 + 缓存写入 + 缓存读取），口径与面板相同；本机 71.6%。</p></div>
+    <div class="spec"><b>金额主显人民币</b><p>按 <code>cost_usd × $CNY_RATE</code> 折算，副行给出美元与汇率，与面板 KPI 完全一致。</p></div>
+    <div class="spec"><b>套餐不计费</b><p>订阅制模型只记用量不计金额，本机为 $PLAN_TOKENS tokens；面板里同样标注「套餐不计费」。</p></div>
+    <div class="spec"><b>未计价</b><p>模型不在价目表内时，用量照记、金额留空——本机 $UNPRICED_TOKENS tokens（占 $UNPRICED_PCT），实际成本会更高。</p></div>
+    <div class="spec"><b>缓存命中率</b><p>命中读取 ÷（输入 + 缓存写入 + 缓存读取），口径与面板相同；本机 $CACHE_TXT。</p></div>
   </div>
 </div></section>
 
 <section id="faq" class="rv"><div class="wrap">
   <div class="shead"><span class="no">07</span><h2>常见问题</h2></div>
-  <details class="qa"><summary>首次运行被 SmartScreen 拦下</summary><p>安装包没买代码签名证书，Windows 会提示「Windows 已保护你的电脑」。点「更多信息 → 仍要运行」即可；安装包与更新包的 SHA-256 都随发布一起公开，可自行核对。</p></details><details class="qa"><summary>统计不到我常用的工具</summary><p>面板侧栏有「未计入」分组，会写清每个工具为什么没进来：本地日志加密（如 Cursor、TRAE）或用量只存在服务端。只要该工具在本机落了可解析的日志，就会自动计入。</p></details><details class="qa"><summary>软件要联网吗</summary><p>面板本身离线可用：所有数字都来自本机日志。只有「检查更新」会联网，且走镜像测速择优。</p></details><details class="qa"><summary>会不会拖慢电脑</summary><p>扫描是增量的：命中缓存的目录只比对时间戳，只重扫变化的文件。面板读的是缓存快照，切页不触发重扫。</p></details><details class="qa"><summary>怎么卸载</summary><p>设置 → 应用 → 已安装的应用 → Token Monitor → 卸载；装的时候没有写系统目录，也没有常驻服务。</p></details>
+  $FAQ
 </div></section>
 
 <footer><div class="wrap">
@@ -528,9 +781,364 @@ footer .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
   <span class="sp"></span>
   <a href="https://github.com/liixnglinb/token-monitor" target="_blank" rel="noopener">源码仓库</a>
   <a href="https://github.com/liixnglinb/token-monitor/releases" target="_blank" rel="noopener">全部版本</a>
-  <span class="mono" id="footVer">v2.1.1 · 81 个已知数据源</span>
+  <span class="mono" id="footVer">$FALLBACK_VER · $NREG 个已知数据源</span>
 </div></footer>
 
-<script src="./app-1.js"></script>
+<script>
+(function(){
+'use strict';
+var REPO = 'https://github.com/liixnglinb/token-monitor/releases';
+var PROBE_FILE = 'TokenMonitor.exe';         /* 固定名资产，任意版本都存在 */
+var PROBE_BYTES = 2097152;                   /* 2 MB —— 足够跨越"突发速度"，测到持续速率 */
+var PROBE_TIMEOUT = 15000;                   /* 慢网（<150KB/s）也要放得下 2MB 的完整测量 */
+var CACHE_KEY = 'tm.src.v3', CACHE_TTL = 10 * 60 * 1000;
+var ORDER = ['gh-proxy', 'ghfast', 'direct'];
+var SRC = {
+  'gh-proxy': { name: '国内镜像', pre: 'https://gh-proxy.com/' },
+  'ghfast':   { name: '备用镜像', pre: 'https://ghfast.top/' },
+  'direct':   { name: '官方直连', pre: '' }
+};
+var state = { asset: null, auto: null, manual: null, result: null, probe: null, assetDone: null };
+var SPEEDS = {};
+var reduce = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)').matches : false;
+
+function $(id){ return document.getElementById(id); }
+function setTxt(id, s){ var e = $(id); if (e && s) e.textContent = s; }
+function fmtSpeed(kbs){ return kbs >= 1024 ? (kbs / 1024).toFixed(1) + ' MB/s' : Math.round(kbs) + ' KB/s'; }
+function fmtBytes(b){
+  if (!b) return '';
+  return b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.round(b / 1024) + ' KB';
+}
+
+/* 当前下载地址：手动 > 自动测速 > 国内镜像兜底 */
+function urlFor(){
+  var key = state.manual || state.auto || 'gh-proxy';
+  return state.asset ? SRC[key].pre + state.asset.url : SRC[key].pre + REPO + '/latest';
+}
+function apply(){
+  var u = urlFor();
+  document.querySelectorAll('[data-dl]').forEach(function(a){ a.href = u; });
+  document.querySelectorAll('#srcSeg button').forEach(function(b){
+    b.classList.toggle('on', b.getAttribute('data-s') === (state.manual || 'auto'));
+  });
+  statusLine();
+  renderSpeeds();
+}
+function statusLine(){
+  var e = $('srcStatus'); if (!e) return;
+  if (state.manual){
+    e.innerHTML = '<span class="dot ok"></span>手动选择下载源：<b>' + SRC[state.manual].name + '</b>';
+  } else if (state.result && state.result.ok){
+    e.innerHTML = '<span class="dot ok"></span>已自动选择最快源 <b>' + SRC[state.result.id].name + '</b> · 实测 ' + fmtSpeed(state.result.speed);
+  } else if (state.probe){
+    e.innerHTML = '<span class="dot wait"></span>正在测速选择最快下载源…';
+  } else {
+    e.innerHTML = '<span class="dot"></span>下载源：<b>' + SRC[state.auto || 'gh-proxy'].name + '</b>';
+  }
+}
+
+/* 逐源速率条：以本次最快为 100% */
+function renderSpeeds(){
+  var box = $('spdList'); if (!box) return;
+  var max = 0;
+  ORDER.forEach(function(id){ var s = SPEEDS[id]; if (s && s.ok && s.speed > max) max = s.speed; });
+  var pick = state.manual || state.auto;
+  var html = '';
+  ORDER.forEach(function(id){
+    var s = SPEEDS[id], w = 0, txt = '测速中…', cls = '';
+    if (s && s.ok){ w = Math.max(6, 100 * s.speed / max); txt = fmtSpeed(s.speed); }
+    else if (s){ txt = '不可达'; cls = ' dead'; }
+    if (state.result && state.result.id === id) cls += ' fast';
+    if (pick === id) cls += ' picked';
+    var best = cls.indexOf('fast') >= 0 ? '<i class="best">最快</i>' : '';
+    html += '<div class="spd-row' + cls + '" data-id="' + id + '">'
+      + '<span class="sn">' + SRC[id].name + best + '</span>'
+      + '<span class="st"><i style="width:' + w.toFixed(1) + '%"></i></span>'
+      + '<span class="sv">' + txt + '</span>'
+      + '</div>';
+  });
+  box.innerHTML = html;
+}
+
+/* ── 单源测速：no-cors + Range 取 2MB，资源计时拿整段耗时 ── */
+function probe(src){
+  return new Promise(function(resolve){
+    var url = src.pre + REPO + '/latest/download/' + PROBE_FILE;
+    var ctl = new AbortController(), settled = false, poll = null;
+    function finish(r){
+      if (settled) return; settled = true;
+      clearTimeout(timer); if (poll) clearInterval(poll);
+      SPEEDS[src.id] = r; renderSpeeds();
+      try { ctl.abort(); } catch (e) {}
+      resolve(r);
+    }
+    var timer = setTimeout(function(){ finish({ id: src.id, ok: false }); }, PROBE_TIMEOUT);
+    fetch(url, { mode: 'no-cors', headers: { Range: 'bytes=0-' + (PROBE_BYTES - 1) }, cache: 'no-store', signal: ctl.signal })
+      .then(function(){
+        poll = setInterval(function(){
+          var list = performance.getEntriesByName(url);
+          var e = list[list.length - 1];
+          if (e && e.duration > 0)
+            finish({ id: src.id, ok: true, ms: e.duration, speed: PROBE_BYTES / 1024 / (e.duration / 1000) });
+        }, 180);
+      })
+      .catch(function(){ finish({ id: src.id, ok: false }); });
+  });
+}
+function probeAll(force){
+  if (state.probe) return state.probe;
+  if (!force){
+    try {
+      var c = JSON.parse(sessionStorage.getItem(CACHE_KEY) || 'null');
+      if (c && Date.now() - c.t < CACHE_TTL){
+        state.auto = c.id; state.result = { id: c.id, speed: c.speed, ok: true };
+        if (!SPEEDS[c.id]) SPEEDS[c.id] = { id: c.id, ok: true, speed: c.speed };
+        apply(); return Promise.resolve();
+      }
+    } catch (e) {}
+  } else {
+    try { sessionStorage.removeItem(CACHE_KEY); } catch (e) {}
+    SPEEDS = {};
+  }
+  state.result = null;
+  state.probe = Promise.all(ORDER.map(function(id){
+    return probe({ id: id, name: SRC[id].name, pre: SRC[id].pre });
+  })).then(function(rs){
+    var best = null;
+    rs.forEach(function(r){ if (r.ok && (!best || r.speed > best.speed)) best = r; });
+    if (best){
+      state.auto = best.id; state.result = best;
+      try { sessionStorage.setItem(CACHE_KEY, JSON.stringify({ t: Date.now(), id: best.id, speed: best.speed })); } catch (e) {}
+    } else {
+      state.auto = 'gh-proxy';
+    }
+    state.probe = null; apply();
+  });
+  apply();
+  return state.probe;
+}
+
+/* ── 资产信息（版本 / 文件名 / 体积 / SHA-256），走本站 Function 代理 ── */
+function loadAsset(){
+  state.assetDone = fetch('/tm-api/latest', { cache: 'no-store' })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (!d || !d.version) return;
+      var ver = String(d.version).replace(/^v/, '');
+      var list = d.assets || [], setup = null;
+      for (var i = 0; i < list.length; i++){
+        var n = (list[i].name || '').toLowerCase();
+        if (n.indexOf('setup') >= 0 && n.indexOf('.sha256') < 0){ setup = list[i]; break; }
+      }
+      if (!setup || !setup.url) return;
+      state.asset = setup;
+      var mb = setup.size > 0 ? '约 ' + Math.round(setup.size / 1048576) + ' MB' : '$FALLBACK_SIZE';
+      setTxt('verPill', 'v' + ver);
+      setTxt('verBtn', 'v' + ver);
+      setTxt('fileName', setup.name);
+      setTxt('chipSize', mb);
+      setTxt('dlVer', 'v' + ver);
+      setTxt('dlMeta', mb + ' · v' + ver);
+      setTxt('footVer', 'v' + ver + ' · $NREG 个已知数据源');
+      setTxt('shaVal', d.sha256 ? d.sha256 : '随安装包同名发布（' + setup.name + '.sha256）');
+      if (d.sha256){ var b = $('copySha'); if (b) b.hidden = false; }
+      document.title = 'Token Monitor v' + ver + ' —— 本机 AI 用量看板 · Voyra';
+      apply();
+    })
+    .catch(function(){});
+  return state.assetDone;
+}
+
+/* ── 统一点击入口：地址未就绪时先提示并等待（封顶 2 秒） ── */
+function ready(){
+  return Promise.all([state.assetDone || Promise.resolve(), state.probe || Promise.resolve()]);
+}
+var HINT_DEFAULT = '测速取各源 2 MB 持续速率，结果缓存 10 分钟 · 安装包与更新包均为双闸校验（体积 + SHA-256）';
+document.addEventListener('click', function(ev){
+  var row = ev.target.closest ? ev.target.closest('.spd-row') : null;
+  if (row){
+    var id = row.getAttribute('data-id');
+    if (id && SPEEDS[id] && !SPEEDS[id].ok) return;
+    state.manual = id; apply(); return;
+  }
+  var a = ev.target.closest ? ev.target.closest('[data-dl]') : null;
+  if (!a) return;
+  if (ev.button !== 0 || ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey) return;
+  ev.preventDefault();
+  var label = $('dlHint');
+  var go = function(){ location.href = urlFor(); };
+  var wait = (state.asset && !state.probe) ? null : Promise.race([ready(), new Promise(function(res){ setTimeout(res, 2000); })]);
+  if (!wait){ go(); return; }
+  a.classList.add('busy');
+  if (label) label.textContent = '正在选择最快下载源并准备下载…';
+  wait.then(function(){
+    a.classList.remove('busy');
+    if (label) label.textContent = HINT_DEFAULT;
+    go();
+  });
+});
+document.querySelectorAll('#srcSeg button').forEach(function(b){
+  b.addEventListener('click', function(){
+    var s = b.getAttribute('data-s');
+    state.manual = (s === 'auto') ? null : s;
+    apply();
+  });
+});
+$('reprobe').addEventListener('click', function(){
+  state.manual = null;          /* 重新测速 = 交还给自动选择，否则按钮看着没反应 */
+  probeAll(true);
+});
+function copyText(text, btn, done){
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(done, function(){});
+  } else {
+    var ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); done(); } catch (e) {}
+    document.body.removeChild(ta);
+  }
+}
+$('copyLink').addEventListener('click', function(){
+  var btn = this;
+  copyText(location.origin + urlFor(), btn, function(){
+    btn.textContent = '已复制'; setTimeout(function(){ btn.textContent = '复制链接'; }, 1600);
+  });
+});
+if ($('copySha')) $('copySha').addEventListener('click', function(){
+  var btn = this, v = $('shaVal').textContent.trim();
+  if (!/^[0-9a-f]{64}$/i.test(v)) return;
+  copyText(v, btn, function(){
+    btn.textContent = '已复制'; setTimeout(function(){ btn.textContent = '复制 SHA-256'; }, 1600);
+  });
+});
+
+/* ── 滚动进度 + 分段入场 + 数字滚动 ── */
+var nav = document.querySelector('.nav');
+function onScroll(){
+  var h = document.documentElement.scrollHeight - window.innerHeight;
+  if (nav) nav.style.setProperty('--sp', (h > 0 ? Math.min(100, 100 * window.scrollY / h) : 0) + '%');
+}
+window.addEventListener('scroll', onScroll, { passive: true });
+onScroll();
+
+function fmtNum(v, dec, pre, suf){
+  var s = dec ? v.toFixed(dec) : String(Math.round(v));
+  var p = s.split('.');
+  p[0] = p[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return (pre || '') + p.join('.') + (suf || '');
+}
+function countUp(el){
+  var to = parseFloat(el.getAttribute('data-to'));
+  if (isNaN(to)) return;
+  var dec = parseInt(el.getAttribute('data-dec') || '0', 10);
+  var pre = el.getAttribute('data-pre') || '', suf = el.getAttribute('data-suf') || '';
+  var t0 = performance.now(), dur = 900;
+  (function step(now){
+    var k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+    el.textContent = fmtNum(to * e, dec, pre, suf);
+    if (k < 1) requestAnimationFrame(step);
+  })(t0);
+}
+var rvNodes = Array.prototype.slice.call(document.querySelectorAll('.rv'));
+rvNodes.forEach(function(el, i){ el.style.transitionDelay = Math.min(320, i * 60) + 'ms'; });
+if ('IntersectionObserver' in window && !reduce){
+  var io = new IntersectionObserver(function(es){
+    es.forEach(function(en){
+      if (!en.isIntersecting) return;
+      en.target.classList.add('in');
+      en.target.querySelectorAll('[data-to]').forEach(countUp);
+      io.unobserve(en.target);
+    });
+  }, { rootMargin: '0px 0px -8% 0px', threshold: .1 });
+  rvNodes.forEach(function(el){ io.observe(el); });
+} else {
+  rvNodes.forEach(function(el){ el.classList.add('in'); });
+}
+
+probeAll();
+loadAsset();
+apply();
+})();
+</script>
 </body>
 </html>
+"""
+
+html = (TPL
+        .replace("$FALLBACK_VER", FALLBACK_VER)
+        .replace("$FALLBACK_SIZE", FALLBACK_SIZE)
+        .replace("$TOTAL_TOKENS", hum_tok(kpi["tokens"]))
+        .replace("$N_AGENTS", str(len(agents)))
+        .replace("$N_UNCOUNTED", str(N_UNCOUNTED))
+        .replace("$N_MODELS", str(kpi["models"]))
+        .replace("$ACTIVE_DAYS", str(kpi["active_days"]))
+        .replace("$NREG", str(NREG))
+        .replace("$NPATHS", str(NPATHS))
+        .replace("$METRICS", METRICS)
+        .replace("$SRC_ROWS", SRC_ROWS)
+        .replace("$COV_ROWS", COV_ROWS)
+        .replace("$STEPS", STEPS_HTML)
+        .replace("$FAQ", FAQ_HTML)
+        .replace("$SPAN", SPAN)
+        .replace("$SPARK", SPARK)
+        .replace("$PEAK_TOK", PEAK_TOK)
+        .replace("$PEAK_DAY", PEAK_DAY)
+        .replace("$RING", RING)
+        .replace("$CNY_RATE", str(CNY_RATE))
+        .replace("$PLAN_TOKENS", hum_tok(kpi["plan_tokens"]))
+        .replace("$UNPRICED_TOKENS", hum_tok(kpi["unpriced_tokens"]))
+        .replace("$UNPRICED_PCT", "%.1f%%" % (100.0 * kpi["unpriced_tokens"] / max(1, kpi["tokens"])))
+        .replace("$CACHE_TXT", cache_txt))
+
+# 模板里所有 $ 占位符必须被消费干净，漏一个就会把 "$FOO" 打进线上页面
+_leftover = re.findall(r"\$[A-Z][A-Z_]{2,}", html)
+if _leftover:
+    print("!! 存在未替换占位符:", sorted(set(_leftover)))
+    sys.exit(1)
+
+# 生成后自检：抽出 <script> 过 node --check，语法不过就不落盘
+# （教训：CSS 误插进脚本块会让整页交互静默报废，页面看着正常、点了没反应）
+_m = re.search(r"<script>(.*?)</script>", html, re.S)
+if _m:
+    _tmp = os.path.join(BASE, "_script_check.js")
+    io.open(_tmp, "w", encoding="utf-8", newline="\n").write(_m.group(1))
+    _r = subprocess.run(["node", "--check", _tmp], capture_output=True, text=True)
+    os.remove(_tmp)
+    if _r.returncode != 0:
+        print("!! JS 语法校验失败，已中止（不落盘）:\n" + (_r.stderr or "")[:600])
+        sys.exit(1)
+    print("JS 语法校验通过")
+
+# 站点约定：7 个下载页的探测脚本一律外置为 ./app-1.js（主仓库 954f720）。
+# 生成器仍按内联模板产出，落盘前统一拆出去 —— 否则每重跑一次就把内联块写回线上页：
+# 页面比兄弟页胖 11KB，且 scripts/ui-design-system.test.mjs 的共享资产断言会红。
+_sm = re.search(r"<script>\n(.*?)</script>", html, re.S)
+if not _sm:
+    print("!! 模板里找不到内联 <script> 块，外置步骤失败")
+    sys.exit(1)
+page_js = _sm.group(1)
+html = html[:_sm.start()] + '<script src="./app-1.js"></script>' + html[_sm.end():]
+
+
+def emit(dst_dir, name="index.html"):
+    """同一份 HTML 与外置脚本写到目标目录"""
+    io.open(os.path.join(dst_dir, name), "w", encoding="utf-8", newline="\n").write(html)
+    io.open(os.path.join(dst_dir, "app-1.js"), "w", encoding="utf-8", newline="\n").write(page_js)
+
+
+out_preview = os.path.join(BASE, "index.html")
+emit(BASE)
+print("已生成:", out_preview, "%.1f KB + app-1.js %.1f KB"
+      % (len(html.encode("utf-8")) / 1024, len(page_js.encode("utf-8")) / 1024))
+
+for tgt in SYNC_TARGETS:
+    d = os.path.dirname(tgt)
+    if not os.path.isdir(d):
+        print("跳过同步（目录不存在）:", tgt)
+        continue
+    emit(d, os.path.basename(tgt))
+    print("已同步:", tgt)
+
+print("折线 %d 点 | 峰值 %s (%s) | 区间 %s | 源 %d | 未计入 %d | 模型 %d"
+      % (len(series), PEAK_TOK, PEAK_DAY, SPAN, len(agents), N_UNCOUNTED, kpi["models"]))
