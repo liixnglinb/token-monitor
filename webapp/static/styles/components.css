@@ -1564,3 +1564,16 @@ th.num .th-sort { justify-content: flex-end; }
   .rail-avatar { min-height: 46px; }
   .chip-warn { min-width: 20px; min-height: 20px; }
 }
+
+/* 窄窗口（含 125%/150% 系统缩放后 CSS 视口变窄的机器）下模型表会横向滚动：
+   实测 819 CSS 宽时表格内容 760 > 容器 665，末列「均价」要滚才看得到。
+   能滚但看不出来 = 用户以为没这一列。给一条明确提示 + 右缘渐隐作抓手。 */
+@media (max-width: 900px) {
+  .table-scroll { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), rgba(0,0,0,.45));
+                  mask-image: linear-gradient(90deg, #000 calc(100% - 28px), rgba(0,0,0,.45)); }
+  .table-toolbar::after {
+    content: "表格可左右滑动 →"; flex: none; font-size: var(--fs-2xs);
+    color: var(--muted); border: 1px dashed var(--line-strong); border-radius: var(--r-pill);
+    padding: 2px 8px;
+  }
+}

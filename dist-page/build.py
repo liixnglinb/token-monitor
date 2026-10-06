@@ -135,7 +135,7 @@ METRICS = "".join([
     metric("t-req", "API 请求次数", req_txt, kpi["requests"], 0,
            "本机 %d 个数据源" % len(agents)),
     metric("t-cache", "缓存命中率", cache_txt, "%.2f" % (kpi["cache_rate"] * 100), 1,
-           "命中读取 / 输入与写入合计", suf="%"),
+           "缓存读取 ÷（基础输入 + 缓存写入 + 缓存读取）", suf="%"),
 ])
 
 
@@ -767,7 +767,7 @@ footer .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
     <div class="spec"><b>金额主显人民币</b><p>按 <code>cost_usd × $CNY_RATE</code> 折算，副行给出美元与汇率，与面板 KPI 完全一致。</p></div>
     <div class="spec"><b>套餐不计费</b><p>订阅制模型只记用量不计金额，本机为 $PLAN_TOKENS tokens；面板里同样标注「套餐不计费」。</p></div>
     <div class="spec"><b>未计价</b><p>模型不在价目表内时，用量照记、金额留空——本机 $UNPRICED_TOKENS tokens（占 $UNPRICED_PCT），实际成本会更高。</p></div>
-    <div class="spec"><b>缓存命中率</b><p>命中读取 ÷（输入 + 缓存写入 + 缓存读取），口径与面板相同；本机 $CACHE_TXT。</p></div>
+    <div class="spec"><b>缓存命中率</b><p>缓存读取 ÷（基础输入 + 缓存写入 + 缓存读取），口径与面板五态同名；本机 $CACHE_TXT。</p></div>
   </div>
 </div></section>
 

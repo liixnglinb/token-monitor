@@ -42,11 +42,28 @@ def main() -> None:
         page = browser.new_page(viewport={"width": 1440, "height": 900})
         errors: list[str] = []
         page.on("pageerror", lambda e: errors.append(str(e)))
+        def wait_full_data(pg):
+            """等真正的完整结果：partial 也有 matrix，但来源可能一个都没并进来。"""
+            pg.wait_for_function(
+                "typeof DATA !== 'undefined' && DATA && !DATA.partial && !DATA.building"
+                " && (DATA.matrix || []).length > 0 && (DATA.agents || []).length > 0",
+                timeout=300000)
+            # 这里刻意不用 wait_for_selector("#agentList ...")：reload 会按 hash
+            # 恢复到「模型用量」视图，总览那一屏是 hidden 的，侧栏行虽然一直在 DOM 里，
+            # 但选择器等待在这种上下文里不稳（实测 30s 超时）。数据到位后再给 1.2s
+            # 让各 render*() 收尾，就够了 —— 原来那条 null.range 抛异常的竞态
+            # 是"数据没到"造成的，等数据才是对症的修法。
+            pg.wait_for_timeout(1200)
+
         page.goto(args.base, wait_until="networkidle")
         # 等服务端把数据交出来再开始点：首扫期间 DATA 仍是 null，此时直接
         # evaluate renderModelTable() 会读到 null.range 抛异常（实测偶发）。
+        # 必须等到"完整结果"而不是部分结果：首扫期间的 partial 也有 matrix，
+        # 但来源少、多数 agent 不足两天 —— 排行榜迷你图与抽屉来源列表会是空的，
+        # 那几条纹案在扫描中跑就会假红（实测偶发 36/38）。
         page.wait_for_function(
-            "typeof DATA !== 'undefined' && DATA && (DATA.matrix || []).length > 0",
+            "typeof DATA !== 'undefined' && DATA && !DATA.partial && !DATA.building"
+            " && (DATA.matrix || []).length > 0 && (DATA.agents || []).length > 0",
             timeout=300000)
         page.wait_for_timeout(1200)
 
@@ -120,6 +137,10 @@ def main() -> None:
         check("筛选写入 hash（range=today）", "range=today" in page.evaluate("location.hash"),
               page.evaluate("location.hash"))
         page.reload(wait_until="networkidle")
+        # reload 之后必须重新等"完整数据 + 侧栏已渲染"：服务端这时可能正在后台重扫，
+        # 直接往下跑会让后面所有依赖排行/抽屉的纹案拿到空列表（实测假红 36/38，
+        # 且一次挂两条：排行榜走势 + 抽屉来源列表，都是同一个因）。
+        wait_full_data(page)
         page.wait_for_timeout(1200)
         check("刷新后筛选保留", page.eval_on_selector("#ddRangeVal", "el => el.textContent") == "今天",
               page.eval_on_selector("#ddRangeVal", "el => el.textContent"))
@@ -227,6 +248,11 @@ def main() -> None:
         check("窄屏隐藏侧栏", not page.is_visible("#sidebar"))
         check("窄屏显示底部标签栏", page.is_visible("#tabbar"))
         check("窄屏显示数据源筛选按钮", page.is_visible("#filterBtn"))
+        # 上一步的 Toast 浮在右下角，正好压在 #filterBtn 上 —— 先等它消失
+        try:
+            page.wait_for_selector(".toast", state="detached", timeout=6000)
+        except Exception:
+            pass
         page.click("#filterBtn")
         page.wait_for_timeout(400)
         check("抽屉打开", page.is_visible("#agentDrawer"))

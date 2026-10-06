@@ -391,14 +391,14 @@ function renderTotalTokenCard(t){
     pillP.hidden = true;
     pillM.hidden = true;
   }
-  /* 微型双色进度条：按量计费 vs 套餐覆盖 */
+  /* 微型双色进度条：按量计费 vs 套餐不计费 */
   const barM = $("heroDualMetered"), barP = $("heroDualPlan");
   const total = Math.max(compTotal, 1);
   if (barM) barM.style.setProperty("--w", (meteredTokens / total * 100).toFixed(1) + "%");
   if (barP) barP.style.setProperty("--w", (t.planTokens / total * 100).toFixed(1) + "%");
   const dual = $("heroDualBar");
   if (dual) dual.setAttribute("aria-label",
-    "计费构成：按量计费 " + fmtTok(meteredTokens) + "，套餐覆盖 " + fmtTok(t.planTokens));
+    "计费构成：按量计费 " + fmtTok(meteredTokens) + "，套餐不计费 " + fmtTok(t.planTokens));
   const sub = $("heroTokenSub");
   if (sub) sub.textContent = compTotal > 0
     ? "缓存读取 + 输入 + 写入 + 输出 合计"
@@ -410,7 +410,7 @@ function renderCacheCard(t){
   const compTotal = t.compTotal;
   const cacheBase = t.inp + t.cw + t.cr;
   $("heroCache").textContent = cacheBase > 0
-    ? "缓存命中 " + (t.cr / cacheBase * 100).toFixed(1) + "%" : "缓存命中 —";
+    ? "缓存命中率 " + (t.cr / cacheBase * 100).toFixed(1) + "%" : "缓存命中率 —";
   const equiv = t.inp + CR_RATIO * t.cr + CW_RATIO * t.cw;
   $("heroEquiv").textContent = compTotal > 0 ? fmtTok(equiv) + " tok" : "—";
   $("heroSavingPct").textContent = compTotal > 0
@@ -466,7 +466,7 @@ function renderCostCard(t){
     : (planOnly ? "套餐" : (t.unpricedTokens > 0 ? "未计价" : fmtCNY(0)));
   costEl.title = t.cost > 0
     ? "按各模型价格估算，不代表实际账单 · 等效 $" + fmtUSD(t.cost).slice(1)
-    : "套餐模型不计费；单价缺失的用量不记为免费";
+    : "套餐不计费；单价缺失的用量不记为免费";
   $("heroCostSub").textContent = t.cost > 0
     ? "$" + fmtUSD(t.cost).slice(1) + " · 汇率 " + DATA.cny_rate : "";
 
@@ -934,7 +934,7 @@ function sparkPairsFor(rows, metric, start){
 }
 function sparkPairs(rows, start){ return sparkPairsFor(rows, "tokens", start); }
 
-/* 金额为 0 但有用量时，用三态徽标区分「按量计费 / 套餐覆盖 / 未计价」，
+/* 金额为 0 但有用量时，用三态徽标区分「按量计费 / 套餐不计费 / 未计价」，
    避免把缺价或订阅制误读成真正免费 */
 function costText(cost, tokens, model, forcePlan){
   if (cost > 0) return '<span class="cost-priced">' + fmtCNY(cost * DATA.cny_rate) + '</span>';
@@ -942,7 +942,7 @@ function costText(cost, tokens, model, forcePlan){
   const set = window.PLAN_SET || new Set();
   const isPlan = !!forcePlan || !!(model && set.has(String(model).toLowerCase()));
   if (isPlan){
-    return '<span class="pill-pill pill-plan" title="套餐/订阅制模型（如商汤小浣熊、Agnes 等）：只记吞吐量，金额按 ¥0 统计">套餐覆盖</span>';
+    return '<span class="pill-pill pill-plan" title="套餐/订阅制模型（如商汤小浣熊、Agnes 等）：只记吞吐量，金额按 ¥0 统计">套餐不计费</span>';
   }
   return '<span class="pill-pill pill-unpriced" title="单价不在价格库，未计入金额 —— 不是免费；可在 custom-pricing.json 补充单价">未计价</span>';
 }
@@ -1009,7 +1009,7 @@ function renderAgentList(){
       return;
     }
     box.innerHTML = mlist.map(([mname, o2]) =>
-      '<div class="mrow"><span class="nm">' + modelCellHTML(mname) + '</span>'
+      '<div class="mrow"><span class="nm" title="' + esc(mname) + '">' + modelCellHTML(mname) + '</span>'
       + '<span class="num">' + fmtInt(o2.tokens) + ' tok · ' + fmtInt(o2.requests) + ' 次 · '
       + costText(o2.cost, o2.tokens, mname) + '</span></div>').join("");
   }
@@ -1133,7 +1133,7 @@ function renderModelDist(){
     '<div class="t10-row" data-model="' + esc(n) + '" title="查看 ' + esc(n) + ' 的明细">'
     + '<span class="idx">' + String(k + 1).padStart(2, "0") + '</span>'
     + '<span class="dot" style="background:' + PAL[k % PAL.length] + '"></span>'
-    + '<span class="nm">' + esc(n) + '</span>'
+    + '<span class="nm" title="' + esc(n) + '">' + esc(n) + '</span>'
     + '<span class="t10-bar"><i style="width:' + Math.max(4, o.req / maxReq * 100).toFixed(1) + '%;background:' + PAL[k % PAL.length] + '"></i></span>'
     + '<span class="val">' + fmtInt(o.req) + '<em>次</em></span>'
     + '</div>').join("");

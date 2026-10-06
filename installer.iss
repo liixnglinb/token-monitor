@@ -23,6 +23,12 @@ ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=lowest
 DisableProgramGroupPage=yes
 Uninstallable=yes
+; 覆盖安装时如果程序正在跑：显式写出这两条（Inno 默认已是 yes，但依赖默认值
+; 看不出来我们在管这件事）。RestartApplications 关掉 —— 这是个常驻托盘的工具，
+; 让安装器替用户悄悄重新拉起进程反而更容易撞上"两个实例"。
+CloseApplications=yes
+RestartApplications=no
+CloseApplicationsFilter=*.exe,*.dll
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -38,6 +44,11 @@ Name: "{userdesktop}\Token Monitor"; Filename: "{app}\TokenMonitor.exe"
 [Run]
 Filename: "{app}\TokenMonitor.exe"; Description: "启动 Token Monitor"; \
   Flags: nowait postinstall skipifsilent
+
+[InstallDelete]
+; 上一次自更新半途失败会留下 .new；覆盖安装前先清掉，别让安装目录里
+; 永远躺着一份没人认的旧 exe（卸载时同样会清，但升级路径上不该等卸载）
+Type: files; Name: "{app}\TokenMonitor.exe.new"
 
 [UninstallDelete]
 ; 清理更新残留
