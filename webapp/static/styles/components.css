@@ -1547,3 +1547,20 @@ th.num .th-sort { justify-content: flex-end; }
   .mini-donut circle,
   .dual-bar i { transition: none !important; }
 }
+
+/* ── 触屏档（触摸屏笔记本 / 平板）：命中区放大 ─────────────────────
+   判据必须是 pointer:coarse，不能用宽度断点 —— 窄窗口的鼠标用户不该被迫看
+   大按钮，而 13 寸触摸屏笔记本既不是窄屏也不会命中 max-width。实测桌面档
+   .dd-btn / .icon-btn 只有 34px 高、.t10-row 24px，手指点不准。── */
+@media (pointer: coarse) {
+  .dd-btn { min-height: 44px; }
+  .dd-menu button { min-height: 44px; }
+  .btn, .icon-btn { min-height: 44px; }
+  .icon-btn { min-width: 44px; }
+  #nav a { min-height: 46px; }
+  .set-tabs .set-item { min-height: 46px; }   /* 选择器要和生产方的 .set-tabs .set-item 同级，
+                                                 单写 .set-item 会被特异性压掉（实测 34px 没生效） */
+  .t10-row { min-height: 44px; }
+  .rail-avatar { min-height: 46px; }
+  .chip-warn { min-width: 20px; min-height: 20px; }
+}

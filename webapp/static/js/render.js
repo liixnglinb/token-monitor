@@ -128,47 +128,87 @@ renderRangeMenu();
 function bindDropdown(ddId, menuId, onPick){
   const dd = $(ddId), menu = $(menuId);
   if (!dd || !menu) return;
-  dd.querySelector(".dd-btn").onclick = e => {
-    e.stopPropagation();
-    const wasOpen = dd.classList.contains("open");
-    closeAllDropdowns();
-    if (!wasOpen){
-      dd.classList.add("open");
-      menu.hidden = false;
-      if (window.TMUI) TMUI.syncAria();
-    }
-  };
+  const btn = dd.querySelector(".dd-btn");
+  btn.onclick = e => { e.stopPropagation(); ddToggle(dd, btn); };
   menu.onclick = e => {
     const b = e.target.closest("button[data-k]"); if (!b || !onPick) return;
     onPick(b.dataset.k);
-    closeAllDropdowns();
+    closeAllDropdowns(btn);
   };
+  ddBindKeys(dd, menu, btn);
 }
 /* 数据源下拉：菜单项带图标与用量，与窄屏抽屉共用同一份渲染 */
 function bindAgentDropdown(){
   const dd = $("ddAgent"), menu = $("ddAgentMenu");
   if (!dd || !menu) return;
-  dd.querySelector(".dd-btn").onclick = e => {
-    e.stopPropagation();
-    const wasOpen = dd.classList.contains("open");
-    closeAllDropdowns();
-    if (!wasOpen){
-      dd.classList.add("open");
-      menu.hidden = false;
-      if (window.TMUI) TMUI.syncAria();
-    }
-  };
+  const btn = dd.querySelector(".dd-btn");
+  btn.onclick = e => { e.stopPropagation(); ddToggle(dd, btn); };
   menu.onclick = e => {
     const b = e.target.closest("[data-agent-filter]");
     if (!b) return;
     applyAgentFilter(b.dataset.agentFilter);
+    closeAllDropdowns(btn);
   };
+  ddBindKeys(dd, menu, btn);
 }
-function closeAllDropdowns(){
+
+/* ---------- 下拉的键盘层（三个图表下拉 + 时间 + 数据源共用） ----------
+   容器标的是 role="menu"，以前却只认鼠标：方向键走不了选项、Home/End 无效、
+   Esc 关不掉，关掉之后焦点还会掉回页头 —— 键盘用户等于用不了筛选。 */
+function ddItems(dd){
+  return [...dd.querySelectorAll(".dd-menu button:not([disabled])")];
+}
+function ddOpen(dd, btn, focusInto){
+  closeAllDropdowns();
+  dd.classList.add("open");
+  const menu = dd.querySelector(".dd-menu");
+  if (menu) menu.hidden = false;
+  if (window.TMUI) TMUI.syncAria();
+  if (focusInto){
+    const it = ddItems(dd);
+    const t = it.find(b => b.classList.contains("on")) || it[0];
+    if (t) t.focus();
+  }
+}
+function ddToggle(dd, btn){
+  if (dd.classList.contains("open")) closeAllDropdowns(btn);
+  else ddOpen(dd, btn, btn.dataset.kbd === "1");   /* 键盘进来的才把焦点送进菜单 */
+}
+function ddBindKeys(dd, menu, btn){
+  btn.addEventListener("keydown", e => {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp"){
+      e.preventDefault();
+      if (!dd.classList.contains("open")){
+        btn.dataset.kbd = "1"; ddOpen(dd, btn, true); delete btn.dataset.kbd;
+      }
+    } else if (e.key === "Escape" && dd.classList.contains("open")){
+      e.preventDefault(); closeAllDropdowns(btn);
+    }
+  });
+  /* Enter/Space 由浏览器翻译成 click；这条路径上不送焦点进菜单，
+     否则菜单里第一项会被"选中"一次（键盘用户最恨的意外提交）。 */
+  menu.addEventListener("keydown", e => {
+    const it = ddItems(dd);
+    if (!it.length) return;
+    const i = it.indexOf(document.activeElement);
+    const move = n => { e.preventDefault(); it[(n + it.length) % it.length].focus(); };
+    if (e.key === "ArrowDown") move(i + 1);
+    else if (e.key === "ArrowUp") move(i - 1);
+    else if (e.key === "Home") move(0);
+    else if (e.key === "End") move(it.length - 1);
+    else if (e.key === "Escape"){ e.preventDefault(); closeAllDropdowns(btn); }
+    else if (e.key === "Tab") closeAllDropdowns();
+  });
+}
+
+function closeAllDropdowns(backTo){
   document.querySelectorAll(".dd.open").forEach(d => d.classList.remove("open"));
   document.querySelectorAll(".dd-menu").forEach(m => m.hidden = true);
+  if (window.TMUI) TMUI.syncAria();
+  /* 菜单被隐藏时里面那个焦点元素会失效、焦点掉到 body —— 显式交还给触发按钮 */
+  if (backTo && typeof backTo.focus === "function") backTo.focus();
 }
-document.addEventListener("click", closeAllDropdowns);
+document.addEventListener("click", () => closeAllDropdowns());
 
 /* ---------- 数据源筛选（顶栏下拉 + 窄屏抽屉） ---------- */
 function renderAgentFilter(){

@@ -20,6 +20,7 @@ import os
 import sys
 import threading
 import time
+import logging
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 if ROOT not in sys.path:
@@ -32,6 +33,11 @@ from fastapi.staticfiles import StaticFiles
 
 import pricing
 import updater
+
+# 与 main.py 用同一个 logger：本地服务的日志和界面的报错要落到同一份 app.log，
+# 否则用户报障时只有半边证据。
+LOG = logging.getLogger("tokenmonitor")
+_CLIENT_ERR = {"ts": [], "n": 0}      # 前端异常上报的限流窗口
 
 CST = None  # 延迟导入保持结构清晰（见下）
 from datetime import datetime, timezone, timedelta
@@ -315,6 +321,35 @@ def api_summary():
 def api_reload():
     """非阻塞：正在扫描时再点 = 排队，绝不并发跑两个扫描"""
     return JSONResponse(_R.refresh(force=True))
+
+
+@app.post("/api/client-error")
+async def api_client_error(request: Request):
+    """前端未捕获异常 / Promise 拒绝的落地通道。
+
+    界面是 WebView，崩在里面用户只会看到"某块没出来"，事后什么线索都没有。
+    这里把消息写进和本地服务同一份 app.log，报障时能直接看。
+    只收字符串摘要 + 文件名 + 行号：不收对话原文、不收请求体、不做任何持久化结构。
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False, "error": "请求体不是合法 JSON"}, status_code=400)
+    if not isinstance(body, dict):
+        return JSONResponse({"ok": False, "error": "请求体必须是 JSON 对象"}, status_code=400)
+    now = time.time()
+    _CLIENT_ERR["n"] = sum(1 for t in _CLIENT_ERR["ts"] if now - t < 60)
+    if _CLIENT_ERR["n"] >= 12:                       # 死循环报错不该把日志刷爆
+        return JSONResponse({"ok": False, "error": "rate-limited"}, status_code=429)
+    _CLIENT_ERR["ts"].append(now)
+    msg = str(body.get("msg") or "")[:500]
+    src = str(body.get("src") or "")[:200]
+    try:
+        line = max(0, min(int(body.get("line") or 0), 10 ** 7))
+    except (TypeError, ValueError):
+        line = 0
+    LOG.warning("前端异常: %s @ %s:%s", msg or "(空)", src or "?", line)
+    return JSONResponse({"ok": True})
 
 
 @app.get("/api/settings")

@@ -24,17 +24,50 @@
 ```bash
 pip install -r requirements.txt
 python main.py            # 起内嵌窗口；服务在 http://127.0.0.1:8420
+python tools/dev_serve.py # 只起服务不起窗口，改前端时用这个
 ```
+
+## 验收（改完必须全绿才算改完）
+
+```bash
+pip install -r requirements.txt -r requirements-dev.txt
+playwright install chromium          # 界面验收要真浏览器，不跑 headless 断言没意义
+python -m pytest tests -q            # 单元 + HTTP 契约
+python tools/dev_serve.py 8420 &     # 起服务后跑两套浏览器用例
+python tools/ui_smoke.py             # 交互冒烟 38 条
+python tools/final_check.py          # 主题 / 对比度 / 无障碍 / 布局 51 条
+python -m pip_audit -r requirements.txt   # 依赖漏洞，必须 0 命中
+```
+
+推送 `v*` 标签时 CI 会再跑一遍 pytest + 前端语法检查 + `pip-audit --strict`，
+不过就不出包。两条写下来的坑：
+
+- **`requirements*.txt 里不能写中文注释**：`pip-audit` 按本地编码读文件，
+  Windows 上是 cp936，UTF-8 注释会让扫描直接崩（`UnicodeDecodeError`）。
+- **前端八个脚本共用一个全局作用域**：单个文件 `node --check` 过了不代表能跑，
+  跨文件重名的 `let` 会让整块脚本静默中止（症状是"某个函数怎么就 undefined 了"）。
+  必须按 `index.html` 的加载顺序拼起来再查一遍，CI 里已经是这么做的。
+
+## 排障与留痕
+
+| 位置（`%LOCALAPPDATA%\TokenMonitor\`） | 是什么 |
+| --- | --- |
+| `app.log` | 后端日志**以及界面未捕获异常**（前端经 `POST /api/client-error` 落同一份日志，只含消息/文件名/行号，不含任何用量内容） |
+| `last-build.json` | 上次成功扫描的结果快照，开机直接复用（所以不会每次打开都重扫） |
+| `scan-cache.json` | 文件级增量缓存与"该源无用量"判定，按文件指纹失效 |
+| `settings.json` | 刷新间隔等设置，越界值在读取时钳制 |
+| `custom-pricing.json` | 可选：自己补的模型价目表（仓库里有 `.example.json` 模板） |
+
+界面里出的错会被兜住：toast 提示一次（同一条 60s 内不重复弹），摘要进 `app.log`，
+数据区保留上一次的有效结果不被清空。
 
 ## 自动更新机制
 
-应用启动与页面加载时会请求 GitHub Releases 最新版本；发现新版后侧边栏出现「⬆ 更新到 vX.Y.Z」，点击后：
-
-1. 下载新版 exe 到临时目录
-2. 生成自替换脚本，等待当前进程退出
-3. 替换 exe 并自动重启，应用窗口自动打开新版本
-
-整个过程无需重新下载安装包。
+启动即检查一次、此后每 30 分钟一次；发现新版本会自动**测速挑最快下载源**并下载，
+顶栏出现真实进度（不是编造的百分比），下载完成后弹窗问「现在更新并重启 / 稍后」。
+入口在 **设置 › 软件更新** 那张卡片（检查、下载进度、失败原因与重试都在那里），
+安装是两段式：先把新版 exe 落到临时目录并校验「体积 + `.sha256`」双闸，
+确认后才替换 exe 并重启，替换过程由脱离父进程的独立脚本完成。
 
 ## 界面（前端结构）
 
@@ -90,11 +123,55 @@ git push origin v1.0.1
 
 ```bash
 pip install -r requirements.txt pyinstaller
-python -m PyInstaller --noconfirm --clean TokenMonitor.spec
+python -c "open('version.txt','w').write('vX.Y.Z')"     # 无 BOM；CI 里同样这么写
+pyinstaller --noconfirm --onefile --name TokenMonitor --windowed --icon icon.ico \
+  --add-data "webapp/static;webapp/static" --add-data "version.txt;." --add-data "icon.ico;." \
+  --hidden-import uvicorn --hidden-import uvicorn.loops --hidden-import uvicorn.loops.auto \
+  --hidden-import uvicorn.protocols --hidden-import uvicorn.protocols.http \
+  --hidden-import uvicorn.protocols.http.h11_impl --hidden-import uvicorn.lifespan \
+  --hidden-import uvicorn.lifespan.on --hidden-import webview \
+  --hidden-import webview.platforms.winforms --hidden-import webview.platforms.edgechromium \
+  --hidden-import clr_loader --hidden-import pythonnet --hidden-import clr \
+  --hidden-import pystray --hidden-import pystray._win32 --collect-all pystray \
+  --collect-all PIL --hidden-import _cffi_backend --collect-all cffi \
+  --collect-all clr_loader --collect-all pythonnet main.py
+iscc /DAppVersion="vX.Y.Z" installer.iss                # Inno Setup 出安装版
 ```
+
+> 仓库里**没有** `TokenMonitor.spec` —— 它是 PyInstaller 的生成物（已 gitignore），
+> 参数以上面这条命令行为准（与 `.github/workflows/release.yml` 保持一致）。
+> `version.txt` 必须无 BOM，带 BOM 会让更新器的版本解析抛错，出现"已是最新还提示更新"。
 
 > 打包版把 `webapp/static` 一并打进 exe，因此**改前端必须重新打包**才会在安装版里生效；
 > 开发期请用 `python tools/dev_serve.py` 或 `python main.py` 直接读源码目录。
+
+## 数据流与扩展点（给接手的人）
+
+单向、一处写、多处读，没有回写环：
+
+```
+本机各 Agent 日志 / sqlite
+   └─ probe_v3_allsources.py      手写扫描器(ORIGINAL/NEW/EXTRA) + 注册表驱动源
+        └─ scan_cache.py          文件指纹增量缓存 + "该源无用量"判定
+             └─ server._build()   pricing 计价 → _aggregate() 成 (date,agent,model) 矩阵
+                  │                （扫描中途每 ≥2s 回抛一次 partial）
+                  └─ refresher.Refresher   后台线程：调度 / 忙碌合并 / 脏标记
+                       ├─ save_snapshot() → %LOCALAPPDATA%\TokenMonitor\last-build.json
+                       └─ /api/summary    → 前端 DATA（唯一写入点 app.js）
+                                             └─ render.js 各 render*() 只读 DATA/F/PAGE
+```
+
+- **加一个数据源**：能在 `sources_registry.py` 里描述路径与格式就别写代码 ——
+  `jsonl_generic` / sqlite 两条通用解析路径已覆盖大部分；只有语义特殊
+  （累计值、分片重复、需要剥离缓存读）才在 `probe_v3_allsources.py` 里加手写扫描器，
+  并登记进 `HANDLED_IDS` 防止注册表重复计入。
+- **加一个指标/图表**：数据只在 `_aggregate()` 出，前端只加 `render*()` 与 `CHOICE` 表条目，
+  不要在渲染层现算口径 —— 口径必须与下载页 `dist-page/export_data.py` 一致
+  （它走的是同一条 `_aggregate`，这就是"网站数字与面板对得上"的保证）。
+- **改设置项**：`refresher.DEFAULTS` 加键 + `_clamp()` 定边界，前端才会拿到钳制后的值。
+- **下载页**：唯一生成器在 `dist-page/`（`export_data` → `capture_shots` →
+  `build_assets` → `build`），**不要直接改产物 HTML**；它同时写
+  `site/index.html`（本仓库存档）和网站仓库的 `public/token-monitor/`。
 
 ## 数据口径说明
 

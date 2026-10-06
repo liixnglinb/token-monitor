@@ -3,6 +3,48 @@ let DATA = null, MAIN = null;
 /* 后端是否正在扫描：唯一写入点是 interactions.js 的 syncSettings，
    渲染侧只读它，避免"部分结果已到位但扫描指示条还挂着"这类时序错乱。 */
 let SCANNING = false;
+
+/* ---------- 全局兜底（必须最早挂上） ----------
+   界面跑在 WebView 里：未捕获异常和 Promise 拒绝默认只在开发者控制台闪过，
+   用户看到的是"某块内容没出来"，事后什么线索都没有。这里把摘要送进本地服务的
+   app.log（和后端同一份日志），并给一次可读提示。
+   只送消息、文件名、行号 —— 不送数据内容、不送用户日志里的任何原文。 */
+(function globalErrorNet(){
+  const seen = new Map();            // 同一条消息 60s 内只报一次
+  let shown = 0;
+  function report(msg, src, line){
+    const key = String(msg || "未知错误").slice(0, 300);
+    const now = Date.now();
+    if (now - (seen.get(key) || 0) < 60000) return;
+    seen.set(key, now);
+    if (seen.size > 80) seen.clear();
+    try { console.error("[UI] " + key + " @ " + src + ":" + line); } catch (_) {}
+    try {
+      fetch("/api/client-error", {
+        method: "POST", headers: { "Content-Type": "application/json" }, keepalive: true,
+        body: JSON.stringify({ msg: key, src: String(src || "").slice(0, 200),
+                               line: Number(line) || 0 })
+      }).catch(() => {});             // 上报本身失败不能再触发一次拒绝
+    } catch (_) {}
+    if (shown < 2 && window.TMUI && TMUI.toast){
+      shown++;
+      TMUI.toast("界面有一处出了错，已记入本地日志；点顶部「刷新」可恢复", { kind: "error" });
+    }
+  }
+  window.addEventListener("error", e => {
+    const t = e && e.target;
+    if (t && t !== window && t.tagName)          // 图片 / 脚本加载失败也要留痕
+      report(t.tagName + " 资源加载失败: " + String(t.src || t.href || "").slice(0, 200), "asset", 0);
+    else
+      report(e && e.message, e && e.filename, e && e.lineno);
+  }, true);
+  window.addEventListener("unhandledrejection", e => {
+    const r = e && e.reason;
+    report((r && r.message) ? r.message : String(r).slice(0, 300), "promise", 0);
+  });
+  window.__TM_ERROR = report;                     // 供验收工具与人工排查调用
+})();
+
 const F = { rangeKey: "last7", agent: "all", metric: "tokens", grain: "day", dim: "total",
             billing: "all", lens: "entity", open: new Set() };
 try {

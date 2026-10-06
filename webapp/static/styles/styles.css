@@ -10,13 +10,16 @@
    · layout  —— 页面骨架、栅格、侧栏与顶栏、响应式与多端
 
    新增样式请放进对应层文件，不要再往 legacy 里加东西。
+   四个 @import 必须带 ?v= 版本戳，且与 index.html 里那批戳同步改：
+   WebView2 的缓存跨版本存活，自动更新后不带戳的分层文件可能还是旧的一份，
+   表现就是"改了 CSS 界面上没变化"。tests/test_static_refs.py 会盯这件事。
    ============================================================================= */
 @layer legacy, base, components, layout;
 
-@import url("./tokens.css");
-@import url("./base.css") layer(base);
-@import url("./components.css") layer(components);
-@import url("./layout.css") layer(layout);
+@import url("./tokens.css?v=20261006");
+@import url("./base.css?v=20261006") layer(base);
+@import url("./components.css?v=20261006") layer(components);
+@import url("./layout.css?v=20261006") layer(layout);
 
 /* -----------------------------------------------------------------------------
    关于 legacy 层
