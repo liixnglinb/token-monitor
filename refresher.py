@@ -61,7 +61,15 @@ def _clamp(s):
         m = int(s.get("refresh_minutes", DEFAULTS["refresh_minutes"]))
     except (TypeError, ValueError):
         m = DEFAULTS["refresh_minutes"]
-    s["refresh_minutes"] = 0 if m <= 0 else max(MIN_REFRESH, min(MAX_REFRESH, m))
+    # 0 是「关闭自动刷新」的合法值，但只能由界面上那个开关明确表达；
+    # 负数 / 垃圾输入不能顺手把自动刷新关掉（以前 -5 → 0，用户以为只是填错个数）。
+    if m == 0:
+        m = 0                                        # 唯一的"关闭"入口
+    elif m < 0:
+        m = MIN_REFRESH
+    else:
+        m = max(MIN_REFRESH, min(MAX_REFRESH, m))
+    s["refresh_minutes"] = m
     return s
 
 

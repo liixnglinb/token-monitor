@@ -327,7 +327,10 @@ async def api_set_settings(request: Request):
     try:
         body = await request.json()
     except Exception:
-        body = {}
+        # 以前解析失败当成"空补丁"照样回 ok:true，界面以为存好了其实什么都没改。
+        return JSONResponse({"ok": False, "error": "请求体不是合法 JSON"}, status_code=400)
+    if not isinstance(body, dict):
+        return JSONResponse({"ok": False, "error": "请求体必须是 JSON 对象"}, status_code=400)
     return JSONResponse({"ok": True, "settings": _R.set_settings(body)})
 
 

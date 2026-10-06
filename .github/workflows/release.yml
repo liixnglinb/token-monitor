@@ -32,7 +32,7 @@ jobs:
       - name: 验收门禁（单元测试 + 前端语法）
         shell: bash
         run: |
-          pip install pytest
+          pip install -r requirements-dev.txt
           python -m pytest tests -q
           # 逐文件 + 按 index.html 的真实加载顺序拼起来再查一遍：
           # 九个脚本共用一个全局作用域，跨文件重名的 let/const 会让整块脚本

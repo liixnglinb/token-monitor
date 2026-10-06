@@ -276,8 +276,19 @@ function syncSettings(s){
   if (!s) return;
   const minutes = (s.settings && (s.settings.refresh_minutes ?? 0)) || 0;
   const el = $("autoMin");
-  if (el && document.activeElement !== el)
-    el.value = String(minutes);
+  if (el && document.activeElement !== el){
+    /* 选项里只有 0/1/3/5/10/30/60：服务端存着别的号（老 settings.json、
+       或从接口设过 7）时直接赋 .value 会落回第一个选项 —— 界面于是显示成
+       「关闭」，而后台其实在每 7 分钟重扫。补一条"自定义"选项，让选择器不撒谎。 */
+    const want = String(minutes);
+    if (minutes > 0 && ![...el.options].some(o => o.value === want)){
+      const opt = document.createElement("option");
+      opt.value = want;
+      opt.textContent = "每 " + want + " 分钟（自定义）";
+      el.appendChild(opt);
+    }
+    el.value = minutes > 0 ? want : "0";
+  }
   const chk = $("autoChk");
   if (chk){
     chk.checked = minutes > 0;
@@ -347,12 +358,27 @@ async function pollMeta(){
 setInterval(()=>{if(!document.hidden)void pollMeta();}, POLL_MS);
 document.addEventListener("visibilitychange",()=>{if(!document.hidden)void pollMeta();});
 $("autoMin").onchange = async function(){
-  const m = parseInt(this.value, 10) || 0;
+  /* 这是一个 <select>，选项自带「关闭」= 0，所以 0 是合法值，不能当非法输入拦掉。
+     要拦的是读不出数字的情况：服务端值不在选项列表里时 select 会显示为空白
+     （syncSettings 直接赋 .value，选项不存在就匹配不上），
+     以前 `parseInt("") || 0` 会把这种空白当成"用户选了关闭"，静默停掉自动刷新。 */
+  const raw = String(this.value).trim();
+  const m = /^\d+$/.test(raw) ? parseInt(raw, 10) : NaN;
+  if (!Number.isFinite(m) || m > 720){
+    if (window.TMUI) TMUI.toast("刷新间隔只认 0（关闭）到 720 分钟，请重新选择", { kind: "error" });
+    pollMeta();
+    return;
+  }
   try {
-    await fetch("/api/settings", { method: "POST",
+    const r = await fetch("/api/settings", { method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refresh_minutes: m }) });
-  } catch(e){}
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    if (window.TMUI) TMUI.toast(m === 0 ? "已关闭自动刷新" : "自动刷新改为每 " + m + " 分钟",
+                                { kind: "success" });
+  } catch(e){
+    if (window.TMUI) TMUI.toast("设置保存失败，请检查本地服务", { kind: "error" });
+  }
   pollMeta();
 };
 async function pushSettings(patch){
