@@ -18,6 +18,17 @@
   Token 卡片首屏不可点、侧栏状态灯写死绿色、顶栏下载进度是可聚焦却无动作的按钮、
   托盘「检查更新」丢弃响应。
 
+### 数据源
+
+- **阿里 Qoder（Qoder CN）第一次能扫到用量**：注册表里这个源从来没有指向真实转录所在的
+  `~/.qoder-cn/projects`，所以面板一直显示它没有用量。接上后又发现它的字段名是 Anthropic 的、
+  语义却是 OpenAI 的 —— `input_tokens` 已经把 `cache_read_input_tokens` 包在里面
+  （实测全部 usage 记录的 `context_usage_ratio × 1,000,000` 恒为整数，且对带 token 的记录
+  恰好等于 `input_tokens`），照旧口径会把 5.29 亿报成 10.45 亿。
+  新增注册表字段 `cache_in_input` 按源声明，不给全局默认。
+  它的内置模型（qfmodel / dfmodel 等）四个 token 字段恒写 0、只给 credits，
+  本地换不出 token 也没有官方 credits 单价，这一段有意不计入。
+
 ### 崩溃与重启回到原状态（模块二.3）
 
 - 界面状态（视图 + 筛选 + 数据源展开态）以前存在 **sessionStorage**，整个程序退出即清空：

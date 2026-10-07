@@ -24,6 +24,10 @@ Token Monitor — 全量数据源注册表
               api_only  本地无数据，须走官方 API
               absent    本机未安装
   note      备注 / 关键字段
+  cache_in_input  可选布尔：该源的 input_tokens 已把 cache_read_input_tokens 包在里面，
+              解析时要从 input 里扣掉缓存段，否则同批 token 数两遍。
+              只在**拿该源自己的字段做过恒等式验证**时才写（见 qoder 的 note），
+              不给全局默认——Anthropic 原生的 cache_read 是独立输入，扣了就把量算少。
 
 本表为"数据"，解析逻辑在 probe_v3_allsources.py（scan_reg_jsonl_one / scan_reg_sqlite_one）。
 新增源只需在此追加一条。
@@ -76,10 +80,23 @@ SOURCES = [
 
     dict(id="qoder", cn="阿里 Qoder", en="Alibaba Qoder",
          vendor="阿里巴巴", region="CN", form="ide",
-         paths=["{home}/.qoder-cli/ai-stats", "{home}/.qoder", "{home}/.qoderwork",
-                "{home}/.qodersec", "{appdata}/QoderCN", "{appdata}/QoderWork CN"],
-         fmt=FMT_JSONL_GEN, status="verified",
-         note="ai-stats 仅代码行归属；token 需查 index/IndexedDB"),
+         paths=["{home}/.qoder-cli/ai-stats", "{home}/.qoder-cn/projects",
+                "{home}/.qoder", "{home}/.qoderwork",
+                "{home}/.qodersec", "{appdata}/QoderWork CN"],
+         fmt=FMT_JSONL_GEN, status="verified", cache_in_input=True,
+         note="转录在 .qoder-cn/projects/<slug>/<sessionId>.jsonl，另有 "
+              "<sessionId>/subagents/agent-*.jsonl（2026-10-07 本机：123 个文件 / 2.17 万条 usage，"
+              "request_id 全部唯一，跨文件不重复）。口径两处特殊性："
+              "① 内置模型 qfmodel/dfmodel/gfmodel/kmodel_latest 的四个 token 字段恒写 0，只给 credits"
+              "（本机 2 万条 / 约 1.58 万 credits，其中 qfmodel 全为 billable=false）；"
+              "本地既换不出 token 也没有官方 credits 单价 → 这段不计入，别当成扫描器漏了。"
+              "② BYOK 自定义模型（本机 qoder-custom-<uuid>/ark-code-latest）token 是真值，"
+              "但 input_tokens 已经把 cache_read_input_tokens 包在里面：实测全部 usage 记录的 "
+              "context_usage_ratio × 1,000,000 都是整数（21,735/21,735），且对 1,264 条 ark 记录恰好等于"
+              "input_tokens → 分母是 1M 窗口、input 是整段上下文，故声明 cache_in_input；"
+              "不声明会把同一批 token 数两遍（528M 变 1,045M）。"
+              "ai-stats 只有代码行归属；{appdata}/QoderCN 本机不存在，真名 com.qodercn.app.stable "
+              "是纯 Electron 缓存、无用量字段（均已实测）。"),
 
     dict(id="qwen-cli", cn="阿里 通义千问 CLI", en="Alibaba Qwen CLI",
          vendor="阿里巴巴", region="CN", form="cli",

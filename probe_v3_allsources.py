@@ -980,14 +980,19 @@ def _iv(d, *names):
     return 0
 
 
-def usage_from_dict(u):
+def usage_from_dict(u, cache_in_input=False):
     """各家用量对象 → (inp, cw, cr, out, think)；识别不出返回 None
     口径：inp = 未命中缓存的输入，cr = 缓存命中，cw = 缓存写入
     返回 (inp, cw, cr, out, think, total_only)；total_only=True 表示
     只有总量没有拆分 —— 这类值在会话日志里通常是**累计值**，不能逐条相加。
 
     键名先做一次 camelCase 别名镜像：Cline 等 JS/TS 系 agent 写的是
-    inputTokens/outputTokens/cacheReadTokens，不归一会整源判 0。"""
+    inputTokens/outputTokens/cacheReadTokens，不归一会整源判 0。
+
+    cache_in_input=True 用于「字段名是 Anthropic 的、语义却是 OpenAI 的」源：
+    这类源的 input_tokens 已经把 cache_read_input_tokens 包在里面，直接相加会
+    把同一批 token 数两遍。只能由注册表按源显式声明（见 sources_registry 的
+    cache_in_input 字段），不许在这里靠数值猜——猜错的方向是把用量算少。"""
     if not isinstance(u, dict) or not u:
         return None
     u = _alias_keys(u)
@@ -997,9 +1002,11 @@ def usage_from_dict(u):
         cr = _iv(u, "cache_read_input_tokens", "cached_input_tokens", "cached_tokens")
         cw = _iv(u, "cache_creation_input_tokens", "cache_write_input_tokens")
         out = _iv(u, "output_tokens")
-        # 只有明确带 cached_input_tokens 的 OpenAI/Codex 形态才从 input 扣除。
+        # 只有明确带 cached_input_tokens 的 OpenAI/Codex 形态才从 input 扣除；
+        # cache_in_input 是该源自己声明的等价事实。
         # Anthropic 的 cache_read_input_tokens 是独立输入，不能扣。
-        cached_in_input = ("cached_input_tokens" in u or "cached_tokens" in u)
+        cached_in_input = (cache_in_input or "cached_input_tokens" in u
+                           or "cached_tokens" in u)
         if cached_in_input and cr and inp >= cr:
             inp -= cr
     elif "prompt_tokens" in u or "completion_tokens" in u:
@@ -1043,29 +1050,30 @@ def usage_from_dict(u):
     return inp, cw, cr, out, think, bool(locals().get("total_only"))
 
 
-def find_usage(obj, depth=0):
+def find_usage(obj, depth=0, cache_in_input=False):
     """递归找第一个可识别的用量对象（各家包装层差异极大，不能只认 obj["usage"]）"""
     if not isinstance(obj, dict) or depth > 5:
         return None
     for k in _USAGE_WRAP:
         v = obj.get(k)
         if isinstance(v, dict):
-            r = usage_from_dict(v) or find_usage(v, depth + 1)
+            r = usage_from_dict(v, cache_in_input) or find_usage(v, depth + 1,
+                                                                 cache_in_input)
             if r:
                 return r
         elif isinstance(v, list):
             for it in v:
-                r = find_usage(it, depth + 1)
+                r = find_usage(it, depth + 1, cache_in_input)
                 if r:
                     return r
     for v in obj.values():
         if isinstance(v, dict):
-            r = find_usage(v, depth + 1)
+            r = find_usage(v, depth + 1, cache_in_input)
             if r:
                 return r
         elif isinstance(v, list) and depth <= 2:
             for it in v:
-                r = find_usage(it, depth + 2)
+                r = find_usage(it, depth + 2, cache_in_input)
                 if r:
                     return r
     return None
@@ -1290,6 +1298,7 @@ def scan_reg_jsonl_one(src, agent, seen_real, pre=None):
     recs, seen, nf = [], set(), 0
     folded = [0]                                # 被折叠掉的重复 usage 条数
     cum = {}                                    # (session, model) -> (date, 最大总量)
+    cin = bool(src.get("cache_in_input"))       # 该源的 cache_read 已含在 input_tokens 里
     t0 = time.time()
     truncated = False
     last_model = None                     # 文件内向后传递的模型名
@@ -1349,7 +1358,7 @@ def scan_reg_jsonl_one(src, agent, seen_real, pre=None):
                 if idx % CHECK_EVERY_LINES == 0 and time.time() - t0 > MAX_SOURCE_SECONDS:
                     truncated = True
                     break
-                got = find_usage(obj)
+                got = find_usage(obj, cache_in_input=cin)
                 if not got:
                     continue
                 inp, cw, cr, out, think, total_only = got
