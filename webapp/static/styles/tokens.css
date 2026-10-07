@@ -78,7 +78,7 @@
   --ctl-touch: 44px;
 
   /* 布局：极简左侧导航栏 + 全局上下文顶栏 + 居中内容列 */
-  --rail-w: 64px;
+  --rail-w: 132px;      /* 带文字标签的导航轨：图标 + 名称同排，靠悬停才知含义的设计已废 */
   --sidebar-w: 64px;              /* 兼容别名：旧样式仍引用 --sidebar-w */
   --topbar-h: 58px;
   --context-h: 58px;

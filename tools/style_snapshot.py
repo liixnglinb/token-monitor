@@ -35,7 +35,7 @@ PROBE = r"""
     'borderRadius','borderColor','boxShadow','opacity','overflowX','overflowY','textAlign'];
   const nodes = [];
   /* 选择器清单随 v2.0 Bento 架构更新：Slim Rail + 上下文顶栏 + Bento KPI + 主舞台 + 侧栏 + 底部双栏 */
-  const selectors = ['body','#sidebar.slim-rail','.rail-top','.rail-nav','.rail-nav a','.rail-tip','.rail-avatar','.side-online',
+  const selectors = ['body','#sidebar.slim-rail','.rail-top','.rail-nav','.rail-nav a','.rail-label','.rail-id','.rail-id-sub','.rail-upd','.side-online',
     'main','.context-bar','.cb-inner','.page-title','.global-filters','.dd-btn','.actions','.top-status',
     '.content','.bento-kpis','.kpi-card','.kc-head','.kc-label','.kc-hero','.kc-sub','.kc-foot','.dual-bar',
     '.mini-donut','.legend-mini','.kc-spark','.flip-card',

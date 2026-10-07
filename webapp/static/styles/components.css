@@ -1599,7 +1599,7 @@ th.num .th-sort { justify-content: flex-end; }
   .set-tabs .set-item { min-height: 46px; }   /* 选择器要和生产方的 .set-tabs .set-item 同级，
                                                  单写 .set-item 会被特异性压掉（实测 34px 没生效） */
   .t10-row { min-height: 44px; }
-  .rail-avatar { min-height: 46px; }
+  .rail-id { min-height: 46px; }
   .chip-warn { min-width: 20px; min-height: 20px; }
 }
 

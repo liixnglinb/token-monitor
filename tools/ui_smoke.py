@@ -74,6 +74,48 @@ def main() -> None:
               initial_hash in ("#/overview", "") or initial_hash.startswith("#/overview?"),
               initial_hash)
 
+        # 左侧栏：导航项文字直显（不再靠悬停浮层），左下角是"软件名 + 版本号"身份块
+        rail = page.evaluate("""() => {
+          const links = [...document.querySelectorAll('#nav a')];
+          const id = document.getElementById('settingsBtn');
+          const logo = id.querySelector('img');
+          const de = document.documentElement;
+          return {
+            labels: links.map(a => (a.querySelector('.rail-label') || {}).textContent || ''),
+            tips: document.querySelectorAll('.rail-tip').length,
+            clipped: links.map(a => { const l = a.querySelector('.rail-label');
+                                       return l ? l.scrollWidth > l.clientWidth + 1 : true; }),
+            idText: id.innerText.replace(/\\s+/g, ' ').trim(),
+            logoOk: !!(logo && logo.complete && logo.naturalWidth > 0),
+            title: id.title,
+            over: de.scrollWidth - de.clientWidth,
+          };
+        }""")
+        check("导航三项都带可见文字标签", len(rail["labels"]) == 3 and all(rail["labels"]),
+              str(rail["labels"]))
+        check("悬停浮层已移除（不再靠 hover 才知道是什么）", rail["tips"] == 0, str(rail["tips"]))
+        check("标签未被截断", not any(rail["clipped"]), str(rail["clipped"]))
+        check("左下角显示软件名与版本号",
+              "Token Monitor" in rail["idText"] and rail["idText"].startswith("Token Monitor v"),
+              rail["idText"])
+        check("身份块官方 logo 加载成功", rail["logoOk"])
+        check("身份块悬停文字含真实状态", "本机只读模式" in rail["title"] or "扫描" in rail["title"],
+              rail["title"])
+        check("整页无横向溢出", rail["over"] <= 0, str(rail["over"]))
+        pill = page.evaluate("""() => {
+          const out = {};
+          for (const st of ['update', 'ready', 'done', 'idle']) {
+            UPD.state = st; setUpdUI();
+            const p = document.getElementById('updBadge');
+            out[st] = [p.hidden, p.textContent.trim()];
+          }
+          UPD.state = 'idle'; setUpdUI();
+          return out;
+        }""")
+        check("更新状态是带字的胶囊而不是孤点",
+              pill["update"][1] == "可更新" and pill["ready"][1] == "已下载"
+              and pill["done"][1] == "待重启" and pill["idle"][0] is True, str(pill))
+
         # 视图切换 + 路由
         page.click('#nav a[data-view="models"]')
         page.wait_for_timeout(400)

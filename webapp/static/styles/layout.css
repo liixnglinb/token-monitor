@@ -62,96 +62,115 @@ body::after {
 .rail-nav {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: var(--sp-2);
+  gap: var(--sp-1);
   width: 100%;
-  padding: var(--sp-1) 0;
+  padding: var(--sp-1) 10px;
 }
+/* 图标 + 文字同排：以前只有 42px 的纯图标，含义要靠悬停浮层才看得见 */
 .rail-nav a {
   position: relative;
-  display: grid;
-  place-items: center;
-  width: 42px;
-  height: 42px;
-  border-radius: var(--r-lg);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 38px;
+  padding: 0 10px;
+  border-radius: var(--r-md);
   color: var(--muted);
   transition: background var(--dur-fast) var(--ease-standard),
               color var(--dur-fast) var(--ease-standard),
               transform var(--dur-instant) var(--ease-standard);
 }
-.rail-nav a svg { width: 19px; height: 19px; color: currentColor; }
+.rail-nav a svg { width: 18px; height: 18px; flex: none; color: currentColor; }
+.rail-label {
+  min-width: 0;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .rail-nav a:hover { background: var(--surface-2); color: var(--ink); text-decoration: none; }
 .rail-nav a:active { transform: translateY(1px); }
-.rail-nav a.active { background: var(--brand-soft); color: var(--brand-strong); }
-/* 选中指示条：贴在导航栏内侧左缘 */
+.rail-nav a.active {
+  background: var(--brand-soft);
+  color: var(--brand-strong);
+  font-weight: var(--fw-semibold);
+}
+/* 选中指示条：贴在导航栏内侧左缘（.rail-nav 有 10px 左内边距，故 -11px 正好压边） */
 .rail-nav a.active::before {
   content: "";
   position: absolute;
   left: -11px;
   top: 50%;
   width: 3px;
-  height: 18px;
+  height: 16px;
   border-radius: var(--r-pill);
   background: var(--brand-strong);
   transform: translateY(-50%);
 }
-.rail-tip {
-  position: absolute;
-  left: calc(100% + 12px);
-  top: 50%;
-  z-index: var(--z-tooltip);
-  padding: 5px 9px;
-  border-radius: var(--r-sm);
-  background: var(--surface-3);
-  border: 1px solid var(--line);
-  color: var(--ink);
-  font-size: var(--fs-2xs);
-  font-weight: var(--fw-medium);
-  white-space: nowrap;
-  box-shadow: var(--shadow-md);
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(-50%) translateX(-4px);
-  transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
-}
-.rail-nav a:hover .rail-tip,
-.rail-nav a:focus-visible .rail-tip { opacity: 1; transform: translateY(-50%) translateX(0); }
 
 .rail-foot {
   margin-top: auto;
+  padding: 0 10px;
+}
+/* 左下角 = 本机身份与状态：软件名 + 版本号 + 状态灯，点它进设置。
+   以前这里是一块写着 TM 的方块（点开也是设置，与上面的齿轮同去处）加一盏 7px 的灯。 */
+.rail-id {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: var(--sp-2);
-}
-.rail-avatar {
-  position: relative;
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 9px;
+  border: 1px solid var(--line-soft);
   border-radius: var(--r-lg);
-  transition: background var(--dur-fast) var(--ease-standard);
+  background: var(--surface-2);
+  text-align: left;
+  transition: background var(--dur-fast) var(--ease-standard),
+              border-color var(--dur-fast) var(--ease-standard);
 }
-.rail-avatar:hover { background: var(--surface-2); }
-.rail-avatar.active { background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line); }
-.side-avatar {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: var(--r-md);
-  background: var(--surface-3);
-  border: 1px solid var(--line);
-  color: var(--text-2);
+.rail-id:hover { background: var(--surface-3); border-color: var(--line); }
+.rail-id.active { border-color: var(--brand-line); box-shadow: inset 0 0 0 1px var(--brand-line); }
+.rail-id-logo { width: 22px; height: 22px; flex: none; border-radius: 6px; }
+.rail-id-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.rail-id-name {
   font-size: var(--fs-2xs);
   font-weight: var(--fw-semibold);
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.rail-avatar .dot { position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; border-radius: 50%; }
-.rail-avatar .dot.update { background: var(--brand-strong); animation: dot-pulse 2s ease-in-out infinite; }
-.rail-avatar .dot.ready,
-.rail-avatar .dot.done { background: var(--dot-ok); }
+.rail-id-sub {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--fs-2xs);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* 更新状态从 8px 的红点改成带字的胶囊：一个点说不清是"可更新"还是"已下载待重启"。
+   配色一律"实色文字 + 同色淡底"（与「套餐不计费」徽章同一套），
+   不拿 --dot-ok 当底色配白字 —— 浅绿底 + 白字在浅色主题下只有 2.9:1，10px 字看不清。 */
+.rail-upd {
+  flex: none;
+  margin-left: auto;
+  padding: 2px 6px;
+  border-radius: var(--r-pill);
+  background: var(--brand-soft);
+  color: var(--brand-strong);
+  box-shadow: inset 0 0 0 1px var(--brand-line);
+  font-size: 10px;
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+}
+.rail-upd.ready,
+.rail-upd.done {
+  background: color-mix(in srgb, var(--dot-ok) 16%, transparent);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dot-ok) 40%, transparent);
+}
+.rail-upd[hidden] { display: none; }
 .side-online {
   width: 7px;
   height: 7px;

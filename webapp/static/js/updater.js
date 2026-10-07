@@ -53,9 +53,15 @@ function setUpdUI(){
   const st = UPD.state;
   const pctNow = Math.max(0, Math.min(100, Math.round(UPD.percent || 0)));
   if (dot){
-    dot.hidden = !(st === "update" || st === "ready" || st === "done");
-    dot.className = "dot " + (st === "update" ? "update" : st === "ready" ? "ready" : "done");
+    /* 一颗 8px 的红点说不清是"可更新"还是"已下载待重启"，改成带字的胶囊 */
+    const label = st === "update" ? "可更新" : st === "ready" ? "已下载"
+                : st === "done" ? "待重启" : "";
+    dot.hidden = !label;
+    dot.className = "rail-upd " + (st === "update" ? "update" : st === "ready" ? "ready" : "done");
+    dot.textContent = label;
   }
+  const ver = $("railVer");
+  if (ver) ver.textContent = "v" + (UPD.ver ? UPD.ver.replace(/^v/i, "") : "dev");
 
   const pct = pctNow;
   /* 设置页「软件更新」卡片里的下载进度行 */

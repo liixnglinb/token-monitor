@@ -313,14 +313,18 @@ function syncSettings(s){
     dot.classList.toggle("busy", !!(s.busy || s.queued));
     dot.classList.toggle("error", !!s.error);
   }
-  /* 侧栏那盏灯以前是写死的绿色常量，后端失败也照样"在线"；现在与顶栏同一份状态 */
+  /* 侧栏那盏灯以前是写死的绿色常量，后端失败也照样"在线"；现在与顶栏同一份状态。
+     灯在身份按钮内部，悬停文字必须挂在按钮上（子元素的 title 不会自己冒出来）。 */
   const rail = $("railOnline");
+  const stateText = s.error ? "上次扫描失败：" + s.error
+    : (s.busy || s.queued) ? "正在扫描本机数据源" : "本机只读模式 · 数据已同步";
   if (rail){
     rail.classList.toggle("busy", !!(s.busy || s.queued));
     rail.classList.toggle("error", !!s.error);
-    rail.title = s.error ? "上次扫描失败：" + s.error
-      : (s.busy || s.queued) ? "正在扫描本机数据源" : "本机只读模式 · 数据已同步";
+    rail.title = stateText;
   }
+  const idBtn = $("settingsBtn");
+  if (idBtn) idBtn.title = "设置 · 本机 · " + stateText;
   SCANNING = !!(s.busy || s.queued);
   renderScanProgress();
   updateCollectionFeedback(s);

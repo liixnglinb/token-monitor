@@ -6,7 +6,7 @@
 <meta name="color-scheme" content="dark light">
 <title>用量总览 · Token Monitor</title>
 <meta name="description" content="本机 AI 编程工具与 Agent 的 Token 用量、请求次数与成本估算面板">
-<link rel="icon" href="/static/favicon.svg?v=202610073" type="image/svg+xml">
+<link rel="icon" href="/static/favicon.svg?v=202610074" type="image/svg+xml">
 <!-- 主题：在样式表之前落地，避免首帧闪白/闪黑 -->
 <script>
 (function () {
@@ -18,7 +18,7 @@
   } catch (e) { /* 主题偏好读取失败就用系统默认 */ }
 })();
 </script>
-<link rel="stylesheet" href="/static/styles/styles.css?v=202610073">
+<link rel="stylesheet" href="/static/styles/styles.css?v=202610074">
 </head>
 <body>
 <a class="skip-link" href="#main">跳到主要内容</a>
@@ -33,27 +33,34 @@
   <div class="rail-top" aria-hidden="true"></div>
 
   <div id="nav" class="rail-nav" role="group" aria-label="视图切换">
-    <a data-view="overview" href="#/overview" class="active" aria-current="page"
-       title="用量总览" aria-label="用量总览">
+    <a data-view="overview" href="#/overview" class="active" aria-current="page">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M2 13.5V8M6 13.5V3M10 13.5V6M14 13.5V9.5"/></svg>
-      <span class="rail-tip" aria-hidden="true">用量总览</span>
+      <span class="rail-label">用量总览</span>
     </a>
-    <a data-view="models" href="#/models" title="模型用量" aria-label="模型用量">
+    <a data-view="models" href="#/models">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/><path d="M8 2.5v11M2.5 8h11"/></svg>
-      <span class="rail-tip" aria-hidden="true">模型用量</span>
+      <span class="rail-label">模型用量</span>
     </a>
-    <a data-view="settings" href="#/settings/general" title="设置" aria-label="设置">
+    <a data-view="settings" href="#/settings/general">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="2.2"/><path d="M13 8a5 5 0 0 0-.1-1l1.6-1.2-1.3-2.3-1.9.8a5 5 0 0 0-.9-.5L10 2H6l-.3 1.8a5 5 0 0 0-.9.5l-1.9-.8-1.3 2.3L3.1 7a5 5 0 0 0 0 2l-1.6 1.2 1.3 2.3 1.9-.8c.27.2.57.37.9.5l.3 1.8h4l.3-1.8a5 5 0 0 0 1.6-1.1"/></svg>
-      <span class="rail-tip" aria-hidden="true">设置</span>
+      <span class="rail-label">设置</span>
     </a>
   </div>
 
+  <!-- 左下角：本机身份与状态。以前这里是一个写着 TM 的方块（点开也是"设置"，
+       与上面那颗齿轮同去处）加一盏 7px 的灯；现在直接写清是哪个软件、哪个版本。 -->
   <div class="rail-foot">
-    <button id="settingsBtn" class="rail-avatar" type="button" title="设置 · 本机" aria-label="打开设置（本机）">
-      <span class="side-avatar" aria-hidden="true">TM</span>
-      <span class="dot" id="updBadge" hidden></span>
+    <button id="settingsBtn" class="rail-id" type="button" title="设置 · 本机">
+      <img class="rail-id-logo" src="/static/favicon.svg" alt="" width="22" height="22">
+      <span class="rail-id-text">
+        <b class="rail-id-name">Token Monitor</b>
+        <small class="rail-id-sub">
+          <span id="railVer">版本读取中</span>
+          <i class="side-online" id="railOnline" aria-hidden="true"></i>
+        </small>
+      </span>
+      <span class="rail-upd" id="updBadge" hidden></span>
     </button>
-    <span class="side-online" id="railOnline" title="本机只读模式" aria-hidden="true"></span>
   </div>
 </nav>
 
@@ -601,14 +608,14 @@
 <div class="toast-stack" id="toastStack" role="region" aria-label="通知" aria-live="polite"></div>
 
 <script src="/static/vendor/chart.umd.min.js"></script>
-<script src="/static/js/core.js?v=202610073"></script>
-<script src="/static/js/theme.js?v=202610073"></script>
-<script src="/static/js/ui.js?v=202610073"></script>
-<script src="/static/js/data.js?v=202610073"></script>
-<script src="/static/js/charts.js?v=202610073"></script>
-<script src="/static/js/render.js?v=202610073"></script>
-<script src="/static/js/interactions.js?v=202610073"></script>
-<script src="/static/js/updater.js?v=202610073"></script>
-<script src="/static/js/app.js?v=202610073"></script>
+<script src="/static/js/core.js?v=202610074"></script>
+<script src="/static/js/theme.js?v=202610074"></script>
+<script src="/static/js/ui.js?v=202610074"></script>
+<script src="/static/js/data.js?v=202610074"></script>
+<script src="/static/js/charts.js?v=202610074"></script>
+<script src="/static/js/render.js?v=202610074"></script>
+<script src="/static/js/interactions.js?v=202610074"></script>
+<script src="/static/js/updater.js?v=202610074"></script>
+<script src="/static/js/app.js?v=202610074"></script>
 </body>
 </html>
