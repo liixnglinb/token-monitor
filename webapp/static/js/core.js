@@ -205,10 +205,13 @@ const AGENT_LOGOS = {
   /* 2026-10-05：从本机各应用安装体（icon.ico / 安装包 PE 资源 / MSIX app.asar）
      提取的官方图。此前 Codex 错误地复用 OpenAI 的 knot 标志，现已换成 Codex 自己的。 */
   "doubao":"doubao.png", "qwen-cli":"qianwen.png", "yumbo":"yuanbao.png",
+  /* 2026-10-07：Qoder CN 第一次能被扫到，顺手补上官方应用图标
+     （取自本机 %APPDATA%/com.qodercn.app.stable/application-icons 的当前 ico，256px 归一） */
+  "qoder":"qoder.png",
 };
 /* 需要浅色底衬的 logo：这几张官方素材是纯深色单色实心路径（#111827 / #0F172A），
    直接落在深色面板上等于隐形。按同一标准登记，别顺手给彩色 logo 也加瓷砖。 */
-const LOGO_ON_PLATE = new Set(["openai.svg", "opencode.svg"]);
+const LOGO_ON_PLATE = new Set(["openai.svg", "opencode.svg", "qoder.png"]);
 function brandImg(file){
   return '<img class="agent-brand-img' + (LOGO_ON_PLATE.has(file) ? " plate" : "")
     + '" src="/static/logos/' + file + '" alt="" loading="lazy" decoding="async">';

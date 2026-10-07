@@ -16,10 +16,10 @@
    ============================================================================= */
 @layer legacy, base, components, layout;
 
-@import url("./tokens.css?v=20261007");
-@import url("./base.css?v=20261007") layer(base);
-@import url("./components.css?v=20261007") layer(components);
-@import url("./layout.css?v=20261007") layer(layout);
+@import url("./tokens.css?v=202610072");
+@import url("./base.css?v=202610072") layer(base);
+@import url("./components.css?v=202610072") layer(components);
+@import url("./layout.css?v=202610072") layer(layout);
 
 /* -----------------------------------------------------------------------------
    关于 legacy 层
