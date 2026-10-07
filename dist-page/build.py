@@ -44,8 +44,8 @@ try:
     print("注册表实测: %d 个数据源 / %d 条路径" % (NREG, NPATHS))
 except Exception as e:
     print("!! 读不到 sources_registry，用兜底值 %d/%d：%s" % (NREG, NPATHS, e))
-FALLBACK_VER = "v2.1.1"
-FALLBACK_SIZE = "约 29 MB"
+FALLBACK_VER = "v2.1.2"
+FALLBACK_SIZE = "约 31 MB"    # 2026-10-07 v2.1.2 实测 32,422,517 B
 CNY_RATE = 7.1     # server.py: CNY_RATE，页面与面板同一汇率
 
 # 源 id → 显示名（与 App 内 AGENT_NAME 保持一致）
@@ -55,12 +55,14 @@ DISPLAY = {
     "openclaw-autoclaw": "OpenClaw", "agnes": "Agnes", "dsh": "DSH",
     "cline": "Cline", "box-agent": "Box Agent", "mavis": "Mavis",
     "workbuddy": "WorkBuddy", "workbuddy-ai": "WorkBuddy AI",
+    "qoder": "Qoder",     # 与 core.js AGENT_NAME["qoder"] 同一写法（页面曾显示成小写 id）
 }
 # 图标映射/字母徽标：与 webapp/static/js/core.js 的 AGENT_LOGOS / AGENT_MONO 一一对应
 ICON_FILES = {
     "codex": "codex.png", "claude-code": "claude-code.svg", "opencode": "opencode.svg",
     "cline": "cline.svg", "zcode": "zcode.png", "hermes": "hermes.png",
     "workbuddy": "workbuddy.png", "workbuddy-ai": "workbuddy-ai.png", "dsh": "dsh.png",
+    "qoder": "qoder.png",
 }
 MONO = {
     "box-agent": ("B", "#7C8CF8"), "mhagent": ("MH", "#4AC08A"),

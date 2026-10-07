@@ -29,6 +29,8 @@ ICONS = {
     "codex": "codex.png", "claude-code": "claude.svg", "opencode": "opencode.svg",
     "cline": "cline.svg", "zcode": "zcode.png", "hermes": "hermes.png",
     "workbuddy-ai": "workbuddy.png", "dsh": "dsh.png",
+    # 2026-10-07：Qoder CN 第一次有真实用量，页面排行会露出它 → 与 App 同一张官方标
+    "qoder": "qoder.png",
 }
 ICON_SIZE = 64          # 排行行内显示 18px，64 足够 2x/3x 屏
 SHOT_W = 1320           # 导览图统一宽度，高度按裁切结果
