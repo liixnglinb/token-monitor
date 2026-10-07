@@ -284,27 +284,49 @@ const agentHasIcon = name => !!(AGENT_LOGOS[name] || AGENT_MONO[name] || AGENT_I
 
 /* 模型厂商识别：模型名 → 官方品牌图 / 品牌色徽标。
    有本机已验证的官方素材就走 img，其余用厂商品牌色字母徽标，
-   与侧栏数据源的 mono 徽标同一套视觉语言。 */
+   与侧栏数据源的 mono 徽标同一套视觉语言。
+   2026-10-07：`logos/vendors/*` 六张（deepseek / zhipu / hunyuan / minimax / sensenova /
+   volcengine）取自本机 WorkBuddy 会话备份里的 256px 官方标，逐张看过图核对过品牌；
+   同批里 stepfun 那张文件内容其实是 KUNLUN、xfyun 那张是坏图，都没采用。
+   放在 vendors/ 子目录是为了不被下载页的 agent-icons 流水线（按 AGENT_LOGOS 白名单取文件）带走。 */
+/* 厂商识别要先还出"模型自己的名字"（实测三条）：
+   · `provider/model` 形态看斜杠后段 —— cline-free/kimi-k3 是 Kimi，
+     qoder-custom-<uuid>/ark-code-latest 是火山方舟；
+   · `sn-` 是商汤小浣熊的**接入通道前缀**（pricing._norm 同源同理），底层模型才算厂商 ——
+     sn-deepseek-v4-pro 归 DeepSeek，标成 SenseNova 就是错归属。 */
+function modelVendorKey(name){
+  let n = String(name || "").toLowerCase();
+  const cut = n.lastIndexOf("/");
+  if (cut >= 0) n = n.slice(cut + 1);
+  return n.replace(/^sn-/, "");
+}
 const MODEL_VENDOR = [
-  [/^(gpt|o[134](-| |$)|codex|davinci|chatgpt|omni)/, ["openai", "openai.svg"]],
+  [/^(gpt|o[134](-| |$)|davinci|chatgpt|omni)/, ["openai", "openai.svg"]],
+  [/^codex/, ["codex", "codex.png"]],
   [/^claude/, ["claude", "claude.svg"]],
   [/^(kimi|moonshot)/, ["kimi", "kimi.png"]],
-  [/^deepseek/, ["deepseek", ["DS", "#4D6BFE"]]],
-  [/^(glm|zhipu|chatglm)/, ["zhipu", ["GL", "#3859FF"]]],
-  [/^(qwen|qwq|qvq)/, ["qwen", ["QW", "#6236FF"]]],
-  [/^(doubao|ark-)/, ["doubao", ["DB", "#3C74F6"]]],
-  [/^ernie/, ["baidu", ["EB", "#2932E1"]]],
-  [/^hunyuan/, ["tencent", ["HY", "#0052D9"]]],
-  [/^(minimax|abab)/, ["minimax", ["MM", "#F23F5D"]]],
-  [/^(sn-|sensenova)/, ["sensenova", ["SN", "#E8531F"]]],
+  [/^(qwen|qwq|qvq)/, ["qwen", "qianwen.png"]],
+  [/^doubao/, ["doubao", "doubao.png"]],
+  [/^cline/, ["cline", "cline.svg"]],
+  [/^ark-/, ["volcengine", "vendors/volcengine.png"]],
+  [/^deepseek/, ["deepseek", "vendors/deepseek.png"]],
+  [/^(glm|zhipu|chatglm|z-?ai)/, ["zhipu", "vendors/zhipu.png"]],
+  [/^(ernie)/, ["baidu", ["EB", "#2932E1"]]],
+  [/^(hunyuan|hy\d)/, ["tencent", "vendors/hunyuan.png"]],  /* hy3 / hy4-preview-f：WorkBuddy 通道内的混元命名 */
+  [/^(minimax|abab)/, ["minimax", "vendors/minimax.png"]],
+  [/^(sensenova)/, ["sensenova", "vendors/sensenova.png"]],
+  [/^raccoon/, ["raccoon", ["R", "#4AC08A"]]],   /* 小浣熊是商汤的另一个产品，不拿 sensenova 标顶替 */
+  [/^(mimo)/, ["xiaomi", ["MI", "#FF6900"]]],
+  [/^(nemotron)/, ["nvidia", ["NV", "#76B900"]]],
+  [/^agnes/, ["agnes", ["AG", "#A78BFA"]]],
+  [/^ox-/, ["ox", ["OX", "#8A8F98"]]],
   [/^gemini/, ["gemini", ["GE", "#4285F4"]]],
   [/^grok/, ["xai", ["GK", "#8A8F98"]]],
   [/^(llama|meta-)/, ["meta", ["LL", "#0668E1"]]],
   [/^(mistral|mixtral)/, ["mistral", ["MI", "#FA520F"]]],
-  [/^raccoon/, ["raccoon", ["R", "#4AC08A"]]],
 ];
 function modelIcon(name){
-  const n = String(name || "").toLowerCase();
+  const n = modelVendorKey(name);
   for (const [re, v] of MODEL_VENDOR){
     if (re.test(n)){
       if (typeof v[1] === "string") return brandImg(v[1]);

@@ -271,6 +271,39 @@ def main() -> None:
         page.evaluate("() => { F.day = null; persistFilters(); renderAll(); }")
         page.wait_for_timeout(400)
 
+        # ── 模型厂商真标：先验覆盖度，再逐个钉住关键归属（sn- 前缀必须归底层模型）──
+        cov = page.evaluate("""() => {
+          const agg = new Map();
+          for (const r of DATA.matrix) agg.set(r.model, (agg.get(r.model) || 0) + r.requests);
+          const sorted = [...agg.entries()].sort((a, b) => b[1] - a[1]);
+          const total = sorted.reduce((s, x) => s + x[1], 0) || 1;
+          let imgReq = 0; const missing = [];
+          for (const [m, rq] of sorted){
+            if (/agent-brand-img/.test(modelIcon(m))) imgReq += rq; else missing.push(m);
+          }
+          return { pct: Math.round(imgReq / total * 100),
+                   models: sorted.length,
+                   imgModels: sorted.length - missing.length,
+                   missing,
+                   check: ['deepseek-v4-pro', 'sn-deepseek-v4-pro', 'glm-5.3-flash', 'hy3',
+                           'ark-code-latest', 'minimax-m3', 'sensenova-6.8-flash-lite',
+                           'qwen3.8-flash', 'cline-free/kimi-k3']
+                     .filter(m => !/agent-brand-img/.test(modelIcon(m))) };
+        }""")
+        check("模型真标覆盖 ≥ 85% 请求量", cov["pct"] >= 85, str(cov["pct"]))
+        check("关键厂商归属全部走真标（含 sn- 前缀与 provider/model）",
+              cov["check"] == [], str(cov["check"]))
+        urls = page.evaluate("""() => [...new Set(
+          Object.values(MODEL_VENDOR.map(v => v[1][1]).filter(x => typeof x === 'string')
+            .concat(Object.values(AGENT_LOGOS)))
+            .map(f => '/static/logos/' + f))]""")
+        dead = []
+        for u in urls:
+            resp = page.request.get(args.base + u)
+            if not resp.ok:
+                dead.append("%s %s" % (u, resp.status))
+        check("所有品牌图 URL 都能取到", not dead, "; ".join(dead)[:200])
+
         # 设置页 + 设置分类路由
         page.click("#settingsBtn")
         page.wait_for_timeout(400)

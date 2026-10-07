@@ -32,6 +32,25 @@
   深色瓷砖版在深色面板上会糊成一条漂浮的笔画，按既有约定登记进 `LOGO_ON_PLATE`，
   实测两套主题都能看出图标轮廓。
 
+### 模型厂商真标（模型明细表）
+
+- **有厂商的模型一律换成官方品牌图**：模型明细表里此前只有 OpenAI / Claude / Kimi 三个是真标，
+  其余是品牌色字母方块。现在 **45 个模型里 33 个走真标，覆盖 90% 请求量**（原来 6%）。
+  新增六张：DeepSeek（蓝鲸）/ 智谱 Zhipu / 腾讯混元 / MiniMax / SenseNova / 火山引擎，
+  全部从本机 WorkBuddy 会话备份里的 256px 素材提取，逐张看图核对过品牌
+  （同批里 `stepfun` 文件内容其实是 KUNLUN、`xfyun` 那张是坏图，都没采用）。
+  放在 `webapp/static/logos/vendors/` 子目录，不被下载页的 agent-icons 白名单流水线带走。
+- **修掉三处厂商归属错误**（用户此前否过"错误归属"，这次是同一类）：
+  `sn-deepseek-v4-pro` 原来按 `sn-` 前缀标成商汤，实际底层模型是 DeepSeek
+  （与 `pricing._norm` 同源同理，接入通道不等于厂商）；
+  `qoder-custom-<uuid>/ark-code-latest` 与 `cline-free/kimi-k3` 因为整串匹配前缀而落到通用灰标，
+  现在按 `provider/model` 的后段识别，分别归火山引擎与 Kimi。
+  另外补上 `hy3 / hy4-preview-f`（WorkBuddy 通道内的混元命名）、qwen、doubao 等漏网规则。
+- 仍保留字母徽标的：`raccoon-*`（小浣熊与 SenseNova 是同厂不同产品，不借标）、`ox-*`、
+  `agnes-*`、`mimo-*`、`nemotron-*`、`unknown` —— 本机拿不到这些的官方标。
+- 可见性按数据判定：六张新标合成到深色面板后的主体对比度 3.60–13.28:1，都不需要 `LOGO_ON_PLATE` 浅底衬。
+- `ui_smoke` 58 → 61 条：真标覆盖度、九个关键归属逐一钉住、全部品牌图 URL 实测可取。
+
 ### 左侧栏与左下角（导航带文字 + 身份块）
 
 - **导航项改成图标 + 文字同排**（`--rail-w` 64 → 132px）：以前是 42px 纯图标，含义要靠悬停浮层
