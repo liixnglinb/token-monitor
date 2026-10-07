@@ -42,9 +42,8 @@ function setCat(cat){
 }
 
 /* 路由桥：hash 是唯一"地址"，TMUI.route 写 hash，hashchange 触发渲染。
-   筛选参数（range/agent/metric/grain/dim/billing）也序列化进 hash，
+   筛选参数（range/agent/metric/grain/dim/billing/lens/day）也序列化进 hash，
    刷新、前进后退、分享链接都不会丢过滤视图。 */
-const FILTER_KEYS = ["range", "agent", "metric", "grain", "dim", "billing"];
 function applyRoute(route, replace){
   /* hash 里带的筛选参数优先级最高（超过上次记住的 localStorage 值） */
   if (route.params && Object.keys(route.params).length){
@@ -56,6 +55,7 @@ function applyRoute(route, replace){
     if (["total","agent","model"].includes(p.dim)) F.dim = p.dim;
     if (["all","metered","plan","unpriced"].includes(p.billing)) F.billing = p.billing;
     if (["entity","composition","cache"].includes(p.lens)) F.lens = p.lens;
+    if (typeof p.day === "string" && /^\d{4}-\d{2}(-\d{2})?$/.test(p.day)) F.day = p.day;
     /* 已存在的视图已渲染过旧筛选：让数据按新筛选重算一遍 */
     if (DATA && !DATA.building && DATA.range) renderAll();
   }
@@ -76,6 +76,7 @@ function syncFilterHash(){
   params.set("dim", F.dim);
   if (F.billing !== "all") params.set("billing", F.billing);
   if (F.lens !== "entity") params.set("lens", F.lens);
+  if (F.day) params.set("day", F.day);
   const target = "#/" + view + "?" + params.toString();
   if (location.hash !== target){
     try { history.replaceState(null, "", target); } catch { /* 沙箱环境忽略 */ }

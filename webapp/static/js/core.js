@@ -46,7 +46,11 @@ let SCANNING = false;
 })();
 
 const F = { rangeKey: "last7", agent: "all", metric: "tokens", grain: "day", dim: "total",
-            billing: "all", lens: "entity", open: new Set() };
+            billing: "all", lens: "entity", open: new Set(),
+            /* 钉住的某一天/某一月（"2026-10-02" / "2026-09"）：只影响右侧排行，
+               不改动趋势图与顶部 KPI 的区间口径 —— 否则整页数字会跟着变成一天，
+               用户会以为统计错了。null = 未钉。 */
+            day: null };
 /* 视图与筛选记在 localStorage 而不是 sessionStorage：
    session 存储只在"同一次标签会话"内有效，程序整个退出重开（或崩溃后被拉起来）
    就清空 —— 界面于是回到默认视图，等于没记住用户在哪。主题一直用的是 localStorage，
@@ -56,7 +60,7 @@ function persistFilters(){
   try {
     localStorage.setItem(UI_FILTER_KEY, JSON.stringify({
       rangeKey: F.rangeKey, agent: F.agent, metric: F.metric, grain: F.grain,
-      dim: F.dim, billing: F.billing, lens: F.lens,
+      dim: F.dim, billing: F.billing, lens: F.lens, day: F.day,
       open: [...F.open].slice(0, 40)          /* 展开态也记住；上限防极端情况撑大 */
     }));
   } catch (_) { /* 纯 UI 状态，存不下就算了 */ }
@@ -71,6 +75,8 @@ try {
     if (["total","agent","model"].includes(saved.dim)) F.dim=saved.dim;
     if (["all","metered","plan","unpriced"].includes(saved.billing)) F.billing=saved.billing;
     if (["entity","composition","cache"].includes(saved.lens)) F.lens=saved.lens;
+    /* 钉住的那天：只认 YYYY-MM-DD 或 YYYY-MM，别的值一律当没存过 */
+    if (typeof saved.day === "string" && /^\d{4}-\d{2}(-\d{2})?$/.test(saved.day)) F.day=saved.day;
     if (Array.isArray(saved.open)) saved.open.forEach(k => { if (typeof k === "string") F.open.add(k); });
   }
 } catch { /* corrupt storage never blocks the dashboard */ }

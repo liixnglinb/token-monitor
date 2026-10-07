@@ -46,12 +46,28 @@ function refreshChartTokens(){
   TT = theme.tooltip;
   return theme;
 }
-/* hover 竖直参考线（对齐 DeepSeek） */
+/* hover 竖直参考线（对齐 DeepSeek）+ 被钉住那一天的实线标记 */
 const crosshair = { id: "crosshair",
   afterDatasetsDraw(c){
+    const ctx = c.ctx, top = c.chartArea.top, bot = c.chartArea.bottom;
+    /* 钉住标记先画，hover 虚线压在它上面：鼠标动的时候不该把"你钉了哪天"盖掉 */
+    const day = (typeof F !== "undefined" && F.day) ? String(F.day) : null;
+    if (day){
+      const i = (c.data.labels || []).findIndex(l => String(l) === day);
+      if (i >= 0){
+        const x = c.scales.x.getPixelForValue(i);
+        ctx.save();
+        ctx.strokeStyle = cssVar("--brand-strong", "#6C9BFF");
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, bot); ctx.stroke();
+        ctx.fillStyle = cssVar("--brand-strong", "#6C9BFF");
+        ctx.fillRect(x - 2.5, top - 1, 5, 5);
+        ctx.restore();
+      }
+    }
     const a = c.tooltip && c.tooltip._active;
     if (!a || !a.length) return;
-    const x = a[0].element.x, ctx = c.ctx, top = c.chartArea.top, bot = c.chartArea.bottom;
+    const x = a[0].element.x;
     ctx.save();
     ctx.strokeStyle = cssVar("--line-strong", "rgba(255,255,255,.22)");
     ctx.lineWidth = 1; ctx.setLineDash([4,4]);

@@ -672,6 +672,9 @@ select {
 }
 .chart-hint { font-size: var(--fs-2xs); color: var(--muted); }
 .chart-wrap { position: relative; }
+/* 只有"点了有用"的那张图才给可点光标（renderMain 里按 lens 加/去 .pinnable），
+   构成与缓存两个视角没绑点击，给十字光标就是骗人。 */
+#mainChart.pinnable { cursor: crosshair; }
 .trend-chart { height: 300px; }
 .chart-empty {
   position: absolute;
@@ -730,13 +733,29 @@ select {
 .daily-list { max-height: 420px; overflow-y: auto; overflow-x: hidden; }
 .daily-row {
   display: grid;
-  grid-template-columns: 78px minmax(120px, 0.5fr) minmax(140px, 2.2fr) minmax(100px, 0.6fr);
+  grid-template-columns: 96px minmax(120px, 0.5fr) minmax(140px, 2.2fr) minmax(100px, 0.6fr);
   align-items: center;
   gap: var(--sp-3);
   padding: var(--sp-2) var(--sp-2);
   border-radius: var(--r-md);
 }
 .daily-row:hover { background: var(--surface-2); }
+/* 每一行都是"只看这天"的入口（render.js bindDailyList），得像个控件。
+   焦点环由 base.css 的全局 :focus-visible 负责，这里不重复声明。 */
+.daily-row { cursor: pointer; transition: background var(--dur-fast) var(--ease-standard); }
+.daily-row:active { transform: translateY(1px); }
+.daily-row.pinned {
+  background: var(--brand-soft);
+  box-shadow: inset 0 0 0 1px var(--brand-line);
+}
+.daily-row.pinned .daily-date b { color: var(--brand-strong); }
+/* 星期那行本来只有两个字，加后缀必须同时放宽列宽，否则换行把这一行撑高、
+   与上下行不再等高（实测 78px 列会把"已只看这天"挤成两行）。 */
+.daily-date small { white-space: nowrap; }
+.daily-row.pinned .daily-date small::after {
+  content: " · 只看这天";
+  color: var(--brand-strong);
+}
 .daily-date { display: flex; flex-direction: column; }
 .daily-date b { font-size: var(--fs-xs); font-weight: var(--fw-semibold); color: var(--ink); }
 .daily-date small { font-size: var(--fs-2xs); color: var(--muted); }
@@ -771,6 +790,25 @@ select {
 .rail-head h3 { font-size: var(--fs-md); font-weight: var(--fw-semibold); }
 .rail-head p { margin-top: 2px; font-size: var(--fs-2xs); color: var(--muted); }
 .agent-panel-count { font-size: var(--fs-2xs); color: var(--muted); white-space: nowrap; }
+/* 钉住某天时的芯片：既报"现在只算哪一天"，也是唯一的取消入口之一 */
+.rail-pin {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding: 3px 7px 3px 9px;
+  border: 1px solid var(--brand-line);
+  border-radius: var(--r-pill);
+  background: var(--brand-soft);
+  color: var(--brand-strong);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-medium);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.rail-pin:hover { background: color-mix(in srgb, var(--brand-soft) 60%, var(--brand-line)); }
+.rail-pin[hidden] { display: none; }
+.rail-pin-x { font-size: 13px; line-height: 1; opacity: .8; }
 #agentList { min-height: 0; overflow-y: auto; overflow-x: hidden; margin: 0 calc(var(--sp-2) * -1); }
 
 .ar-entry { border-radius: var(--r-md); }

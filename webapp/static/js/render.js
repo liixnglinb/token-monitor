@@ -112,6 +112,24 @@ renderChartChoosers();
    以前只有 renderAll() 里那一次 renderRangeMenu()，首扫期间点开时间下拉是个空壳。 */
 renderRangeMenu();
 
+/* 「每日明细」每行都是同一个日期桶，点它 = 钉住那天，和点柱子等价。
+   委托绑在容器上（列表每次渲染都重建 innerHTML，绑在行上会越叠越多）。 */
+(function bindDailyList(){
+  const box = $("dailyList");
+  if (!box) return;
+  const pick = el => {
+    const row = el && el.closest ? el.closest(".daily-row[data-day]") : null;
+    if (!row) return;
+    setPinnedDay(row.dataset.day);
+  };
+  box.addEventListener("click", e => pick(e.target));
+  box.addEventListener("keydown", e => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault();          /* 空格默认会滚动页面 */
+    pick(e.target);
+  });
+})();
+
 /* 缩写/全值切换的绑定与数据无关，却曾写在 renderTotalTokenCard 里 ——
    于是首屏（数据未到）那段窗口里，那颗写着"点击切换"的按钮点了没反应。 */
 (function bindHeroNum(){
@@ -533,6 +551,7 @@ function bindEmptyActions(box){
     "range-all":     () => { F.rangeKey = "all"; renderAll(); },
     "range-last7":   () => { F.rangeKey = "last7"; renderAll(); },
     "clear-filters": () => { F.rangeKey = "last7"; F.agent = "all"; renderAll(); },
+    "clear-day":     () => { if (F.day) setPinnedDay(F.day); else renderAll(); },
     "lens-entity":   () => { F.lens = "entity";
       document.querySelectorAll("#segLens button").forEach(x => {
         const on = x.dataset.lens === "entity";
@@ -586,7 +605,10 @@ function renderDailyDetail(rows, list, metric){
     const share = item.value / total * 100;
     const dayLabel = isMonth ? fmtMonth(item.label) : md(item.label);
     const daySub = isMonth ? item.label.slice(0,4) : weekdayCN(item.label);
-    return '<div class="daily-row">'
+    const on = F.day === item.label;
+    return '<div class="daily-row' + (on ? " pinned" : "") + '" role="button" tabindex="0"'
+      + ' data-day="' + esc(item.label) + '" aria-pressed="' + on + '"'
+      + ' aria-label="只看 ' + esc(dayLabel) + (isMonth ? " 当月" : " 当天") + '">'
       + '<div class="daily-date"><b>' + esc(dayLabel) + '</b><small>' + esc(daySub) + '</small></div>'
       + '<div class="daily-primary"><b>' + metricText(item.value, metric) + '</b><span>占 ' + share.toFixed(1) + '%</span></div>'
       + '<div class="daily-track"><i style="width:' + Math.max(item.value ? 2 : 0, pct).toFixed(1) + '%"></i></div>'
@@ -599,21 +621,109 @@ function renderDailyDetail(rows, list, metric){
       + '</div>';
   }).join("");
 }
+/* ═════════════════ 钉住某一天 / 某一月（图上点柱、或点「每日明细」某一行）
+   只影响右侧 Agent 排行；趋势图与顶部 KPI 仍按时间区间口径 ——
+   整页数字跟着变成一天，会被当成"统计错了"（用户在逐像素比对页面与软件）。 */
+const DAY_PIN_RE = /^\d{4}-\d{2}(-\d{2})?$/;
+const isMonthBucket = k => typeof k === "string" && k.length === 7;
+function inPinnedDay(r){
+  if (!F.day) return true;
+  return isMonthBucket(F.day) ? String(r.date).slice(0, 7) === F.day : r.date === F.day;
+}
+function railRows(){ return rowsFor(false).filter(inPinnedDay); }
+function pinWord(){ return isMonthBucket(F.day) ? "当月" : "当天"; }
+function pinLabel(){ return F.day ? (isMonthBucket(F.day) ? fmtMonth(F.day) : md(F.day)) : ""; }
+function chartHintText(){
+  if (F.lens === "composition")
+    return "按 Token 物理构成（读取/写入/输入/输出）堆叠，观察上下文膨胀与生成强度";
+  if (F.lens === "cache")
+    return "上轨=全量等效输入（虚线），下轨=真实付费输入；阴影区为缓存吸收的开销";
+  return F.day
+    ? "按日聚合的 Token 趋势 · 已钉住 " + pinLabel() + "（" + pinWord() + "只影响右侧排行），再点一次取消"
+    : "按日聚合的 Token 趋势，可切换数据源与模型拆分 · 点柱/点线可只看那一天";
+}
+/* 只翻每日明细各行上的钉住态，不重建列表 */
+function paintDailyPinState(){
+  document.querySelectorAll("#dailyList .daily-row[data-day]").forEach(el => {
+    const on = el.dataset.day === F.day;
+    el.classList.toggle("pinned", on);
+    el.setAttribute("aria-pressed", String(on));
+  });
+}
+/* 钉住的日子被时间范围排除时静默解钉：留一个永远为空的排行比回到区间合计更让人困惑 */
+function dropPinIfOutOfRange(){
+  if (!F.day) return false;
+  const range = rangeDates();
+  if (!range) return false;
+  const out = isMonthBucket(F.day)
+    ? (F.day < range[0].slice(0, 7) || F.day > range[1].slice(0, 7))
+    : (F.day < range[0] || F.day > range[1]);
+  if (out){ F.day = null; persistFilters(); }
+  return out;
+}
+function setPinnedDay(bucket){
+  if (!DAY_PIN_RE.test(String(bucket || ""))) return;
+  F.day = (F.day === bucket) ? null : bucket;      /* 再点同一天 = 取消 */
+  persistFilters();
+  if (typeof syncFilterHash === "function") syncFilterHash();
+  /* 只重绘，绝不销毁重建：这条路径是从 Chart.js 自己的 onClick 回调里进来的，
+     在回调中 destroy 当前实例，它返回后会踩到已释放的 handleEvent
+     （实测每次点击都抛 TypeError，并被全局异常网当成真故障弹给用户）。 */
+  if (MAIN) MAIN.update("none");
+  const hint = $("chartHint");
+  if (hint) hint.textContent = chartHintText();
+  paintDailyPinState();
+  renderAgentList();
+}
+/* tooltip 里补一段"这个桶里各软件分别用了多少"。
+   维度已经是数据源时不追加 —— 那时系列本身就是逐源拆分，列两遍是噪声。 */
+function tooltipAgentLines(bucket){
+  if (F.dim === "agent" || !bucket) return [];
+  const rows = rowsFor(false).filter(r => isMonthBucket(bucket)
+    ? String(r.date).slice(0, 7) === bucket : r.date === bucket);
+  if (!rows.length) return [];
+  const by = new Map();
+  for (const r of rows) by.set(r.agent, (by.get(r.agent) || 0) + cellVal(r, F.metric));
+  const list = [...by.entries()].sort((a, b) => b[1] - a[1]);
+  const shown = list.slice(0, 5);
+  const rest = list.slice(5);
+  const lines = ["", (isMonthBucket(bucket) ? "当月各数据源" : "当天各数据源")];
+  for (const [name, v] of shown) lines.push(agentLabel(name) + "  " + metricText(v, F.metric));
+  if (rest.length){
+    const sum = rest.reduce((s, x) => s + x[1], 0);
+    lines.push("其他 " + rest.length + " 个  " + metricText(sum, F.metric));
+  }
+  return lines;
+}
+/* 排行卡头上的芯片：钉住状态必须一眼看得见，否则用户会以为排行数字算错了 */
+function renderDayPin(){
+  const chip = $("railDay");
+  if (!chip) return;
+  if (!F.day){ chip.hidden = true; chip.innerHTML = ""; return; }
+  chip.hidden = false;
+  chip.innerHTML = '<span>' + esc(pinWord() + " · " + pinLabel()) + '</span>'
+    + '<span class="rail-pin-x" aria-hidden="true">×</span>';
+  chip.setAttribute("aria-label", "取消只看" + pinLabel() + "，回到区间合计");
+  chip.onclick = () => setPinnedDay(F.day);
+}
 function renderMain(){
   const rows = rowsFor(false);
   const range = rangeDates();
   const theme = refreshChartTokens();
   refreshPalette();
   syncSegAvailability();
+  dropPinIfOutOfRange();          /* 范围换了可能把钉住那天排除掉：先解钉再画，免得留下幽灵标记 */
+  const cnv0 = $("mainChart");
+  if (cnv0) cnv0.classList.remove("pinnable");   /* 两个结构视角没绑点击，先摘掉可点光标 */
   if (F.lens === "composition"){
-    $("chartHint").textContent = "按 Token 物理构成（读取/写入/输入/输出）堆叠，观察上下文膨胀与生成强度";
+    $("chartHint").textContent = chartHintText();
     return renderComposition(rows, range, theme);
   }
   if (F.lens === "cache"){
-    $("chartHint").textContent = "上轨=全量等效输入（虚线），下轨=真实付费输入；阴影区为缓存吸收的开销";
+    $("chartHint").textContent = chartHintText();
     return renderCacheLeverage(rows, range, theme);
   }
-  $("chartHint").textContent = "按日聚合的 Token 趋势，可切换数据源与模型拆分";
+  $("chartHint").textContent = chartHintText();
 
   const fmt = fmtTick[F.metric];
   const suffix = F.grain === "month" ? "（按月）" : "";
@@ -705,6 +815,18 @@ function renderMain(){
   opts.plugins.tooltip.callbacks.label = c => {
     return " " + c.dataset.label + "   " + metricText(c.parsed.y, F.metric);
   };
+  opts.plugins.tooltip.callbacks.afterBody = items =>
+    tooltipAgentLines(items && items.length ? items[0].label : null);
+  /* 点柱/点线 = 钉住那一天。用 index 模式而不是默认 intersect：
+     折线模式下数据点只有 2.6px，要求"正好压在图形上"等于点不到。 */
+  opts.onClick = (evt, _active, chart) => {
+    const hit = chart.getElementsAtEventForMode(evt, "index", { intersect: false }, true);
+    if (!hit || !hit.length) return;
+    const bucket = labels[hit[0].index];
+    if (bucket) setPinnedDay(bucket);
+  };
+  const cnv = $("mainChart");
+  if (cnv) cnv.classList.add("pinnable");
 
   if (MAIN) MAIN.destroy();
   const multiSeries = members.length > 1;
@@ -961,10 +1083,12 @@ const CHEV_SVG = '<svg class="ar-chev" viewBox="0 0 12 12" fill="none" stroke="c
   + 'stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="m4.5 2.5 4 3.5-4 3.5"/></svg>';
 
 function renderAgentList(){
-  const rows = rowsFor(false);
+  dropPinIfOutOfRange();
+  const rows = railRows();
   const range = rangeDates();
   const start = range && range[0];
   const planSet = window.PLAN_SET || new Set();
+  renderDayPin();
   const ag = new Map();
   for (const r of rows){
     const o = ag.get(r.agent) || {tokens:0, cost:0, requests:0, planTokens:0};
@@ -979,10 +1103,14 @@ function renderAgentList(){
   if (countEl) countEl.textContent = list.length ? fmtInt(list.length) + " 个数据源" : "";
   if (!list.length){
     /* 空态要给出"下一步怎么办"，不能只有一行灰字 */
+    const pinned = !!F.day;
     wrap.innerHTML = '<div class="empty ar-empty">'
-      + '<div class="t1">当前筛选下没有数据源</div>'
-      + '<div class="t2">放宽时间范围，或清除数据源筛选后再看</div>'
-      + '<div class="empty-acts">' + emptyActions(["清除筛选", "clear-filters"]) + '</div>'
+      + '<div class="t1">' + (pinned ? esc(pinLabel() + " " + pinWord() + "没有用量记录")
+                                     : "当前筛选下没有数据源") + '</div>'
+      + '<div class="t2">' + (pinned ? "换一天，或取消只看" + pinWord() + "回到区间合计"
+                                     : "放宽时间范围，或清除数据源筛选后再看") + '</div>'
+      + '<div class="empty-acts">' + emptyActions(pinned
+          ? ["取消只看" + pinWord(), "clear-day"] : ["清除筛选", "clear-filters"]) + '</div>'
       + '</div>';
     bindEmptyActions(wrap);
     return;
@@ -995,7 +1123,7 @@ function renderAgentList(){
   let rendered = 0;
 
   function fillModels(box, name){
-    const arows = rowsFor(false).filter(r => r.agent === name);
+    const arows = railRows().filter(r => r.agent === name);
     const mm = new Map();
     for (const r of arows){
       const o2 = mm.get(r.model) || {tokens:0, cost:0, requests:0};

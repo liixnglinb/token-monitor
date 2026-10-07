@@ -181,7 +181,7 @@
     const params = {};
     if (qIndex !== -1) {
       new URLSearchParams(raw.slice(qIndex + 1)).forEach(function (value, key) {
-        if (["range", "agent", "metric", "grain", "dim", "billing", "lens"].includes(key)) params[key] = value;
+        if (["range", "agent", "metric", "grain", "dim", "billing", "lens", "day"].includes(key)) params[key] = value;
       });
     }
     return Object.assign({}, base, { params: params });

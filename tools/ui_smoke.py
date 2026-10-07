@@ -158,6 +158,77 @@ def main() -> None:
         check("排行榜使用 SVG sparkline", page.locator(".sparkline").count() > 0,
               f"sparklines={page.locator('.sparkline').count()}")
 
+        # ── 趋势图交互：tooltip 逐源拆分 + 点柱"钉住那一天"（只影响右侧排行）──
+        tip = page.evaluate("""() => {
+          const ch = Chart.getChart('mainChart');
+          const labels = ch.data.labels;
+          return ch.options.plugins.tooltip.callbacks.afterBody(
+            [{ label: labels[labels.length - 1] }]);
+        }""")
+        check("tooltip 追加当天各数据源拆分", len(tip) >= 3 and "各数据源" in "".join(tip),
+              str(tip)[:140])
+        dim_agent = page.evaluate("""() => {
+          const prev = F.dim; F.dim = 'agent'; renderMain();
+          const ch = Chart.getChart('mainChart');
+          const labels = ch.data.labels;
+          const out = ch.options.plugins.tooltip.callbacks.afterBody(
+            [{ label: labels[labels.length - 1] }]);
+          F.dim = prev; renderMain();
+          return out;
+        }""")
+        check("维度已是数据源时不重复列", dim_agent == [], str(dim_agent)[:80])
+
+        hit = page.evaluate("""() => {
+          const ch = Chart.getChart('mainChart');
+          const i = ch.data.labels.length - 1;
+          const r = ch.canvas.getBoundingClientRect();
+          return { x: r.left + ch.getDatasetMeta(0).data[i].x,
+                   y: r.top + (ch.chartArea.top + ch.chartArea.bottom) / 2,
+                   label: ch.data.labels[i] };
+        }""")
+        page.mouse.click(hit["x"], hit["y"])
+        page.wait_for_timeout(600)
+        pinned = page.evaluate("""() => ({ day: F.day,
+          chip: document.getElementById('railDay').innerText,
+          hash: location.hash })""")
+        check("点柱钉住那一天", pinned["day"] == hit["label"],
+              f"{pinned['day']} vs {hit['label']}")
+        check("排行卡头出现日期芯片", ("当天" in pinned["chip"]) or ("当月" in pinned["chip"]),
+              pinned["chip"])
+        check("钉住写入 hash", "day=" + str(hit["label"]) in pinned["hash"], pinned["hash"][:140])
+        check("点击过程中无未捕获异常", not errors, "; ".join(errors)[:220])
+        # 排行口径必须真的等于图上那一天的量（同一份 rowsFor + 同一个桶）
+        same = page.evaluate("""(label) => {
+          const ch = Chart.getChart('mainChart');
+          const i = ch.data.labels.indexOf(label);
+          const chartVal = ch.data.datasets.reduce((s, d) => s + (d.data[i] || 0), 0);
+          const sum = railRows().reduce((s, r) => s + r.tokens, 0);
+          return { chartVal, sum };
+        }""", hit["label"])
+        check("钉住后排行口径 = 图上那一天", abs(same["chartVal"] - same["sum"]) <= 1, str(same))
+        page.mouse.click(hit["x"], hit["y"])
+        page.wait_for_timeout(500)
+        check("再点同一天取消钉住", page.evaluate("F.day") is None, str(page.evaluate("F.day")))
+
+        row = page.locator("#dailyList .daily-row[data-day]").first
+        day_attr = row.get_attribute("data-day")
+        row.press("Enter")
+        page.wait_for_timeout(500)
+        check("每日明细行 Enter 也能钉住", page.evaluate("F.day") == day_attr,
+              f"{page.evaluate('F.day')} vs {day_attr}")
+        check("钉住的行带 pinned 态与 aria-pressed",
+              page.locator('#dailyList .daily-row.pinned[aria-pressed="true"]').count() == 1)
+        heights = page.evaluate("""() => [...document.querySelectorAll('#dailyList .daily-row')]
+          .slice(0, 6).map(el => Math.round(el.getBoundingClientRect().height))""")
+        check("钉住不会把那一行撑高（等高）", len(set(heights)) == 1, str(heights))
+        page.reload(wait_until="networkidle")
+        wait_full_data(page)
+        page.wait_for_timeout(800)
+        check("刷新后钉住状态恢复", page.evaluate("F.day") == day_attr,
+              str(page.evaluate("F.day")))
+        page.evaluate("() => { F.day = null; persistFilters(); renderAll(); }")
+        page.wait_for_timeout(400)
+
         # 设置页 + 设置分类路由
         page.click("#settingsBtn")
         page.wait_for_timeout(400)

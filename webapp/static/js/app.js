@@ -85,6 +85,7 @@ function syncFilterSummary(){
   /* 筛选即地址：把当前过滤视图序列化进 hash，刷新/后退/分享都不丢 */
   if (typeof syncFilterHash === "function") syncFilterHash();
 }
-$("clearFilters").onclick=()=>{F.rangeKey="last7";F.agent="all";F.open.clear();renderAll();};
+/* 「清除筛选」必须连钉住的那天一起清：否则顶栏写着"已清除"，右侧排行还只算一天 */
+$("clearFilters").onclick=()=>{F.rangeKey="last7";F.agent="all";F.day=null;F.open.clear();renderAll();};
 void loadSummary();
 if (!$("updBtn").dataset.pending) checkUpdate(true);
