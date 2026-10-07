@@ -26,8 +26,13 @@
   （实测全部 usage 记录的 `context_usage_ratio × 1,000,000` 恒为整数，且对带 token 的记录
   恰好等于 `input_tokens`），照旧口径会把 5.29 亿报成 10.45 亿。
   新增注册表字段 `cache_in_input` 按源声明，不给全局默认。
-  它的内置模型（qfmodel / dfmodel 等）四个 token 字段恒写 0、只给 credits，
-  本地换不出 token 也没有官方 credits 单价，这一段有意不计入。
+- **Qoder CN 内置模型的用量不再凭空消失**：qfmodel / dfmodel / gfmodel / kmodel_latest 的
+  四个 token 字段被厂商恒写 0，只有 `context_usage_ratio` 是真值（本机 2 万条 / 约 1.58 万 credits）。
+  新增字段 `ratio_is_context` 按源声明，用 比值 × 1,000,000（该源实测的窗口分母）反推整段上下文
+  记进基础输入；拆不出缓存段就不硬拆。这四个别名同时归入**套餐不计费** ——
+  官方没公布 credits 单价，所以只记用量、不编金额。
+  实测该源从 1,264 条 / 3 天 / 5.29 亿 tok 变成 **22,534 条 / 15 天 / 63.8 亿 tok**。
+  没声明这个字段的源一律不反推（不能拿它去救"就是没用量"的源）。
 - 侧栏「Qoder」改用官方应用图标（取自本机 Qoder CN 自己的 ico，256px 归一）。
   深色瓷砖版在深色面板上会糊成一条漂浮的笔画，按既有约定登记进 `LOGO_ON_PLATE`，
   实测两套主题都能看出图标轮廓。

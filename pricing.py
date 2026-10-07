@@ -256,10 +256,14 @@ def _ccswitch_pricing():
 #   ox-               OX
 #   ark-              火山方舟
 #   raccoon-          Raccoon
+#   qfmodel/dfmodel/  Qoder CN 内置模型别名（实测于 ~/.qoder-cn/projects 转录：
+#   gfmodel/          token 字段恒 0、只给 credits 与 billable 标记，走的是订阅额度，
+#   kmodel_latest     既没有 token 单价也没有公布的 credits 单价 → 只记用量不计金额）
 # 这与『API 但价表缺价』是两回事，界面必须分开说
 # （见 kpi_all 的 plan_tokens / unpriced_tokens）。
 # ---------------------------------------------------------------------------
-PLAN_PREFIXES = ("sn-", "sensenova", "agnes-", "ox-", "ark-", "raccoon-")
+PLAN_PREFIXES = ("sn-", "sensenova", "agnes-", "ox-", "ark-", "raccoon-",
+                 "qfmodel", "dfmodel", "gfmodel", "kmodel_latest")
 # provider 段出现这些档位名即视为套餐/免费额度（实测 Cline：
 # provider=cline-pass，模型写成 cline-free/kimi-k3）
 PLAN_PROVIDERS = ("cline-free", "cline-pass", "cursor-free", "github-copilot")

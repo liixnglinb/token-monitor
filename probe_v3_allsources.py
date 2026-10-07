@@ -980,7 +980,13 @@ def _iv(d, *names):
     return 0
 
 
-def usage_from_dict(u, cache_in_input=False):
+# context_usage_ratio 反推上下文规模用的窗口常量。
+# 不是估值：Qoder CN 转录里 21,735 条 usage 的 ratio × 1e6 全部为整数（100%），
+# 且对 1,264 条带真值 token 的记录恰好等于 input_tokens，说明分母恒为 1,000,000。
+RATIO_CTX_WINDOW = 1_000_000
+
+
+def usage_from_dict(u, cache_in_input=False, ratio_is_context=False):
     """各家用量对象 → (inp, cw, cr, out, think)；识别不出返回 None
     口径：inp = 未命中缓存的输入，cr = 缓存命中，cw = 缓存写入
     返回 (inp, cw, cr, out, think, total_only)；total_only=True 表示
@@ -992,7 +998,11 @@ def usage_from_dict(u, cache_in_input=False):
     cache_in_input=True 用于「字段名是 Anthropic 的、语义却是 OpenAI 的」源：
     这类源的 input_tokens 已经把 cache_read_input_tokens 包在里面，直接相加会
     把同一批 token 数两遍。只能由注册表按源显式声明（见 sources_registry 的
-    cache_in_input 字段），不许在这里靠数值猜——猜错的方向是把用量算少。"""
+    cache_in_input 字段），不许在这里靠数值猜——猜错的方向是把用量算少。
+
+    ratio_is_context 用于「四个 token 字段被厂商写死为 0、只留 context_usage_ratio」
+    的源（Qoder CN 内置模型实测）：该比值就是 整段上下文 / 窗口，反推回输入规模。
+    同样只能按源声明（见 sources_registry 的 ratio_is_context 字段）。"""
     if not isinstance(u, dict) or not u:
         return None
     u = _alias_keys(u)
@@ -1046,34 +1056,45 @@ def usage_from_dict(u, cache_in_input=False):
         think = _iv(det, "thinking_tokens", "reasoning_tokens")
     think = max(think, _iv(u, "reasoning_tokens", "thinking_tokens"))
     if inp + cw + cr + out <= 0:
+        # 声明了 ratio_is_context 的源：比值 × 窗口 = 这次请求的整段上下文规模。
+        # Qoder CN 内置模型（qfmodel/dfmodel 等）四个 token 字段恒写 0，只给这个比值
+        # 与 credits；实测全部 usage 记录的 ratio × 1,000,000 都是整数，
+        # 且对同文件里带真值的记录恰好等于 input_tokens → 分母就是 1M 窗口。
+        # 拆不出缓存段，整记成"基础输入"：总量对、四态分布粗，已在注册表 note 里写明。
+        if ratio_is_context:
+            r = u.get("context_usage_ratio")
+            if isinstance(r, (int, float)) and not isinstance(r, bool) and r > 0:
+                ctx = int(round(r * RATIO_CTX_WINDOW))
+                if ctx > 0:
+                    return ctx, 0, 0, 0, 0, False
         return None
     return inp, cw, cr, out, think, bool(locals().get("total_only"))
 
 
-def find_usage(obj, depth=0, cache_in_input=False):
+def find_usage(obj, depth=0, cache_in_input=False, ratio_is_context=False):
     """递归找第一个可识别的用量对象（各家包装层差异极大，不能只认 obj["usage"]）"""
     if not isinstance(obj, dict) or depth > 5:
         return None
     for k in _USAGE_WRAP:
         v = obj.get(k)
         if isinstance(v, dict):
-            r = usage_from_dict(v, cache_in_input) or find_usage(v, depth + 1,
-                                                                 cache_in_input)
+            r = (usage_from_dict(v, cache_in_input, ratio_is_context)
+                 or find_usage(v, depth + 1, cache_in_input, ratio_is_context))
             if r:
                 return r
         elif isinstance(v, list):
             for it in v:
-                r = find_usage(it, depth + 1, cache_in_input)
+                r = find_usage(it, depth + 1, cache_in_input, ratio_is_context)
                 if r:
                     return r
     for v in obj.values():
         if isinstance(v, dict):
-            r = find_usage(v, depth + 1, cache_in_input)
+            r = find_usage(v, depth + 1, cache_in_input, ratio_is_context)
             if r:
                 return r
         elif isinstance(v, list) and depth <= 2:
             for it in v:
-                r = find_usage(it, depth + 2, cache_in_input)
+                r = find_usage(it, depth + 2, cache_in_input, ratio_is_context)
                 if r:
                     return r
     return None
@@ -1299,6 +1320,7 @@ def scan_reg_jsonl_one(src, agent, seen_real, pre=None):
     folded = [0]                                # 被折叠掉的重复 usage 条数
     cum = {}                                    # (session, model) -> (date, 最大总量)
     cin = bool(src.get("cache_in_input"))       # 该源的 cache_read 已含在 input_tokens 里
+    ric = bool(src.get("ratio_is_context"))     # 该源只有 context_usage_ratio 是真值
     t0 = time.time()
     truncated = False
     last_model = None                     # 文件内向后传递的模型名
@@ -1358,7 +1380,7 @@ def scan_reg_jsonl_one(src, agent, seen_real, pre=None):
                 if idx % CHECK_EVERY_LINES == 0 and time.time() - t0 > MAX_SOURCE_SECONDS:
                     truncated = True
                     break
-                got = find_usage(obj, cache_in_input=cin)
+                got = find_usage(obj, cache_in_input=cin, ratio_is_context=ric)
                 if not got:
                     continue
                 inp, cw, cr, out, think, total_only = got

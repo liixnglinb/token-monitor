@@ -3,9 +3,12 @@
 
 回归背景（2026-10-07）：注册表里 qoder 的 paths 从未包含
 `{home}/.qoder-cn/projects` —— 真实转录一直在那里，面板却显示这个源没用量。
-接上之后又踩到第二个坑：该源用的是 Anthropic 的字段名，语义却是 OpenAI 的
-（input_tokens 已含 cache_read_input_tokens，实测 context_usage_ratio×1e6
-恒等于 input_tokens），照 Anthropic 口径相加会把 528M 报成 1,045M。
+接上之后又踩到两个口径坑：
+① 字段名是 Anthropic 的、语义却是 OpenAI 的（input_tokens 已含
+   cache_read_input_tokens，实测 context_usage_ratio×1e6 恒等于 input_tokens），
+   照 Anthropic 口径相加会把 528M 报成 1,045M；
+② 内置模型（qfmodel/dfmodel 等）四个 token 字段恒写 0，只有 context_usage_ratio
+   是真值 —— 不反推的话本机约 2 万条请求的用量会凭空消失。
 """
 import json
 import os
@@ -24,8 +27,12 @@ import sources_registry as SR
 ARK = "qoder-custom-72bd0478-adb3-48a5-9c6b-5090280aa47f/ark-code-latest"
 
 
-def _rec(rid, inp, cr, out, model=ARK, ts="2026-10-07T10:00:00.000+08:00"):
-    """按 Qoder CN 转录的真实包装层造一条 assistant 记录。"""
+def _rec(rid, inp, cr, out, model=ARK, ts="2026-10-07T10:00:00.000+08:00",
+         ratio=None):
+    """按 Qoder CN 转录的真实包装层造一条 assistant 记录。
+
+    ratio 默认按"比值 × 1M == input_tokens"这条实测恒等式推导；
+    内置模型那类四个 token 字段全 0、只给比值的记录要显式传 ratio。"""
     return {
         "type": "assistant",
         "sessionId": "sess-1",
@@ -41,10 +48,19 @@ def _rec(rid, inp, cr, out, model=ARK, ts="2026-10-07T10:00:00.000+08:00"):
                 "cache_read_input_tokens": cr,
                 "output_tokens": out,
                 "request_id": rid,
-                "context_usage_ratio": inp / 1000000.0,
+                "context_usage_ratio": (inp / 1000000.0) if ratio is None else ratio,
             },
         },
     }
+
+
+def _builtin(rid, ratio, model="qfmodel", credits=0.7988112220000001):
+    """内置模型记录：四个 token 字段恒 0，只有比值与 credits（本机实测形态）。"""
+    r = _rec(rid, 0, 0, 0, model=model, ratio=ratio)
+    r["message"]["usage"].update({"credits": credits,
+                                  "original_credits": credits,
+                                  "billable": False})
+    return r
 
 
 class QoderCNRegistryTests(unittest.TestCase):
@@ -54,7 +70,7 @@ class QoderCNRegistryTests(unittest.TestCase):
         probe.scan_cache = None          # 测试文件不该写进本机共享缓存
         probe.SKIP_NOTES.clear()
         self.src = {"id": "qoder", "paths": [], "fmt": "jsonl_generic",
-                    "cache_in_input": True}
+                    "cache_in_input": True, "ratio_is_context": True}
 
     def tearDown(self):
         probe.scan_cache = self._cache
@@ -108,11 +124,41 @@ class QoderCNRegistryTests(unittest.TestCase):
         self.assertEqual(1, len(recs), "同一 request_id 只能算一次")
         self.assertIn("折叠", probe.SKIP_NOTES.get("qoder", ""))
 
-    def test_credit_only_builtin_records_produce_no_tokens(self):
-        """内置模型（qfmodel 等）四个 token 字段恒 0、只有 credits：
-        本地既换不出 token 也没有单价，必须一条都不产生，绝不能拿 credits 当 token。"""
-        recs = self._scan([_rec("c1", 0, 0, 0, model="qfmodel")])
-        self.assertEqual([], recs)
+    def test_credit_only_builtin_records_are_derived_from_ratio(self):
+        """内置模型四个 token 字段恒 0：按 比值 × 1M 反推整段上下文记进基础输入。"""
+        recs = self._scan([_builtin("c1", 0.028246), _builtin("c2", 0.149512, model="dfmodel")])
+        self.assertEqual(2, len(recs), "反推后这两条都必须计入，否则整段用量凭空消失")
+        by = {r.model: r for r in recs}
+        self.assertEqual(28246, by["qfmodel"].inp)      # 0.028246 × 1,000,000
+        self.assertEqual(149512, by["dfmodel"].inp)
+        for r in recs:
+            self.assertEqual((0, 0, 0), (r.cw, r.cr, r.out),
+                             "拆不出缓存段与输出，只能整记成基础输入")
+            self.assertGreater(r.inp, 100,
+                               "credits（<1 的小数）绝不能被当成 token 混进来")
+
+    def test_ratio_derivation_is_opt_in_per_source(self):
+        """没声明 ratio_is_context 的源不得凭比值造数 —— 别拿它去救"就是没用量"的源。"""
+        plain = self._scan([_builtin("c3", 0.028246)],
+                           src={"id": "qoder", "paths": [], "cache_in_input": True})
+        self.assertEqual([], plain)
+
+    def test_ratio_derived_records_still_dedupe_by_request_id(self):
+        recs = self._scan([_builtin("dup", 0.05), _builtin("dup", 0.05)])
+        self.assertEqual(1, len(recs), "同一 request_id 只能算一次")
+
+    def test_builtin_aliases_are_subscription_not_unpriced(self):
+        """qfmodel 等是订阅额度内的内置模型：只记用量、有意不计金额（没有可验证的
+        credits 单价就不编），不能和"API 但价表缺价"混为一类。"""
+        for m in ("qfmodel", "dfmodel", "gfmodel", "kmodel_latest"):
+            self.assertTrue(pricing.is_plan(m), m)
+            self.assertIsNone(pricing.cost(m, inp=100000, out=0))
+        self.assertFalse(pricing.is_plan("some-brand-new-api-model"))
+
+    def test_declared_flags_are_qoder_only(self):
+        for key in ("cache_in_input", "ratio_is_context"):
+            self.assertEqual(["qoder"], [s["id"] for s in SR.SOURCES if s.get(key)],
+                             "%s 必须只由验证过的源声明" % key)
 
     def test_without_the_flag_the_same_file_would_double_count(self):
         """反向证据：同一个文件不声明口径，这一条就从小小的 551,119 涨成 1,101,792。"""
