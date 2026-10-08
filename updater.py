@@ -179,9 +179,14 @@ def find_setup_asset(assets):
     return None
 
 
-def find_sum_asset(assets):
-    """找 exe 对应的 sha256 校验文件资产（name == EXE_NAME + '.sha256'）。无则返回 None。"""
-    target = EXE_NAME + ".sha256"
+def find_sum_asset(assets, name: str = None):
+    """找某个资产对应的 sha256 校验文件（name == <资产名> + '.sha256'）。无则返回 None。
+
+    name 省略时按单文件 exe 找。安装包与单文件 exe 各有自己的 .sha256 资产
+    （TokenMonitor-setup-<版本>.exe.sha256 / TokenMonitor.exe.sha256），
+    所以调用方要把实际下载的那个资产名传进来，否则安装包这条路径会静默降级成体积校验。
+    """
+    target = (name or EXE_NAME) + ".sha256"
     for a in assets:
         if (a.get("name") or "") == target:
             return a

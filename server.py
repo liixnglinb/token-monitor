@@ -390,9 +390,11 @@ def api_update():
         if asset is None:
             return JSONResponse({"ok": False,
                                  "error": "Release 中没有可更新的安装包资产"}, status_code=400)
-        # .sha256 资产只覆盖单文件 exe；安装包没有校验文件，下载后走体积兜底
+        # 按实际下载的那个资产找它的 .sha256（安装包与单文件 exe 各有一份），
+        # 传 None 会退化成「体积 ≥ 1MB」兜底，等于把完整性校验让掉。
         updater.download_staged(asset,
-                                checksum_asset=None if setup else updater.find_sum_asset(assets),
+                                checksum_asset=updater.find_sum_asset(
+                                    assets, asset.get("name")),
                                 version=latest)
     except Exception as e:
         return JSONResponse({"ok": False, "error": str(e)[:200]}, status_code=500)
