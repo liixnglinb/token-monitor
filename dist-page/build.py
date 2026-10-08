@@ -44,8 +44,8 @@ try:
     print("注册表实测: %d 个数据源 / %d 条路径" % (NREG, NPATHS))
 except Exception as e:
     print("!! 读不到 sources_registry，用兜底值 %d/%d：%s" % (NREG, NPATHS, e))
-FALLBACK_VER = "v2.1.2"
-FALLBACK_SIZE = "约 31 MB"    # 2026-10-07 v2.1.2 实测 32,422,517 B
+FALLBACK_VER = "v2.2.1"
+FALLBACK_SIZE = "约 31 MB"    # 2026-10-08 v2.2.1 实测 32,565,065 B
 CNY_RATE = 7.1     # server.py: CNY_RATE，页面与面板同一汇率
 
 # 源 id → 显示名（与 App 内 AGENT_NAME 保持一致）
