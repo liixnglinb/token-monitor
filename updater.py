@@ -164,6 +164,21 @@ def find_exe_asset(assets):
     return None
 
 
+def find_setup_asset(assets):
+    """找 Inno Setup 安装包资产（name 形如 TokenMonitor-setup-<版本>.exe）。
+
+    为什么优先用它而不是 TokenMonitor.exe：单文件 exe 只能靠自替换脚本覆盖自己
+    （见 apply_staged 的 bat），用户看不到任何安装界面；安装包则是标准的 Inno 向导，
+    由用户自己点「下一步」完成安装——这正是需求要的形态。找不到时才退回单文件 exe。
+    """
+    for a in assets:
+        name = (a.get("name") or "")
+        low = name.lower()
+        if low.startswith("tokenmonitor-setup") and low.endswith(".exe"):
+            return a
+    return None
+
+
 def find_sum_asset(assets):
     """找 exe 对应的 sha256 校验文件资产（name == EXE_NAME + '.sha256'）。无则返回 None。"""
     target = EXE_NAME + ".sha256"
@@ -393,7 +408,9 @@ def download_staged(asset: dict, checksum_asset=None, version: str = None) -> st
     if (asset.get("size") or 0) > 500 * 1024 * 1024:
         raise RuntimeError("更新包异常过大，已中止")
 
-    tmp = os.path.join(tempfile.gettempdir(), EXE_NAME + ".new")
+    # 暂存名必须保留 .exe 扩展名：安装包要能被直接 Popen 拉起（CreateProcess 认扩展名），
+    # 原来的 "TokenMonitor.exe.new" 只能给自替换脚本 move 用。
+    tmp = os.path.join(tempfile.gettempdir(), "TokenMonitor-update.exe")
     declared_total = int(asset.get("size") or 0)
     set_progress(
         state="downloading",
@@ -568,8 +585,38 @@ def _preflight_new_exe(staged: str) -> None:
                         "超时" if last_code is None else last_code))
 
 
+def _launch_setup_installer() -> None:
+    """拉起安装包向导，把「安装」这一步交回给用户。
+
+    与自替换路径的区别：不做防砖预检、不写 bat、不自动重启。安装向导自己接管一切
+    ——installer.iss 里 CloseApplications=yes，运行中的进程由它关闭；装完由 Inno
+    的默认行为启动新版本。DETACHED_PROCESS 是为了让安装器脱离本进程：
+    server 侧 1 秒后会 os._exit(0)，不脱离子进程会被一起收掉。
+    """
+    tmp = STAGED.get("tmp")
+    if not tmp or not os.path.exists(tmp):
+        raise RuntimeError("暂存的安装包不存在，请重新下载")
+    set_progress(
+        state="applying",
+        percent=100,
+        message="正在打开安装程序",
+        source=STAGED.get("source"),
+    )
+    flags = 0
+    if hasattr(subprocess, "DETACHED_PROCESS"):
+        flags = subprocess.DETACHED_PROCESS | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+    subprocess.Popen([tmp], close_fds=True, creationflags=flags)
+
+
 def apply_staged(tmp: str = None) -> None:
-    """第二段：为暂存的更新包写自替换脚本并启动；当前进程由 server 侧退出。"""
+    """第二段：安装暂存的更新包；当前进程由 server 侧退出。
+
+    暂存的是 Inno 安装包时走 _launch_setup_installer（弹出安装向导，用户点「下一步」）；
+    只有拿不到安装包、退回单文件 exe 时才走原来的自替换脚本路径。
+    """
+    asset_name = str((STAGED.get("asset") or {}).get("name") or "").lower()
+    if "setup" in asset_name:
+        return _launch_setup_installer()
     _, exe = _base()
     tmp = tmp or STAGED.get("tmp")
     if not exe or not os.path.exists(exe):

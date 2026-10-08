@@ -75,8 +75,9 @@ function setUpdUI(){
     wrap.setAttribute("aria-valuenow", String(pctNow));
     wrap.setAttribute("aria-valuetext", pctNow + "%");
   }
-  if (txt) txt.textContent = (UPD.source ? "正在从 " + UPD.source + " 下载 " : "正在测速并选择最快下载源 ")
-    + pct + "%";
+  /* 不显示下载源：后台会自动实测各线路并挑最快的，把"当前走哪个源"写出来
+     只会让用户以为要自己判断。进度只报百分比。 */
+  if (txt) txt.textContent = "正在下载更新 " + pct + "%";
   /* 有新版本时把更新日志内联展示在卡片里（原侧栏悬停浮层的替代）；
      下载/安装失败时同一块区域改报原因 —— 以前 UPD.message 只写进状态机，
      界面上只剩一句"下载失败 · 重试"，用户不知道败在哪一步。 */
@@ -118,8 +119,7 @@ function setUpdUI(){
   if (pill){
     pill.hidden = st !== "dl";
     pill.textContent = pct + "%";
-    pill.title = (UPD.source ? "正在从 " + UPD.source + " 下载 " : "正在测速并选择最快下载源 ")
-      + pct + "%（下载完成后会询问是否安装）";
+    pill.title = "正在下载更新 " + pct + "%（下载完成后会询问是否安装）";
   }
 }
 
@@ -206,7 +206,7 @@ async function downloadUpdate(){
   UPD.state = "dl";
   UPD.percent = 0;
   UPD.source = null;
-  UPD.message = "正在测速并选择最快下载源";
+  UPD.message = "正在准备下载更新";
   setUpdUI();
   startProgressPolling();
   try {
@@ -238,9 +238,10 @@ function confirmInstall(){
   const m = $("updModal"); if (!m) return;
   const txt = $("updModalText");
   if (txt){
+    /* 安装这一步是弹出安装程序由用户点「下一步」，不是静默装完自动重启 */
     txt.textContent = UPD.state === "ready"
-      ? "v" + (UPD.latest || "") + " 已下载完成，是否现在更新并重启？"
-      : "v" + (UPD.latest || "") + " 将自动下载并安装，随后重启软件。是否现在更新并重启？";
+      ? "v" + (UPD.latest || "") + " 已下载完成。点击后会打开安装程序，按提示点「下一步」即可完成安装。"
+      : "v" + (UPD.latest || "") + " 将自动下载，下载完成后打开安装程序，由你按提示完成安装。是否现在更新？";
   }
   m.hidden = false;
 }
@@ -255,7 +256,7 @@ async function runUpdate(){
 }
 window.runUpdate = runUpdate;
 
-/* 第二段：确认后替换 exe 并重启 */
+/* 第二段：确认后打开安装程序（安装包路径）或替换 exe（退回单文件 exe 时） */
 async function applyUpdate(){
   const m = $("updModal"); if (m) m.hidden = true;
   const btn = $("updBtn");
@@ -263,7 +264,7 @@ async function applyUpdate(){
   if (btn){
     btn.disabled = true;
     btn.className = "btn is-done";
-    btn.textContent = "正在更新并重启…";
+    btn.textContent = "正在打开安装程序…";
   }
   setUpdUI();
   try {

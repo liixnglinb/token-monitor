@@ -383,12 +383,16 @@ def api_update():
     与需求的"下载完成后提示是否现在更新并重启"不符，故拆成两段。"""
     try:
         latest, assets, _meta = updater.fetch_latest()
-        asset = updater.find_exe_asset(assets)
+        # 优先取安装包：装的时候弹出 Inno 向导、由用户点「下一步」完成；
+        # 只有 Release 里没有安装包时才退回单文件 exe（走自替换脚本那条老路）。
+        setup = updater.find_setup_asset(assets)
+        asset = setup or updater.find_exe_asset(assets)
         if asset is None:
             return JSONResponse({"ok": False,
-                                 "error": "Release 中没有可更新的 exe 资产"}, status_code=400)
-        # 若 Release 附带 .sha256 校验资产则一并传入，下载后做 SHA256 完整性校验
-        updater.download_staged(asset, checksum_asset=updater.find_sum_asset(assets),
+                                 "error": "Release 中没有可更新的安装包资产"}, status_code=400)
+        # .sha256 资产只覆盖单文件 exe；安装包没有校验文件，下载后走体积兜底
+        updater.download_staged(asset,
+                                checksum_asset=None if setup else updater.find_sum_asset(assets),
                                 version=latest)
     except Exception as e:
         return JSONResponse({"ok": False, "error": str(e)[:200]}, status_code=500)
@@ -397,12 +401,15 @@ def api_update():
 
 @app.post("/api/update/apply")
 def api_update_apply():
-    """第二段：用户确认「现在更新并重启」后，替换 exe 并重启（自替换脚本接管）。"""
+    """第二段：用户确认后打开安装程序（安装包）或自替换（单文件 exe）。
+
+    安装包路径下由 Inno 向导接管：它会关掉正在运行的进程、装完自动启动新版本。
+    """
     try:
         updater.apply_staged()
     except Exception as e:
         return JSONResponse({"ok": False, "error": str(e)[:200]}, status_code=500)
-    # 1 秒后退出当前进程，让更新脚本接管（替换 exe 并重启）
+    # 1 秒后退出当前进程：安装包场景是给 Inno 让路，自替换场景是交给 bat 脚本
     threading.Timer(1.0, lambda: os._exit(0)).start()
     return {"ok": True}
 
